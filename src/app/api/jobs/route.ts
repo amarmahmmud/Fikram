@@ -62,30 +62,46 @@ export async function POST(req: Request) {
       }
 
       // 2. Map frontend model IDs to valid Replicate base models for training
-      let replicateModel = "meta/meta-llama-3-8b";
+      let replicateOwner = "meta";
+      let replicateName = "meta-llama-3-8b";
       if (baseModel?.toLowerCase().includes("mistral")) {
-        replicateModel = "mistralai/mistral-7b-v0.1";
+        replicateOwner = "mistralai";
+        replicateName = "mistral-7b-v0.1";
       }
 
-      // 3. Start the training directly via HTTP API
-      const trainingRes = await fetch("https://api.replicate.com/v1/trainings", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: replicateModel,
-          destination: destinationStr,
-          input: {
-            train_data: datasetUrl,
-            num_train_epochs: config?.epochs ?? 3,
-            learning_rate: config?.learningRate ?? 0.0002,
-          },
-          webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
-          webhook_events_filter: ["completed"],
-        })
+      // 3. Fetch the latest version hash of the base model
+      const modelInfoRes = await fetch(`https://api.replicate.com/v1/models/${replicateOwner}/${replicateName}`, {
+        headers: { "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}` }
       });
+      const modelInfo = await modelInfoRes.json();
+      const latestVersion = modelInfo.latest_version?.id;
+
+      if (!latestVersion) {
+        console.error("Could not fetch model version:", modelInfo);
+        throw new Error("Could not fetch latest base model version");
+      }
+
+      // 4. Start the training using the correct versioned endpoint
+      const trainingRes = await fetch(
+        `https://api.replicate.com/v1/models/${replicateOwner}/${replicateName}/versions/${latestVersion}/trainings`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            destination: destinationStr,
+            input: {
+              train_data: datasetUrl,
+              num_train_epochs: config?.epochs ?? 3,
+              learning_rate: config?.learningRate ?? 0.0002,
+            },
+            webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
+            webhook_events_filter: ["completed"],
+          })
+        }
+      );
 
       const training = await trainingRes.json();
 
