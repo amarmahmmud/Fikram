@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import Replicate from "replicate";
-
-const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
-
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -40,12 +36,12 @@ export async function POST(req: Request) {
   // Trigger Replicate Native Training
   try {
     const replicateUsername = process.env.REPLICATE_USERNAME;
-    
+
     if (datasetUrl && replicateUsername) {
+      // 1. Create the destination model on Replicate via HTTP API
       const destinationModelName = `job-${job.id.slice(0, 8)}`;
       const destinationStr = `${replicateUsername}/${destinationModelName}`;
 
-      // 1. Create the destination model on Replicate via HTTP API
       const createModelRes = await fetch("https://api.replicate.com/v1/models", {
         method: "POST",
         headers: {
@@ -56,7 +52,7 @@ export async function POST(req: Request) {
           owner: replicateUsername,
           name: destinationModelName,
           visibility: "private",
-          hardware: "gpu-t4",
+          hardware: "gpu-t4-nano",
           description: `Fine-tuned model for ${name}`
         })
       });
@@ -65,15 +61,13 @@ export async function POST(req: Request) {
         console.warn("Failed to create model (might already exist):", await createModelRes.text());
       }
 
-      // 2. Map HuggingFace IDs from the frontend to valid Replicate base models for training
+      // 2. Map frontend model IDs to valid Replicate base models for training
       let replicateModel = "meta/meta-llama-3-8b";
-      if (baseModel.toLowerCase().includes("mistral")) {
+      if (baseModel?.toLowerCase().includes("mistral")) {
         replicateModel = "mistralai/mistral-7b-v0.1";
       }
-      
-      // 3. Start the training directly via HTTP API (bypassing SDK version requirements)
-      const destinationStr = `${process.env.REPLICATE_USERNAME}/${jobName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-")}`;
-      
+
+      // 3. Start the training directly via HTTP API
       const trainingRes = await fetch("https://api.replicate.com/v1/trainings", {
         method: "POST",
         headers: {
@@ -92,7 +86,7 @@ export async function POST(req: Request) {
           webhook_events_filter: ["completed"],
         })
       });
-      
+
       const training = await trainingRes.json();
 
       if (!trainingRes.ok) {
@@ -106,13 +100,14 @@ export async function POST(req: Request) {
         status:       "running",
         started_at:   new Date().toISOString(),
       }).eq("id", job.id);
+
     } else {
-      // No dataset or model mapping — simulate for testing
+      // No dataset or username configured — just mark as running
       await supabase.from("jobs").update({ status: "running", started_at: new Date().toISOString() }).eq("id", job.id);
     }
   } catch (err) {
     console.error("Replicate error:", err);
-    // Don't fail the whole request — job is created, just mark it
+    // Don't fail the whole request — job is created, just mark it running
     await supabase.from("jobs").update({ status: "running", started_at: new Date().toISOString() }).eq("id", job.id);
   }
 
