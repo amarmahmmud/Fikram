@@ -62,6 +62,7 @@ export default function NewJobPage() {
   const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
   const [jobName, setJobName] = useState("");
   const [launching, setLaunching] = useState(false);
+  const [generationStatus, setGenerationStatus] = useState("");
   const [launchedJobId, setLaunchedJobId] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -171,15 +172,48 @@ export default function NewJobPage() {
   /* ── Launch real job ── */
   async function handleLaunch() {
     setLaunching(true);
+    setGenerationStatus("Preparing...");
     try {
       let finalDatasetUrl = null;
 
       if (file) {
+        let fileToUpload = file;
+        
+        // If file is not jsonl, we auto-generate the dataset
+        if (!file.name.toLowerCase().endsWith(".jsonl")) {
+          setGenerationStatus("Extracting text...");
+          let rawText = "";
+          
+          if (file.name.toLowerCase().endsWith(".pdf")) {
+            const formData = new FormData();
+            formData.append("file", file);
+            const parseRes = await fetch("/api/parse-pdf", { method: "POST", body: formData });
+            const parseData = await parseRes.json();
+            if (!parseData.text) throw new Error("Failed to parse PDF");
+            rawText = parseData.text;
+          } else {
+            rawText = await file.text();
+          }
+
+          setGenerationStatus("Synthesizing dataset (this takes ~10s)...");
+          const genRes = await fetch("/api/generate-dataset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: rawText, goal: chatMessages[1]?.content || "" })
+          });
+          const genData = await genRes.json();
+          if (!genData.ok) throw new Error(genData.error || "Dataset generation failed");
+
+          const blob = new Blob([genData.jsonl], { type: "application/jsonl" });
+          fileToUpload = new File([blob], `${file.name.replace(/\.[^/.]+$/, "")}_dataset.jsonl`, { type: "application/jsonl" });
+        }
+
+        setGenerationStatus("Uploading dataset...");
         // 1. Get presigned upload URL from our API
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: file.type }),
+          body: JSON.stringify({ filename: fileToUpload.name, contentType: fileToUpload.type }),
         });
         const uploadData = await uploadRes.json();
         
@@ -188,8 +222,8 @@ export default function NewJobPage() {
         // 2. Upload directly to Cloudflare R2 securely from the browser
         const putRes = await fetch(uploadData.uploadUrl, {
           method: "PUT",
-          headers: { "Content-Type": file.type || "application/octet-stream" },
-          body: file,
+          headers: { "Content-Type": fileToUpload.type || "application/octet-stream" },
+          body: fileToUpload,
         });
 
         if (!putRes.ok) throw new Error("Failed to upload file to storage");
@@ -198,6 +232,7 @@ export default function NewJobPage() {
         finalDatasetUrl = uploadData.downloadUrl;
       }
 
+      setGenerationStatus("Queueing training job...");
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -530,7 +565,7 @@ export default function NewJobPage() {
                 {launching ? (
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span className="animate-spin" style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} />
-                    Launching job...
+                    {generationStatus || "Launching job..."}
                   </span>
                 ) : "🚀 Launch Fine-Tuning Job"}
               </button>
