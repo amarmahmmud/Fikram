@@ -85,10 +85,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
       <div className="topbar">
         <Link href={`/jobs/${resolvedParams.id}`} className="btn btn-ghost btn-sm">← Job Detail</Link>
         <span className="topbar-title" style={{ flex: 1, textAlign: "center" }}>Playground — Customer Support Bot</span>
-        <span className="badge badge-success">
-          <span className="status-dot done" />
-          Model Ready
-        </span>
+
       </div>
 
       <div className={styles.playgroundLayout}>

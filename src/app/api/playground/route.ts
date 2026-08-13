@@ -23,7 +23,7 @@ export async function POST(req: Request) {
       .single();
 
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
-    if (job.status !== "completed") return NextResponse.json({ error: "Model is still training!" }, { status: 400 });
+    if (job.status?.toLowerCase() !== "completed") return NextResponse.json({ error: "Model is still training!" }, { status: 400 });
     if (!job.result_url) return NextResponse.json({ error: "Model weights not found." }, { status: 400 });
 
     // Format prompt for Llama 3
