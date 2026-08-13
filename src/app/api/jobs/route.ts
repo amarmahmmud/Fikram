@@ -66,9 +66,14 @@ export async function POST(req: Request) {
       }
 
       // 2. Fetch the latest version hash of the base model dynamically
-      // Default to meta-llama-3-8b, or we could map from baseModel.
-      const baseOwner = baseModel.split("/")[0] || "meta";
-      const baseName = baseModel.split("/")[1] || "meta-llama-3-8b";
+      // Map HuggingFace IDs from the frontend to valid Replicate base models for training
+      let baseOwner = "meta";
+      let baseName = "meta-llama-3-8b";
+      
+      if (baseModel.toLowerCase().includes("mistral")) {
+        baseOwner = "mistralai";
+        baseName = "mistral-7b-v0.1";
+      }
       
       const modelRes = await fetch(`https://api.replicate.com/v1/models/${baseOwner}/${baseName}`, {
         headers: { "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}` }
@@ -76,7 +81,10 @@ export async function POST(req: Request) {
       const modelData = await modelRes.json();
       const latestVersion = modelData.latest_version?.id;
 
-      if (!latestVersion) throw new Error("Could not fetch latest base model version");
+      if (!latestVersion) {
+        console.error("Replicate Model Fetch Error:", modelData);
+        throw new Error("Could not fetch latest base model version");
+      }
 
       // 3. Start the training
       const training = await replicate.trainings.create(
