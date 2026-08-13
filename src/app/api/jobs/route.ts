@@ -4,13 +4,6 @@ import Replicate from "replicate";
 
 const replicate = new Replicate({ auth: process.env.REPLICATE_API_TOKEN! });
 
-// Model → Replicate fine-tuning destination mapping
-const MODEL_MAP: Record<string, string> = {
-  "meta-llama/Llama-3.1-8B-Instruct": "lucataco/llama-3-8b-instruct-lora",
-  "mistralai/Mistral-7B-Instruct-v0.3": "lucataco/mistral-7b-v0.2-lora",
-  "microsoft/Phi-3-mini-4k-instruct":   "lucataco/phi-3-mini-4k-instruct-lora",
-  "google/gemma-2-9b-it":               "lucataco/gemma-2-9b-it-lora",
-};
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -44,24 +37,67 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to create job" }, { status: 500 });
   }
 
-  // Trigger Replicate (non-blocking — webhook updates status)
+  // Trigger Replicate Native Training
   try {
-    const replicateModel = MODEL_MAP[baseModel];
-    if (replicateModel && datasetUrl) {
-      const prediction = await replicate.predictions.create({
-        model: replicateModel,
-        input: {
-          train_data:   datasetUrl,
-          num_train_epochs: config?.epochs ?? 3,
-          learning_rate:    config?.learningRate ?? 0.0002,
+    const replicateUsername = process.env.REPLICATE_USERNAME;
+    
+    if (datasetUrl && replicateUsername) {
+      const destinationModelName = `job-${job.id.slice(0, 8)}`;
+      const destinationStr = `${replicateUsername}/${destinationModelName}`;
+
+      // 1. Create the destination model on Replicate via HTTP API
+      const createModelRes = await fetch("https://api.replicate.com/v1/models", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+          "Content-Type": "application/json"
         },
-        webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
-        webhook_events_filter: ["completed", "failed", "logs"],
+        body: JSON.stringify({
+          owner: replicateUsername,
+          name: destinationModelName,
+          visibility: "private",
+          hardware: "gpu-t4",
+          description: `Fine-tuned model for ${name}`
+        })
       });
 
-      // Update job with Replicate prediction ID and mark running
+      if (!createModelRes.ok) {
+        console.warn("Failed to create model (might already exist):", await createModelRes.text());
+      }
+
+      // 2. Fetch the latest version hash of the base model dynamically
+      // Default to meta-llama-3-8b, or we could map from baseModel.
+      const baseOwner = baseModel.split("/")[0] || "meta";
+      const baseName = baseModel.split("/")[1] || "meta-llama-3-8b";
+      
+      const modelRes = await fetch(`https://api.replicate.com/v1/models/${baseOwner}/${baseName}`, {
+        headers: { "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}` }
+      });
+      const modelData = await modelRes.json();
+      const latestVersion = modelData.latest_version?.id;
+
+      if (!latestVersion) throw new Error("Could not fetch latest base model version");
+
+      // 3. Start the training
+      const training = await replicate.trainings.create(
+        baseOwner,
+        baseName,
+        latestVersion,
+        {
+          destination: destinationStr,
+          input: {
+            train_data: datasetUrl,
+            num_train_epochs: config?.epochs ?? 3,
+            learning_rate: config?.learningRate ?? 0.0002,
+          },
+          webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
+          webhook_events_filter: ["completed", "failed"],
+        }
+      );
+
+      // 4. Update job with Replicate training ID
       await supabase.from("jobs").update({
-        replicate_id: prediction.id,
+        replicate_id: training.id,
         status:       "running",
         started_at:   new Date().toISOString(),
       }).eq("id", job.id);

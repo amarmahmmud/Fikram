@@ -2,33 +2,47 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 export async function POST(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const jobId = searchParams.get("job_id");
-  if (!jobId) return NextResponse.json({ error: "No job_id" }, { status: 400 });
+  try {
+    // We appended job_id in the webhook URL
+    const url = new URL(req.url);
+    const jobId = url.searchParams.get("job_id");
+    
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing job_id in query" }, { status: 400 });
+    }
 
-  const supabase = await createClient();
-  const body = await req.json();
+    const payload = await req.json();
+    const supabase = await createClient();
 
-  const { status, output, logs, error } = body;
+    let newStatus = "running";
+    if (payload.status === "succeeded") newStatus = "completed";
+    else if (payload.status === "failed" || payload.status === "canceled") newStatus = "failed";
 
-  if (status === "succeeded") {
-    await supabase.from("jobs").update({
-      status:       "completed",
-      result_url:   output?.[0] ?? null,
-      completed_at: new Date().toISOString(),
-      logs:         logs ?? "",
-    }).eq("id", jobId);
-  } else if (status === "failed") {
-    await supabase.from("jobs").update({
-      status:       "failed",
-      completed_at: new Date().toISOString(),
-      logs:         error ?? "Job failed",
-    }).eq("id", jobId);
-  } else if (status === "processing" && logs) {
-    // Append log lines
-    const { data: job } = await supabase.from("jobs").select("logs").eq("id", jobId).single();
-    await supabase.from("jobs").update({ logs: (job?.logs ?? "") + "\n" + logs }).eq("id", jobId);
+    let resultUrl = null;
+    if (payload.status === "succeeded") {
+      // payload.model looks like "username/job-uuid"
+      // payload.version is the specific deployment hash
+      const modelName = payload.model; 
+      const version = payload.version || payload.output?.version;
+      
+      // Store the exact model string required by replicate.predictions.create
+      resultUrl = version ? `${modelName}:${version}` : modelName;
+    }
+
+    // Update job status in database
+    await supabase
+      .from("jobs")
+      .update({
+        status: newStatus,
+        logs: payload.logs || "",
+        ...(resultUrl ? { result_url: resultUrl } : {}),
+        ...(newStatus === "completed" || newStatus === "failed" ? { completed_at: new Date().toISOString() } : {})
+      })
+      .eq("id", jobId);
+
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
+    console.error("Webhook error:", err);
+    return NextResponse.json({ error: "Failed to process webhook" }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true });
 }

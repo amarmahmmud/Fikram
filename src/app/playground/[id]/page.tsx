@@ -6,14 +6,7 @@ import styles from "./page.module.css";
 
 interface Message { role: "user" | "model"; content: string; ts: string; }
 
-const MOCK_RESPONSES = [
-  "Thank you for your question! Based on my training, I can help you with that. The order tracking system shows your package is currently in transit and should arrive within 2-3 business days.",
-  "Of course! Our return policy allows returns within 30 days of purchase. You can initiate a return directly from your order history page. Would you like me to walk you through the steps?",
-  "I understand your concern. Let me look into that for you. Based on the information available, your refund was processed on August 10th and should appear in your account within 3-5 business days.",
-  "Great question! We offer free shipping on orders over $50. For orders under $50, standard shipping costs $4.99. Expedited options are also available at checkout.",
-];
 
-let responseIdx = 0;
 
 export default function PlaygroundPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -22,6 +15,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("");
   const [sysPrompt, setSysPrompt] = useState("You are a helpful customer support assistant.");
   const [showConfig, setShowConfig] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -30,18 +24,53 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  function sendMessage() {
+  async function sendMessage() {
     if (!input.trim() || loading) return;
     const userMsg: Message = { role: "user", content: input.trim(), ts: new Date().toLocaleTimeString() };
-    setMessages((prev) => [...prev, userMsg]);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
-    setTimeout(() => {
-      const reply = MOCK_RESPONSES[responseIdx % MOCK_RESPONSES.length];
-      responseIdx++;
-      setMessages((prev) => [...prev, { role: "model", content: reply, ts: new Date().toLocaleTimeString() }]);
+
+    try {
+      const res = await fetch("/api/playground", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jobId: resolvedParams.id,
+          messages: newMessages,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok && data.predictionId) {
+        setLoadingStatus("Waking up GPU...");
+        
+        // Polling loop for Replicate predictions
+        let isDone = false;
+        while (!isDone) {
+          await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3s
+          const statusRes = await fetch(`/api/playground/status?id=${data.predictionId}`);
+          const statusData = await statusRes.json();
+
+          if (statusData.status === "succeeded") {
+            setMessages((prev) => [...prev, { role: "model", content: statusData.reply, ts: new Date().toLocaleTimeString() }]);
+            isDone = true;
+          } else if (statusData.status === "failed") {
+            alert(statusData.error || "Model failed to generate response.");
+            isDone = true;
+          } else {
+            setLoadingStatus(statusData.status === "starting" ? "Booting model (this takes ~3 mins if asleep)..." : "Generating...");
+          }
+        }
+      } else {
+        alert(data.error || "Failed to start generation");
+      }
+    } catch {
+      alert("Network error. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1200);
+      setLoadingStatus("");
+    }
   }
 
   function handleKey(e: React.KeyboardEvent) {
@@ -77,7 +106,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                 <span style={{ fontSize: "1rem" }}>🤖</span>
                 <div>
                   <div style={{ fontSize: "0.8125rem", fontWeight: 700 }}>Llama 3.1 8B</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>LoRA fine-tuned · Job #j1</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>LoRA fine-tuned · Job #{resolvedParams.id.substring(0, 8)}</div>
                 </div>
               </div>
             </div>
@@ -138,12 +167,13 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
             {loading && (
               <div className={`${styles.messageRow} ${styles.modelRow}`}>
                 <div className="chat-avatar ai">AI</div>
-                <div className="chat-bubble ai">
+                <div className="chat-bubble ai" style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <span className={styles.typingDots}>
                     <span />
                     <span />
                     <span />
                   </span>
+                  {loadingStatus && <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>{loadingStatus}</span>}
                 </div>
               </div>
             )}
