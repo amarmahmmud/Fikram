@@ -1,0 +1,133 @@
+.welcomeRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.welcomeTitle {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: 4px;
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.statCard { padding: 20px 24px; }
+
+.quickStart {
+  background: var(--bg-card);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 16px;
+  padding: 28px;
+  margin-bottom: 32px;
+  position: relative;
+  overflow: hidden;
+}
+.quickStartGlow {
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 250px; height: 250px;
+  background: radial-gradient(circle, rgba(99,102,241,0.12), transparent 70%);
+  pointer-events: none;
+}
+.quickStartContent {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  position: relative;
+  z-index: 1;
+}
+.quickStartIcon {
+  font-size: 2.5rem;
+  flex-shrink: 0;
+  width: 56px; height: 56px;
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.2);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.quickStartText { flex: 1; }
+.quickStartText h3 { font-size: 1rem; margin-bottom: 4px; }
+.quickStartText p  { font-size: 0.875rem; color: var(--text-muted); }
+.quickStartBtn { flex-shrink: 0; }
+
+.section { margin-bottom: 32px; }
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.jobsList {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.jobRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: var(--transition-base);
+  cursor: pointer;
+  text-decoration: none;
+}
+.jobRow:last-child { border-bottom: none; }
+.jobRow:hover { background: var(--bg-hover); }
+.jobLeft  { display: flex; flex-direction: column; gap: 4px; }
+.jobRight { display: flex; align-items: center; gap: 12px; }
+.jobName  { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
+.jobMeta  { display: flex; align-items: center; gap: 8px; }
+
+.modelsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.modelCard { padding: 20px; cursor: pointer; }
+.modelCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.modelIcon {
+  width: 36px; height: 36px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+}
+.modelName    { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+.modelTask    { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
+.modelCredits { font-size: 0.75rem; color: var(--accent-indigo); font-weight: 600; font-family: var(--font-mono); }
+
+@media (max-width: 1024px) {
+  .statsRow    { grid-template-columns: repeat(2, 1fr); }
+  .modelsGrid  { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .statsRow   { grid-template-columns: 1fr; }
+  .modelsGrid { grid-template-columns: 1fr; }
+  .welcomeRow { flex-direction: column; }
+  .quickStartContent { flex-direction: column; text-align: center; }
+}

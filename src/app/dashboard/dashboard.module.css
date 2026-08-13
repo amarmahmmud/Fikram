@@ -1,0 +1,8 @@
+.navHighlight {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+  color: var(--text-primary) !important;
+}
+.navHighlight:hover {
+  background: rgba(99, 102, 241, 0.15) !important;
+}
