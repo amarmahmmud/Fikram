@@ -65,33 +65,23 @@ export async function POST(req: Request) {
         console.warn("Failed to create model (might already exist):", await createModelRes.text());
       }
 
-      // 2. Fetch the latest version hash of the base model dynamically
-      // Map HuggingFace IDs from the frontend to valid Replicate base models for training
-      let baseOwner = "meta";
-      let baseName = "meta-llama-3-8b";
-      
+      // 2. Map HuggingFace IDs from the frontend to valid Replicate base models for training
+      let replicateModel = "meta/meta-llama-3-8b";
       if (baseModel.toLowerCase().includes("mistral")) {
-        baseOwner = "mistralai";
-        baseName = "mistral-7b-v0.1";
+        replicateModel = "mistralai/mistral-7b-v0.1";
       }
       
-      const modelRes = await fetch(`https://api.replicate.com/v1/models/${baseOwner}/${baseName}`, {
-        headers: { "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}` }
-      });
-      const modelData = await modelRes.json();
-      const latestVersion = modelData.latest_version?.id;
-
-      if (!latestVersion) {
-        console.error("Replicate Model Fetch Error:", modelData);
-        throw new Error("Could not fetch latest base model version");
-      }
-
-      // 3. Start the training
-      const training = await replicate.trainings.create(
-        baseOwner,
-        baseName,
-        latestVersion,
-        {
+      // 3. Start the training directly via HTTP API (bypassing SDK version requirements)
+      const destinationStr = `${process.env.REPLICATE_USERNAME}/${jobName.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-")}`;
+      
+      const trainingRes = await fetch("https://api.replicate.com/v1/trainings", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: replicateModel,
           destination: destinationStr,
           input: {
             train_data: datasetUrl,
@@ -100,8 +90,15 @@ export async function POST(req: Request) {
           },
           webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
           webhook_events_filter: ["completed"],
-        }
-      );
+        })
+      });
+      
+      const training = await trainingRes.json();
+
+      if (!trainingRes.ok) {
+        console.error("Replicate API Error:", training);
+        throw new Error(training.detail || "Failed to create Replicate training");
+      }
 
       // 4. Update job with Replicate training ID
       await supabase.from("jobs").update({
