@@ -99,7 +99,7 @@ export async function POST(req: Request) {
             learning_rate: config?.learningRate ?? 0.0002,
           },
           webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
-          webhook_events_filter: ["completed", "failed"],
+          webhook_events_filter: ["completed"],
         }
       );
 
