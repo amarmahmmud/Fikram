@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const payload = await req.json();
     const supabase = await createClient();
 
-    let newStatus = "running";
+    let newStatus: "pending" | "running" | "completed" | "failed" | "cancelled" = "running";
     if (payload.status === "succeeded") newStatus = "completed";
     else if (payload.status === "failed" || payload.status === "canceled") newStatus = "failed";
 

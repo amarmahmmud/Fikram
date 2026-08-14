@@ -1,24 +1,73 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
+import { useState, useRef, useEffect, use, useCallback } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
+import type { Database } from "@/lib/supabase/types";
 
+type Job = Database["public"]["Tables"]["jobs"]["Row"];
 interface Message { role: "user" | "model"; content: string; ts: string; }
-
-
 
 export default function PlaygroundPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "model", content: "Hello! I'm your fine-tuned customer support assistant. How can I help you today?", ts: "now" },
-  ]);
+  const supabase = createClient();
+
+  const [job, setJob] = useState<Job | null>(null);
+  const [loadingJob, setLoadingJob] = useState(true);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState("");
-  const [sysPrompt, setSysPrompt] = useState("You are a helpful customer support assistant.");
+  const [sysPrompt, setSysPrompt] = useState("You are a helpful assistant specialized in the provided business knowledge.");
   const [showConfig, setShowConfig] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const fetchJob = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/jobs/sync?id=${resolvedParams.id}`);
+      const resData = await res.json();
+      const jobData = resData.ok && resData.job ? resData.job : null;
+
+      const data = jobData || (await supabase
+        .from("jobs")
+        .select("*")
+        .eq("id", resolvedParams.id)
+        .single()).data;
+
+      if (data) {
+        setJob(data);
+        if (messages.length === 0) {
+          setMessages([
+            {
+              role: "model",
+              content: `Hello! I am your custom AI model fine-tuned for "${data.name}". How can I help you today?`,
+              ts: new Date().toLocaleTimeString(),
+            }
+          ]);
+        }
+      }
+    } catch (e) {
+      console.error("Error fetching job in playground:", e);
+    } finally {
+      setLoadingJob(false);
+    }
+  }, [resolvedParams.id, supabase, messages.length]);
+
+  useEffect(() => {
+    fetchJob();
+  }, [fetchJob]);
+
+  // Real-time polling if job is still running so playground unlocks automatically
+  useEffect(() => {
+    if (!job || job.status === "completed") return;
+
+    const interval = setInterval(() => {
+      fetchJob();
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [job, fetchJob]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -31,6 +80,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
     setMessages(newMessages);
     setInput("");
     setLoading(true);
+    setLoadingStatus("Generating response with your fine-tuned model...");
 
     try {
       const res = await fetch("/api/playground", {
@@ -39,31 +89,14 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
         body: JSON.stringify({
           jobId: resolvedParams.id,
           messages: newMessages,
+          systemPrompt: sysPrompt,
         }),
       });
       const data = await res.json();
-      if (data.ok && data.predictionId) {
-        setLoadingStatus("Waking up GPU...");
-        
-        // Polling loop for Replicate predictions
-        let isDone = false;
-        while (!isDone) {
-          await new Promise(resolve => setTimeout(resolve, 3000)); // Poll every 3s
-          const statusRes = await fetch(`/api/playground/status?id=${data.predictionId}`);
-          const statusData = await statusRes.json();
-
-          if (statusData.status === "succeeded") {
-            setMessages((prev) => [...prev, { role: "model", content: statusData.reply, ts: new Date().toLocaleTimeString() }]);
-            isDone = true;
-          } else if (statusData.status === "failed") {
-            alert(statusData.error || "Model failed to generate response.");
-            isDone = true;
-          } else {
-            setLoadingStatus(statusData.status === "starting" ? "Booting model (this takes ~3 mins if asleep)..." : "Generating...");
-          }
-        }
+      if (data.ok && data.reply) {
+        setMessages((prev) => [...prev, { role: "model", content: data.reply, ts: new Date().toLocaleTimeString() }]);
       } else {
-        alert(data.error || "Failed to start generation");
+        alert(data.error || "Failed to generate response");
       }
     } catch {
       alert("Network error. Please try again.");
@@ -80,12 +113,19 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
     }
   }
 
+  const isCompleted = job?.status === "completed";
+
   return (
     <>
       <div className="topbar">
         <Link href={`/jobs/${resolvedParams.id}`} className="btn btn-ghost btn-sm">← Job Detail</Link>
-        <span className="topbar-title" style={{ flex: 1, textAlign: "center" }}>Playground — Customer Support Bot</span>
-
+        <span className="topbar-title" style={{ flex: 1, textAlign: "center" }}>
+          Playground — {job ? job.name : "Model Tester"}
+        </span>
+        <span className={`badge ${isCompleted ? "badge-success" : "badge-warning"}`}>
+          <span className={`status-dot ${job?.status || "pending"}`} />
+          {job ? job.status.toUpperCase() : "LOADING"}
+        </span>
       </div>
 
       <div className={styles.playgroundLayout}>
@@ -102,8 +142,12 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               <div className={styles.modelBadge}>
                 <span style={{ fontSize: "1rem" }}>🤖</span>
                 <div>
-                  <div style={{ fontSize: "0.8125rem", fontWeight: 700 }}>Llama 3.1 8B</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>LoRA fine-tuned · Job #{resolvedParams.id.substring(0, 8)}</div>
+                  <div style={{ fontSize: "0.8125rem", fontWeight: 700 }}>
+                    {job ? job.base_model : "Llama 3.1 8B"}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    LoRA fine-tuned · #{resolvedParams.id.substring(0, 8)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -115,88 +159,109 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                 rows={4}
                 value={sysPrompt}
                 onChange={(e) => setSysPrompt(e.target.value)}
-                style={{ fontSize: "0.8125rem" }}
+                placeholder="Give instructions to your model..."
+                style={{ resize: "vertical", fontSize: "0.8125rem" }}
               />
             </div>
 
             <div className="input-group">
-              <label className="input-label">Temperature</label>
-              <input type="range" min="0" max="100" defaultValue="70" className={styles.slider} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: 2 }}>
-                <span>Precise</span><span>Creative</span>
+              <label className="input-label">Engine</label>
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                Modal.com Serverless GPU (T4/A10G)
               </div>
             </div>
 
             <div className="input-group">
-              <label className="input-label">Max Tokens</label>
-              <input type="number" className="input" defaultValue={512} style={{ fontSize: "0.8125rem" }} />
+              <label className="input-label">Status</label>
+              <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: isCompleted ? "var(--success)" : "var(--warning)" }}>
+                {isCompleted ? "● Ready for Testing" : "● Training in Progress"}
+              </div>
             </div>
-
-            <button className="btn btn-ghost btn-sm w-full" style={{ marginTop: 8 }} onClick={() => setMessages([{ role: "model", content: "Hello! I'm your fine-tuned assistant. How can I help?", ts: "now" }])}>
-              ↺ Reset Conversation
-            </button>
           </div>
         )}
 
-        {/* Chat */}
+        {/* Chat area */}
         <div className={styles.chatArea}>
-          {!showConfig && (
-            <button className={styles.configToggle} onClick={() => setShowConfig(true)}>
-              ⚙ Config
-            </button>
+          {!isCompleted && !loadingJob && (
+            <div style={{
+              background: "rgba(234, 179, 8, 0.08)",
+              borderBottom: "1px solid rgba(234, 179, 8, 0.2)",
+              padding: "10px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.8125rem",
+              color: "var(--warning)"
+            }}>
+              <span>⏳ <strong>Model is still training:</strong> The chat will automatically unlock as soon as training finishes on Modal.</span>
+              <button onClick={fetchJob} className="btn btn-ghost btn-sm" style={{ color: "var(--warning)" }}>Check Status ↺</button>
+            </div>
           )}
 
-          <div className={styles.messages}>
+          <div className={styles.messagesList}>
             {messages.map((m, i) => (
-              <div key={i} className={`${styles.messageRow} ${m.role === "user" ? styles.userRow : styles.modelRow}`}>
-                <div className={`chat-avatar ${m.role === "model" ? "ai" : "user"}`}>
-                  {m.role === "model" ? "AI" : "U"}
+              <div
+                key={i}
+                className={`${styles.message} ${m.role === "user" ? styles.messageUser : styles.messageModel}`}
+              >
+                <div className={styles.messageAvatar}>
+                  {m.role === "user" ? "👤" : "🤖"}
                 </div>
                 <div className={styles.messageContent}>
-                  <div className={`chat-bubble ${m.role === "model" ? "ai" : "user"}`} style={{ maxWidth: "none" }}>
-                    {m.content}
+                  <div className={styles.messageMeta}>
+                    <span className={styles.messageSender}>{m.role === "user" ? "You" : (job?.name || "Model")}</span>
+                    <span className={styles.messageTime}>{m.ts}</span>
                   </div>
-                  <span className={styles.msgTs}>{m.ts}</span>
+                  <div className={styles.messageText}>{m.content}</div>
                 </div>
               </div>
             ))}
-
             {loading && (
-              <div className={`${styles.messageRow} ${styles.modelRow}`}>
-                <div className="chat-avatar ai">AI</div>
-                <div className="chat-bubble ai" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <span className={styles.typingDots}>
-                    <span />
-                    <span />
-                    <span />
-                  </span>
-                  {loadingStatus && <span style={{ fontSize: "0.75rem", opacity: 0.7 }}>{loadingStatus}</span>}
+              <div className={`${styles.message} ${styles.messageModel}`}>
+                <div className={styles.messageAvatar}>🤖</div>
+                <div className={styles.messageContent}>
+                  <div className={styles.messageText}>
+                    <span className="spinner" style={{ width: 14, height: 14, display: "inline-block", marginRight: 8 }} />
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                      {loadingStatus || "Generating..."}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
             <div ref={bottomRef} />
           </div>
 
-          <div className={styles.inputRow}>
+          {/* Input bar */}
+          <div className={styles.inputBar}>
+            {!showConfig && (
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowConfig(true)}
+                title="Show Config"
+                style={{ flexShrink: 0 }}
+              >
+                ⚙
+              </button>
+            )}
             <textarea
               id="playground-input"
-              className={`input ${styles.chatInput}`}
-              placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
+              className={styles.chatInput}
+              rows={1}
+              placeholder={isCompleted ? "Type a message to test your model... (Enter to send)" : "Model is training... chat unlocks upon completion"}
               value={input}
+              disabled={!isCompleted || loading}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKey}
-              rows={2}
             />
             <button
               id="playground-send-btn"
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
+              disabled={!input.trim() || loading || !isCompleted}
               onClick={sendMessage}
-              disabled={loading || !input.trim()}
               style={{ flexShrink: 0 }}
             >
-              {loading ? (
-                <span className="animate-spin" style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} />
-              ) : "Send ↑"}
+              Send ↑
             </button>
           </div>
         </div>

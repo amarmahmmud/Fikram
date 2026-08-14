@@ -33,110 +33,79 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to create job" }, { status: 500 });
   }
 
-  // Trigger Replicate Native Training
+  // Trigger Modal Training Job
   try {
-    const replicateUsername = process.env.REPLICATE_USERNAME;
+    const modalTrainUrl = process.env.MODAL_TRAIN_URL ?? "https://amarsuadbusiness--model-factory-trainer-start-training.modal.run";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
 
-    if (datasetUrl && replicateUsername) {
-      // 1. Create the destination model on Replicate via HTTP API
-      const destinationModelName = `job-${job.id.slice(0, 8)}`;
-      const destinationStr = `${replicateUsername}/${destinationModelName}`;
+    if (datasetUrl && modalTrainUrl) {
+      // The webhook Modal will call when training is done
+      const webhookUrl = `${appUrl}/api/webhooks/modal`;
 
-      const createModelRes = await fetch("https://api.replicate.com/v1/models", {
+      // Call our deployed Modal start_training endpoint
+      const modalRes = await fetch(modalTrainUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          owner: replicateUsername,
-          name: destinationModelName,
-          visibility: "private",
-          hardware: "gpu-t4-nano",
-          description: `Fine-tuned model for ${name}`
-        })
+          job_id: job.id,
+          dataset_url: datasetUrl,
+          webhook_url: webhookUrl,
+          num_train_epochs: config?.epochs ?? 1,
+          learning_rate: config?.learningRate ?? 0.0002,
+          max_steps: 30,  // Cap for cost control
+          // Pass R2 credentials so Modal can upload the trained adapter
+          r2_endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+          r2_access_key: process.env.R2_ACCESS_KEY_ID,
+          r2_secret_key: process.env.R2_SECRET_ACCESS_KEY,
+          r2_bucket: process.env.R2_BUCKET_NAME,
+        }),
       });
 
-      if (!createModelRes.ok) {
-        console.warn("Failed to create model (might already exist):", await createModelRes.text());
+      const modalData = await modalRes.json();
+
+      if (!modalRes.ok || modalData.status === "failed") {
+        console.error("Modal API Error:", modalData);
+        throw new Error(modalData.error || "Failed to trigger Modal training");
       }
 
-      // 2. Map frontend model IDs to valid Replicate base models for training
-      let replicateOwner = "meta";
-      let replicateName = "meta-llama-3-8b";
-      if (baseModel?.toLowerCase().includes("mistral")) {
-        replicateOwner = "mistralai";
-        replicateName = "mistral-7b-v0.1";
-      }
+      const modalCallId = modalData.call_id;
+      console.log("Modal training triggered successfully, call_id:", modalCallId);
 
-      // 3. Fetch the latest version hash of the base model
-      const modelInfoRes = await fetch(`https://api.replicate.com/v1/models/${replicateOwner}/${replicateName}`, {
-        headers: { "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}` }
-      });
-      const modelInfo = await modelInfoRes.json();
-      const latestVersion = modelInfo.latest_version?.id;
-
-      if (!latestVersion) {
-        console.error("Could not fetch model version:", modelInfo);
-        throw new Error("Could not fetch latest base model version");
-      }
-
-      // 4. Start the training using the correct versioned endpoint
-      const trainingRes = await fetch(
-        `https://api.replicate.com/v1/models/${replicateOwner}/${replicateName}/versions/${latestVersion}/trainings`,
-        {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${process.env.REPLICATE_API_TOKEN}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            destination: destinationStr,
-            input: {
-              train_data: datasetUrl,
-              num_train_epochs: config?.epochs ?? 3,
-              learning_rate: config?.learningRate ?? 0.0002,
-            },
-            webhook: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app"}/api/webhooks/replicate?job_id=${job.id}`,
-            webhook_events_filter: ["completed"],
-          })
-        }
-      );
-
-      const training = await trainingRes.json();
-
-      if (!trainingRes.ok) {
-        console.error("Replicate API Error:", training);
-        throw new Error(training.detail || "Failed to create Replicate training");
-      }
-
-      // 4. Update job with Replicate training ID
+      // Update job with Modal call ID
       await supabase.from("jobs").update({
-        replicate_id: training.id,
+        replicate_id: modalCallId,
         status:       "running",
         started_at:   new Date().toISOString(),
       }).eq("id", job.id);
-
     } else {
-      // No dataset or username configured — just mark as running
-      await supabase.from("jobs").update({ status: "running", started_at: new Date().toISOString() }).eq("id", job.id);
+      // No dataset or Modal credentials configured — mark as running for testing
+      console.warn("Modal credentials not set or no dataset — marking job as running without training");
+      await supabase.from("jobs").update({
+        status: "running",
+        started_at: new Date().toISOString(),
+      }).eq("id", job.id);
     }
   } catch (err) {
-    console.error("Replicate error:", err);
-    // Don't fail the whole request — job is created, just mark it running
-    await supabase.from("jobs").update({ status: "running", started_at: new Date().toISOString() }).eq("id", job.id);
+    console.error("Modal training trigger error:", err);
+    // Don't fail the whole request — job is saved, mark it running
+    await supabase.from("jobs").update({
+      status: "running",
+      started_at: new Date().toISOString(),
+    }).eq("id", job.id);
   }
 
   // Deduct credits
   const newBalance = profile.credits_balance - estimatedCredits;
   await supabase.from("profiles").update({ credits_balance: newBalance }).eq("id", user.id);
   await supabase.from("credit_transactions").insert({
-    user_id:      user.id,
-    type:         "job_consumed",
-    label:        `Job: ${name}`,
-    amount:       -estimatedCredits,
+    user_id:       user.id,
+    type:          "job_consumed",
+    label:         `Job: ${name}`,
+    amount:        -estimatedCredits,
     balance_after: newBalance,
-    reference_id: job.id,
+    reference_id:  job.id,
   });
 
   return NextResponse.json({ ok: true, jobId: job.id });

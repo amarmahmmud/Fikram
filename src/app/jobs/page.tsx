@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import JobsClient from "./JobsClient.tsx";
+import JobsClient from "./JobsClient";
 
 
 export default async function JobsPage() {

@@ -1,25 +1,65 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
+import type { Database } from "@/lib/supabase/types";
 
-const TRANSACTIONS = [
-  { id: "t1", type: "signup_bonus", label: "Signup Bonus", amount: +100, balance: 100, date: "2026-08-10", ref: "—" },
-  { id: "t2", type: "job_consumed", label: "Job: Customer Support Bot", amount: -28, balance: 72, date: "2026-08-12", ref: "j1" },
-  { id: "t3", type: "job_consumed", label: "Job: Product Description Writer", amount: -12, balance: 60, date: "2026-08-12", ref: "j2" },
-];
+type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
 export default function CreditsPage() {
-  const balance = 72;
-  const used = 28;
-  const total = 100;
-  const pct = Math.round((balance / total) * 100);
+  const supabase = createClient();
+  const [balance, setBalance] = useState<number>(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch profile credits balance
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("credits_balance")
+          .eq("id", user.id)
+          .single();
+
+        if (profile) {
+          setBalance(profile.credits_balance);
+        }
+
+        // Fetch user's credit transactions
+        const { data: txs } = await supabase
+          .from("credit_transactions")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false });
+
+        if (txs) {
+          setTransactions(txs);
+        }
+      } catch (err) {
+        console.error("Error loading credits:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, [supabase]);
+
+  const total = 100; // Free signup tier quota
+  const used = Math.max(0, total - balance);
+  const pct = Math.min(100, Math.max(0, Math.round((balance / total) * 100)));
 
   return (
     <>
       <div className="topbar">
-        <span className="topbar-title">Credits</span>
-        <button className="btn btn-primary btn-sm" disabled>Buy More Credits <span className="badge badge-default" style={{ fontSize: "0.625rem", marginLeft: 4 }}>Soon</span></button>
+        <span className="topbar-title">Credits & Billing</span>
+        <button className="btn btn-primary btn-sm" disabled>
+          Buy More Credits <span className="badge badge-default" style={{ fontSize: "0.625rem", marginLeft: 4 }}>Soon</span>
+        </button>
       </div>
 
       <div className="page-content">
@@ -29,7 +69,7 @@ export default function CreditsPage() {
           <div className={styles.balanceContent}>
             <div>
               <div className={styles.balanceLabel}>Current Balance</div>
-              <div className={styles.balanceValue}>{balance}</div>
+              <div className={styles.balanceValue}>{loading ? "..." : balance}</div>
               <div className={styles.balanceUnit}>credits remaining</div>
             </div>
             <div className={styles.balanceChart}>
@@ -60,94 +100,84 @@ export default function CreditsPage() {
           <div className={styles.creditStats}>
             <div className={styles.creditStat}>
               <span className={styles.creditStatValue}>{total}</span>
-              <span className={styles.creditStatLabel}>Total received</span>
+              <span className={styles.creditStatLabel}>Initial Free Credits</span>
             </div>
             <div className={styles.creditStat}>
               <span className={styles.creditStatValue} style={{ color: "var(--warning)" }}>{used}</span>
-              <span className={styles.creditStatLabel}>Used</span>
+              <span className={styles.creditStatLabel}>Consumed</span>
             </div>
             <div className={styles.creditStat}>
               <span className={styles.creditStatValue} style={{ color: "var(--success)" }}>{balance}</span>
-              <span className={styles.creditStatLabel}>Remaining</span>
+              <span className={styles.creditStatLabel}>Available</span>
             </div>
             <div className={styles.creditStat}>
-              <span className={styles.creditStatValue}>~2–3</span>
-              <span className={styles.creditStatLabel}>Jobs left</span>
+              <span className={styles.creditStatValue}>~{Math.floor(balance / 28)}</span>
+              <span className={styles.creditStatLabel}>Est. Jobs Left</span>
             </div>
           </div>
         </div>
 
         {/* Credit estimator */}
         <div className={styles.estimatorCard}>
-          <h3 className={styles.sectionTitle}>Credit Cost Estimator</h3>
+          <h3 className={styles.sectionTitle}>Fine-Tuning Cost Reference</h3>
           <div className={styles.estimatorGrid}>
             {[
-              { model: "Phi-3 Mini 3.8B", method: "LoRA", cost: "8–18 credits", time: "5–10 min" },
-              { model: "Mistral 7B", method: "LoRA", cost: "15–35 credits", time: "10–20 min" },
-              { model: "Llama 3.1 8B", method: "LoRA", cost: "20–40 credits", time: "12–25 min" },
-              { model: "Gemma 2 9B", method: "LoRA", cost: "25–50 credits", time: "18–35 min" },
+              { model: "Llama 3.1 8B Instruct", method: "LoRA", cost: "~28 credits", time: "5–15 min (Modal L4 GPU)" },
+              { model: "Mistral 7B Instruct", method: "LoRA", cost: "~25 credits", time: "5–15 min (Modal L4 GPU)" },
+              { model: "Phi-3 Mini 3.8B", method: "LoRA", cost: "~15 credits", time: "4–8 min (Modal L4 GPU)" },
+              { model: "Gemma 2 9B Instruct", method: "LoRA", cost: "~35 credits", time: "8–20 min (Modal L4 GPU)" },
             ].map((e) => (
               <div key={e.model} className={styles.estimatorRow}>
                 <div className={styles.estimatorModel}>{e.model}</div>
                 <span className="badge badge-indigo">{e.method}</span>
                 <div className={styles.estimatorCost}>{e.cost}</div>
-                <div className={styles.estimatorTime}>~{e.time}</div>
+                <div className={styles.estimatorTime}>{e.time}</div>
               </div>
             ))}
           </div>
-          <p className={styles.estimatorNote}>
-            * Costs vary based on dataset size, epochs, and batch size. The AI wizard shows exact estimates before launching.
-          </p>
         </div>
 
-        {/* Transactions */}
-        <div className={styles.sectionHead}>
-          <h3 className={styles.sectionTitle}>Transaction History</h3>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Balance After</th>
-                <th>Reference</th>
-              </tr>
-            </thead>
-            <tbody>
-              {TRANSACTIONS.map((t) => (
-                <tr key={t.id}>
-                  <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{t.label}</td>
-                  <td>{t.date}</td>
-                  <td>
-                    <span style={{ color: t.amount > 0 ? "var(--success)" : "var(--warning)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
-                      {t.amount > 0 ? "+" : ""}{t.amount}
-                    </span>
-                  </td>
-                  <td className="font-mono">{t.balance}</td>
-                  <td>
-                    {t.ref !== "—" ? (
-                      <Link href={`/jobs/${t.ref}`} className="btn btn-ghost btn-sm" style={{ fontSize: "0.75rem" }}>
-                        View Job →
-                      </Link>
-                    ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Upgrade teaser */}
-        <div className={styles.upgradeBanner}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: "1rem", marginBottom: 4 }}>Need more credits?</div>
-            <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-              Paid plans with monthly credit bundles are coming soon. Early users get priority access and discounts.
+        {/* Transaction History */}
+        <div className="card">
+          <h3 className={styles.sectionTitle} style={{ marginBottom: 16 }}>Transaction History</h3>
+          {transactions.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px 0", color: "var(--text-muted)", fontSize: "0.875rem" }}>
+              No transactions recorded yet.
             </div>
-          </div>
-          <button className="btn btn-secondary btn-sm" disabled>Get Notified</button>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Description</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Balance After</th>
+                    <th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((tx) => (
+                    <tr key={tx.id}>
+                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{tx.label}</td>
+                      <td>
+                        <span className={`badge ${tx.amount > 0 ? "badge-success" : "badge-default"}`}>
+                          {tx.type.replace("_", " ").toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="font-mono" style={{ color: tx.amount > 0 ? "var(--success)" : "var(--warning)", fontWeight: 700 }}>
+                        {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                      </td>
+                      <td className="font-mono">{tx.balance_after}</td>
+                      <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                        {new Date(tx.created_at).toLocaleDateString()} {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </>

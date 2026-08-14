@@ -1,19 +1,70 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 export default function SettingsPage() {
-  const [name, setName] = useState("Jane Smith");
-  const [email] = useState("jane@example.com");
+  const supabase = createClient();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [notify, setNotify] = useState({ jobComplete: true, jobFailed: true, credits: false });
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  function handleSave(e: React.FormEvent) {
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setEmail(user.email || "");
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name")
+            .eq("id", user.id)
+            .single();
+
+          if (profile?.full_name) {
+            setName(profile.full_name);
+          } else {
+            setName(user.email?.split("@")[0] || "");
+          }
+        }
+      } catch (err) {
+        console.error("Error loading profile:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, [supabase]);
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from("profiles")
+          .update({ full_name: name })
+          .eq("id", user.id);
+
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Error saving profile:", err);
+      alert("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
   }
+
+  const initials = name
+    ? name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
+    : "AI";
 
   return (
     <>
@@ -22,10 +73,9 @@ export default function SettingsPage() {
       </div>
 
       <div className="page-content" style={{ maxWidth: 680 }}>
-
         {saved && (
           <div className={styles.savedBanner}>
-            ✓ Settings saved successfully
+            ✓ Profile saved successfully
           </div>
         )}
 
@@ -37,10 +87,12 @@ export default function SettingsPage() {
           </div>
 
           <div className={styles.avatarRow}>
-            <div className={styles.avatar}>JS</div>
+            <div className={styles.avatar}>{initials}</div>
             <div>
-              <button type="button" className="btn btn-secondary btn-sm">Change Avatar</button>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>JPG, PNG up to 2MB</p>
+              <div style={{ fontWeight: 600, fontSize: "0.875rem" }}>{name || "User"}</div>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
+                {email || "Account member"}
+              </p>
             </div>
           </div>
 
@@ -51,7 +103,9 @@ export default function SettingsPage() {
                 id="settings-name"
                 className="input"
                 value={name}
+                disabled={loading}
                 onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
               />
             </div>
             <div className="input-group">
@@ -63,12 +117,14 @@ export default function SettingsPage() {
                 disabled
                 style={{ opacity: 0.5, cursor: "not-allowed" }}
               />
-              <span className="input-hint">Email cannot be changed after signup</span>
+              <span className="input-hint">Email is linked to your authentication account</span>
             </div>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button id="save-profile-btn" type="submit" className="btn btn-primary btn-sm">Save Profile</button>
+            <button id="save-profile-btn" type="submit" disabled={saving || loading} className="btn btn-primary btn-sm">
+              {saving ? "Saving..." : "Save Profile"}
+            </button>
           </div>
         </form>
 
@@ -78,13 +134,13 @@ export default function SettingsPage() {
         <div className={styles.section}>
           <div className={styles.sectionHead}>
             <h3 className={styles.sectionTitle}>Notifications</h3>
-            <p className={styles.sectionDesc}>Choose what events send you an email notification.</p>
+            <p className={styles.sectionDesc}>Choose which event alerts are enabled for your account.</p>
           </div>
 
           {[
-            { key: "jobComplete" as keyof typeof notify, label: "Job Completed", desc: "Email when a fine-tuning job finishes successfully" },
-            { key: "jobFailed"   as keyof typeof notify, label: "Job Failed",    desc: "Email when a job fails with an error" },
-            { key: "credits"     as keyof typeof notify, label: "Low Credits",   desc: "Email when your credit balance drops below 10" },
+            { key: "jobComplete" as keyof typeof notify, label: "Job Completed", desc: "Notification when a fine-tuning job finishes successfully" },
+            { key: "jobFailed"   as keyof typeof notify, label: "Job Failed",    desc: "Notification when a job encounters a training error" },
+            { key: "credits"     as keyof typeof notify, label: "Low Credits",   desc: "Notification when your credit balance drops below 20" },
           ].map((n) => (
             <div key={n.key} className={styles.toggleRow}>
               <div>
@@ -93,65 +149,17 @@ export default function SettingsPage() {
               </div>
               <button
                 id={`notify-${n.key}-btn`}
+                type="button"
                 role="switch"
                 aria-checked={notify[n.key]}
                 className={`${styles.toggle} ${notify[n.key] ? styles.toggleOn : ""}`}
                 onClick={() => setNotify((prev) => ({ ...prev, [n.key]: !prev[n.key] }))}
               >
-                <span className={styles.toggleThumb} />
+                <span className={styles.toggleKnob} />
               </button>
             </div>
           ))}
         </div>
-
-        <hr className="divider" />
-
-        {/* API / Integrations */}
-        <div className={styles.section}>
-          <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle}>API Access</h3>
-            <p className={styles.sectionDesc}>Use your Model Factory credentials in external apps and scripts.</p>
-          </div>
-
-          <div className={styles.apiKeyCard}>
-            <div className={styles.apiKeyLabel}>Your API Key</div>
-            <div className={styles.apiKeyRow}>
-              <code className={styles.apiKey}>mf_sk_••••••••••••••••••••••••••••••••</code>
-              <button className="btn btn-secondary btn-sm" disabled>Copy</button>
-              <button className="btn btn-ghost btn-sm" disabled>Regenerate</button>
-            </div>
-            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              API access is available on paid plans. Coming soon.
-            </p>
-          </div>
-        </div>
-
-        <hr className="divider" />
-
-        {/* Danger Zone */}
-        <div className={`${styles.section} ${styles.dangerSection}`}>
-          <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle} style={{ color: "var(--error)" }}>Danger Zone</h3>
-            <p className={styles.sectionDesc}>These actions are permanent and cannot be undone.</p>
-          </div>
-
-          <div className={styles.dangerRow}>
-            <div>
-              <div className={styles.toggleLabel}>Delete all model weights</div>
-              <div className={styles.toggleDesc}>Permanently delete all stored adapter files and results.</div>
-            </div>
-            <button id="delete-weights-btn" className="btn btn-danger btn-sm">Delete All Weights</button>
-          </div>
-
-          <div className={styles.dangerRow} style={{ marginTop: 12 }}>
-            <div>
-              <div className={styles.toggleLabel}>Delete Account</div>
-              <div className={styles.toggleDesc}>Permanently delete your account and all associated data.</div>
-            </div>
-            <button id="delete-account-btn" className="btn btn-danger btn-sm">Delete Account</button>
-          </div>
-        </div>
-
       </div>
     </>
   );
