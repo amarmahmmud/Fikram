@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-const pdf = require("pdf-parse");
 
 export async function POST(req: Request) {
   try {
@@ -13,12 +12,13 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    // pdf-parse extracts the text content from the PDF buffer
-    const data = await pdf(buffer);
+    // Dynamic import to avoid Turbopack ESM resolution issues with pdf-parse v2
+    const pdfParse = await import("pdf-parse").then((m) => m.default ?? m);
+    const data = await pdfParse(buffer);
     
     return NextResponse.json({ text: data.text });
   } catch (error: any) {
-    console.error("PDF Parsing Error:", error);
-    return NextResponse.json({ error: "Failed to parse PDF" }, { status: 500 });
+    console.error("PDF Parsing Error:", error?.message ?? error);
+    return NextResponse.json({ error: "Failed to parse PDF: " + (error?.message ?? "Unknown error") }, { status: 500 });
   }
 }

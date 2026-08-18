@@ -9,7 +9,7 @@ Your job is to help users configure a fine-tuning job for a large language model
 
 When a user describes their goal, you must:
 1. Understand exactly what they want their model to do
-2. Ask 2-4 short clarifying questions, ONE AT A TIME
+2. Ask 2-3 short clarifying questions, ONE AT A TIME
 3. Each question must be a JSON object with this EXACT format (no extra text, no markdown):
 {"type":"question","text":"What is the primary language your users speak?","options":["English only","Arabic only","English + Arabic","Multiple languages"],"allowCustom":true,"multiSelect":false}
 
@@ -31,38 +31,71 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "No messages provided" }, { status: 400 });
     }
 
+    // Count how many user messages we have — forces config after 3 answers (prevents infinite loop)
+    const userMsgCount = messages.filter((m) => m.role === "user").length;
+
     // Build Groq message history
-    const groqMessages = [
-      { role: "system" as const, content: SYSTEM_PROMPT },
+    const groqMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
+      { role: "system", content: SYSTEM_PROMPT },
       ...messages.map((m) => ({
-        role: m.role === "user" ? "user" as const : "assistant" as const,
+        role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
         content: m.content,
       })),
     ];
 
+    // After 3 answers, force the AI to output the config
+    if (userMsgCount >= 3) {
+      groqMessages.push({
+        role: "user",
+        content: "That is enough information. Output the final config JSON now.",
+      });
+    }
+
     const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-20b",
       messages: groqMessages,
       temperature: 0.3,
-      max_tokens: 512,
-      response_format: { type: "json_object" },
+      max_tokens: 600,
     });
 
     const text = completion.choices[0]?.message?.content?.trim() ?? "";
 
     let parsed;
     try {
-      const clean = text.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+      const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
       parsed = JSON.parse(clean);
     } catch {
-      // If it's not valid JSON, wrap it as a question fallback
-      parsed = {
-        type: "question",
-        text: "What tone should your model use?",
-        options: ["Professional & formal", "Friendly & conversational", "Technical & precise", "Creative & expressive"],
-        allowCustom: true,
-        multiSelect: false,
-      };
+      // Try to find JSON anywhere in the response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { parsed = JSON.parse(jsonMatch[0]); } catch { parsed = null; }
+      }
+    }
+
+    // If AI response couldn't be parsed, use smart fallback based on how many questions answered
+    if (!parsed) {
+      if (userMsgCount >= 2) {
+        parsed = {
+          type: "config",
+          summary: "Custom AI assistant based on your requirements",
+          recommendedModel: "meta-llama/Llama-3.1-8B-Instruct",
+          method: "lora",
+          epochs: 3,
+          learningRate: 0.0002,
+          batchSize: 4,
+          estimatedCredits: 28,
+          estimatedTime: "12-18 min",
+          reasoning: "Llama 3.1 8B is the best general-purpose model for chat and instruction tasks.",
+        };
+      } else {
+        parsed = {
+          type: "question",
+          text: "What tone should your model use?",
+          options: ["Professional & formal", "Friendly & conversational", "Technical & precise", "Creative & expressive"],
+          allowCustom: true,
+          multiSelect: false,
+        };
+      }
     }
 
     return NextResponse.json({ ok: true, data: parsed });
@@ -71,13 +104,12 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("Wizard API error:", message);
 
-    // Return a structured fallback question instead of erroring out
     return NextResponse.json({
       ok: true,
       data: {
         type: "question",
-        text: "What is the primary purpose of your fine-tuned model?",
-        options: ["Answer customer questions", "Write product descriptions", "Summarize documents", "Classify text", "Generate code", "Translate content"],
+        text: "What tone should your model use?",
+        options: ["Professional & formal", "Friendly & conversational", "Technical & precise", "Creative & expressive"],
         allowCustom: true,
         multiSelect: false,
       },
