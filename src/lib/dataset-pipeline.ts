@@ -280,11 +280,11 @@ export async function generateDataset(
   });
 
   // Cap chunks to avoid Gemini rate limits (15 RPM on free tier).
-  // 10 chunks × ~10 pairs each = ~100 pairs, ideal for LoRA fine-tuning.
+  // 6 chunks processed sequentially = ~60 pairs, good for LoRA fine-tuning.
   let chunks = smartChunk(text);
-  if (chunks.length > 10) {
-    console.log(`[Pipeline] Document has ${chunks.length} chunks. Capping to 10 to avoid rate limits.`);
-    chunks = chunks.slice(0, 10);
+  if (chunks.length > 6) {
+    console.log(`[Pipeline] Document has ${chunks.length} chunks. Capping to 6 to avoid rate limits.`);
+    chunks = chunks.slice(0, 6);
   }
   const totalChunks = chunks.length;
 
@@ -298,7 +298,8 @@ export async function generateDataset(
 
   // ── Stage 2: Generate in parallel batches ──
   const allPairs: DatasetPair[] = [];
-  const PARALLEL_LIMIT = 3; // max concurrent Gemini calls
+  // Process ONE chunk at a time to avoid Gemini rate limits on free tier
+  const PARALLEL_LIMIT = 1;
 
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
@@ -311,11 +312,11 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] Batch done: chunks ${i+1}-${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks}, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] Chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
-    // 2-second delay between batches to stay under Gemini's 15 RPM rate limit
+    // 4-second delay between requests to stay well under Gemini's 15 RPM limit
     if (i + PARALLEL_LIMIT < totalChunks) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 4000));
     }
 
     onProgress?.({
@@ -327,6 +328,13 @@ export async function generateDataset(
     });
   }
 
+  console.log(`[Pipeline] Generation complete. Raw pairs: ${allPairs.length}`);
+
+  // If we got 0 raw pairs, something is fundamentally wrong (rate limits, API key, etc.)
+  if (allPairs.length === 0) {
+    console.error(`[Pipeline] FAILED: Generated 0 pairs from ${totalChunks} chunks. Check Gemini API key and rate limits.`);
+  }
+
   // ── Stage 3: Validate ──
   onProgress?.({
     stage: "validating",
@@ -336,7 +344,14 @@ export async function generateDataset(
     pairsGenerated: allPairs.length,
   });
 
-  const validated = await validateAndScore(allPairs, goal);
+  let validated = await validateAndScore(allPairs, goal);
+  console.log(`[Pipeline] After validation: ${validated.length} pairs (was ${allPairs.length})`);
+
+  // Safety: if validation removed everything, keep the raw pairs
+  if (validated.length === 0 && allPairs.length > 0) {
+    console.warn(`[Pipeline] Validation removed ALL pairs. Keeping raw pairs as fallback.`);
+    validated = allPairs;
+  }
 
   // ── Stage 4: Deduplicate ──
   onProgress?.({
@@ -348,6 +363,7 @@ export async function generateDataset(
   });
 
   const final = deduplicatePairs(validated);
+  console.log(`[Pipeline] After dedup: ${final.length} pairs`);
 
   // ── Build JSONL ──
   const jsonl = final.map((p) => JSON.stringify(p)).join("\n");
