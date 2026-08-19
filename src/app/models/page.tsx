@@ -3,29 +3,19 @@
 import Link from "next/link";
 import { useState } from "react";
 import styles from "./page.module.css";
-
-const MODELS = [
-  { id: "meta-llama/Llama-3.1-8B-Instruct", name: "Llama 3.1 8B Instruct", org: "Meta", task: "Chat / Instruction", size: "8B", credits: "20–40", popular: true, tags: ["chat", "instruction", "text"] },
-  { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B Instruct v0.3", org: "Mistral AI", task: "General Purpose", size: "7B", credits: "15–35", popular: true, tags: ["general", "instruction", "text"] },
-  { id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini 4K Instruct", org: "Microsoft", task: "Reasoning", size: "3.8B", credits: "8–18", popular: false, tags: ["reasoning", "lightweight", "text"] },
-  { id: "google/gemma-2-9b-it", name: "Gemma 2 9B Instruct", org: "Google", task: "Chat / Instruction", size: "9B", credits: "25–50", popular: true, tags: ["chat", "instruction", "text"] },
-  { id: "Qwen/Qwen2.5-7B-Instruct", name: "Qwen 2.5 7B Instruct", org: "Alibaba", task: "Multilingual", size: "7B", credits: "15–35", popular: false, tags: ["multilingual", "instruction", "text"] },
-  { id: "tiiuae/falcon-7b-instruct", name: "Falcon 7B Instruct", org: "TII UAE", task: "Instruction Following", size: "7B", credits: "15–30", popular: false, tags: ["instruction", "text"] },
-  { id: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B", name: "DeepSeek R1 Llama 8B", org: "DeepSeek", task: "Reasoning / Chain-of-Thought", size: "8B", credits: "20–40", popular: true, tags: ["reasoning", "cot", "text"] },
-  { id: "microsoft/phi-2", name: "Phi-2", org: "Microsoft", task: "General Purpose", size: "2.7B", credits: "6–14", popular: false, tags: ["lightweight", "general", "text"] },
-];
-
-const TASKS = ["All", "Chat / Instruction", "Reasoning", "General Purpose", "Multilingual", "Lightweight"];
+import { MODELS, MODEL_CATEGORIES } from "@/lib/models";
+import type { ModelCategory } from "@/lib/models";
 
 export default function ModelsPage() {
   const [search, setSearch] = useState("");
-  const [activeTask, setActiveTask] = useState("All");
+  const [activeCategory, setActiveCategory] = useState<ModelCategory | "all">("all");
 
   const filtered = MODELS.filter((m) => {
     const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.org.toLowerCase().includes(search.toLowerCase());
-    const matchTask = activeTask === "All" || m.task.includes(activeTask);
-    return matchSearch && matchTask;
+      m.org.toLowerCase().includes(search.toLowerCase()) ||
+      m.bestFor.some((b) => b.toLowerCase().includes(search.toLowerCase()));
+    const matchCategory = activeCategory === "all" || m.category === activeCategory;
+    return matchSearch && matchCategory;
   });
 
   return (
@@ -40,18 +30,18 @@ export default function ModelsPage() {
           <input
             id="model-search"
             className={`input ${styles.searchInput}`}
-            placeholder="Search models by name or organization..."
+            placeholder="Search models by name, org, or use case..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           <div className={styles.taskFilters}>
-            {TASKS.map((t) => (
+            {MODEL_CATEGORIES.map((cat) => (
               <button
-                key={t}
-                className={`btn btn-sm ${activeTask === t ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setActiveTask(t)}
+                key={cat.value}
+                className={`btn btn-sm ${activeCategory === cat.value ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setActiveCategory(cat.value)}
               >
-                {t}
+                {cat.label}
               </button>
             ))}
           </div>
@@ -59,7 +49,7 @@ export default function ModelsPage() {
 
         <div className={styles.resultsMeta}>
           <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-            {filtered.length} models available
+            {filtered.length} model{filtered.length !== 1 ? "s" : ""} available
           </span>
         </div>
 
@@ -69,11 +59,35 @@ export default function ModelsPage() {
               {/* Header */}
               <div className={styles.modelCardTop}>
                 <div className={styles.modelOrg}>{m.org}</div>
-                {m.popular && <span className="badge badge-blue">Popular</span>}
+                <div style={{ display: "flex", gap: 4 }}>
+                  {m.popular && <span className="badge badge-blue">Popular</span>}
+                  {m.recommended && <span className="badge badge-success">⭐ Recommended</span>}
+                </div>
               </div>
 
               <h4 className={styles.modelName}>{m.name}</h4>
-              <div className={styles.modelTask}>{m.task}</div>
+              <div className={styles.modelTask} style={{ textTransform: "capitalize" }}>{m.category}</div>
+
+              {/* Quality Bar */}
+              <div style={{ margin: "8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{
+                  flex: 1, height: 4, borderRadius: 2,
+                  background: "var(--bg-secondary)",
+                  overflow: "hidden",
+                }}>
+                  <div style={{
+                    height: "100%", borderRadius: 2,
+                    width: `${m.quality * 10}%`,
+                    background: m.quality >= 8 ? "var(--success)" : m.quality >= 6 ? "var(--warning, #f59e0b)" : "var(--text-muted)",
+                  }} />
+                </div>
+                <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{m.quality}/10</span>
+              </div>
+
+              {/* Strengths */}
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "6px 0" }}>
+                <strong>Best for:</strong> {m.bestFor.slice(0, 2).join(", ")}
+              </div>
 
               {/* Tags */}
               <div className={styles.modelTags}>
@@ -86,7 +100,7 @@ export default function ModelsPage() {
               <div className={styles.modelCardBottom}>
                 <div className={styles.modelCredits}>
                   <span className={styles.creditsLabel}>Est. cost</span>
-                  <span className={styles.creditsValue}>~{m.credits} credits</span>
+                  <span className={styles.creditsValue}>~{m.credits.min}–{m.credits.max} credits</span>
                 </div>
                 <div className={styles.modelSize}>{m.size} params</div>
               </div>

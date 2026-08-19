@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import Groq from "groq-sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { getModelCatalogPrompt, MODELS } from "@/lib/models";
 
-// Groq is our primary AI — fast, reliable, free tier
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
-const SYSTEM_PROMPT = `You are an expert AI fine-tuning assistant for Model Factory platform.
+const SYSTEM_PROMPT = `You are an expert AI fine-tuning assistant for the Model Factory platform.
 Your job is to help users configure a fine-tuning job for a large language model.
 
 When a user describes their goal, you must:
@@ -14,14 +14,18 @@ When a user describes their goal, you must:
 {"type":"question","text":"What is the primary language your users speak?","options":["English only","Arabic only","English + Arabic","Multiple languages"],"allowCustom":true,"multiSelect":false}
 
 After all questions are answered (usually after 2-3 exchanges), output a final config JSON:
-{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.0002,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config"}
+{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.0002,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config including why this model is the best fit"}
 
 CRITICAL RULES:
 - Output ONLY raw JSON — no markdown fences, no explanation text, nothing else
 - Keep question text SHORT (under 15 words)
 - Give 3-5 options per question
 - After 2-3 questions, always output the config
-- Pick the best model: Phi-3 Mini (simple tasks, 8-18 credits), Mistral 7B (general, 15-35), Llama 3.1 8B (chat/instruction, 20-40), Gemma 2 9B (complex, 25-50)`;
+- You MUST pick the best model from the catalog below based on the user's needs
+- Consider: task type, language requirements, budget, quality needs
+
+AVAILABLE MODELS (pick the best one based on user needs):
+${getModelCatalogPrompt()}`;
 
 export async function POST(req: Request) {
   try {
@@ -31,38 +35,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "No messages provided" }, { status: 400 });
     }
 
-    // Count how many user messages we have — forces config after 3 answers (prevents infinite loop)
+    // Count how many user messages we have — forces config after 3 answers
     const userMsgCount = messages.filter((m) => m.role === "user").length;
 
-    // Build Groq message history
-    const groqMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...messages.map((m) => ({
-        role: (m.role === "user" ? "user" : "assistant") as "user" | "assistant",
-        content: m.content,
-      })),
-    ];
+    // Build message history for Gemini
+    const geminiMessages = messages.map((m) => ({
+      role: (m.role === "user" ? "user" : "model") as "user" | "model",
+      parts: [{ text: m.content }],
+    }));
 
     // After 3 answers, force the AI to output the config
     if (userMsgCount >= 3) {
-      groqMessages.push({
-        role: "user",
-        content: "That is enough information. Output the final config JSON now.",
+      geminiMessages.push({
+        role: "user" as const,
+        parts: [{ text: "That is enough information. Output the final config JSON now." }],
       });
     }
 
-    const completion = await groq.chat.completions.create({
-      model: "openai/gpt-oss-20b",
-      messages: groqMessages,
-      temperature: 0.3,
-      max_tokens: 600,
+    const model = genAI.getGenerativeModel({
+      model: "gemini-3.6-flash",
+      systemInstruction: SYSTEM_PROMPT,
     });
 
-    const text = completion.choices[0]?.message?.content?.trim() ?? "";
+    const result = await model.generateContent({
+      contents: geminiMessages,
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 800,
+      },
+    });
+
+    const text = result.response.text()?.trim() ?? "";
 
     let parsed;
     try {
-      const clean = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      const clean = text
+        .replace(/^```json\s*/i, "")
+        .replace(/^```\s*/i, "")
+        .replace(/```\s*$/i, "")
+        .trim();
       parsed = JSON.parse(clean);
     } catch {
       // Try to find JSON anywhere in the response
@@ -78,14 +89,14 @@ export async function POST(req: Request) {
         parsed = {
           type: "config",
           summary: "Custom AI assistant based on your requirements",
-          recommendedModel: "meta-llama/Llama-3.1-8B-Instruct",
+          recommendedModel: MODELS[0].id,
           method: "lora",
           epochs: 3,
           learningRate: 0.0002,
           batchSize: 4,
           estimatedCredits: 28,
           estimatedTime: "12-18 min",
-          reasoning: "Llama 3.1 8B is the best general-purpose model for chat and instruction tasks.",
+          reasoning: `${MODELS[0].name} is the best general-purpose model for chat and instruction tasks with excellent quality-to-cost ratio.`,
         };
       } else {
         parsed = {
@@ -95,6 +106,15 @@ export async function POST(req: Request) {
           allowCustom: true,
           multiSelect: false,
         };
+      }
+    }
+
+    // Validate model recommendation exists in our catalog
+    if (parsed.type === "config" && parsed.recommendedModel) {
+      const exists = MODELS.find((m) => m.id === parsed.recommendedModel);
+      if (!exists) {
+        // AI recommended a model not in our catalog — fall back to default
+        parsed.recommendedModel = MODELS[0].id;
       }
     }
 

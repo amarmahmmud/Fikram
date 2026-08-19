@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
+import { MODELS } from "@/lib/models";
 
 
 /* ── Types ── */
@@ -33,16 +34,6 @@ interface TrainingConfig {
   estimatedTime: string;
 }
 
-/* ── Mock questions removed — real AI via /api/wizard ── */
-
-
-const MODELS = [
-  { id: "meta-llama/Llama-3.1-8B-Instruct", name: "Llama 3.1 8B", credits: "20–40", recommended: true },
-  { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B", credits: "15–35", recommended: false },
-  { id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini", credits: "8–18", recommended: false },
-  { id: "google/gemma-2-9b-it", name: "Gemma 2 9B", credits: "25–50", recommended: false },
-];
-
 const STEP_LABELS = ["Upload & Describe", "AI Questions", "Review Config", "Launch"];
 
 export default function NewJobPage() {
@@ -69,7 +60,7 @@ export default function NewJobPage() {
 
   /* Use AI config or defaults */
   const config: TrainingConfig = aiConfig ?? {
-    baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "",
+    baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct",
     method: "LoRA (auto-selected)",
     epochs: 3, learningRate: 0.0002, batchSize: 4, warmupSteps: 10,
     estimatedCredits: 28, estimatedTime: "12–18 min",
@@ -195,7 +186,7 @@ export default function NewJobPage() {
             rawText = await file.text();
           }
 
-          setGenerationStatus("Synthesizing dataset (this takes ~10s)...");
+          setGenerationStatus("Synthesizing dataset with AI pipeline (this may take 30-60s for large documents)...");
           const genRes = await fetch("/api/generate-dataset", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -494,9 +485,19 @@ export default function NewJobPage() {
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span className={styles.modelOptionName}>{m.name}</span>
-                        {m.recommended && <span className="badge badge-success" style={{ fontSize: "0.625rem" }}>Recommended</span>}
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <span className="badge badge-default" style={{ fontSize: "0.575rem", textTransform: "capitalize" }}>{m.category}</span>
+                          {m.recommended && <span className="badge badge-success" style={{ fontSize: "0.575rem" }}>⭐ Best Pick</span>}
+                        </div>
                       </div>
-                      <div className={styles.modelOptionCredits}>~{m.credits} credits</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+                        <div className={styles.modelOptionCredits}>~{m.credits.min}–{m.credits.max} credits · {m.size} · Quality {m.quality}/10</div>
+                      </div>
+                      {selectedModel === m.id && (
+                        <div style={{ marginTop: 6, fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.4 }}>
+                          <strong>Best for:</strong> {m.bestFor.slice(0, 3).join(", ")}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import styles from "./landing.module.css";
+import { MODELS as MODEL_REGISTRY } from "@/lib/models";
 
 const FEATURES = [
   {
@@ -68,16 +69,7 @@ const STATS = [
   { value: "99.9%", label: "Platform Uptime" },
 ];
 
-const MODELS = [
-  "Llama 3.1 8B",
-  "Mistral 7B",
-  "Phi-3 Mini",
-  "Gemma 2 9B",
-  "Falcon 7B",
-  "StarCoder 2",
-  "Qwen 2.5",
-  "DeepSeek R1",
-];
+const MODELS = MODEL_REGISTRY.filter((m) => m.popular || m.recommended).map((m) => m.name);
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
