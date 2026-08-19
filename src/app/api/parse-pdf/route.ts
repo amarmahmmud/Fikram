@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { PDFParse, VerbosityLevel } from "pdf-parse";
 
 export async function POST(req: Request) {
   try {
@@ -12,11 +13,14 @@ export async function POST(req: Request) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     
-    // Dynamic import to avoid Turbopack ESM resolution issues with pdf-parse v2
-    const pdfParse = await import("pdf-parse").then((m) => m.default ?? m);
-    const data = await pdfParse(buffer);
+    // pdf-parse v2: pass data in constructor, getText() returns TextResult
+    const parser = new PDFParse({
+      data: new Uint8Array(buffer),
+      verbosity: VerbosityLevel.ERRORS,
+    });
+    const result = await parser.getText();
     
-    return NextResponse.json({ text: data.text });
+    return NextResponse.json({ text: result.text });
   } catch (error: any) {
     console.error("PDF Parsing Error:", error?.message ?? error);
     return NextResponse.json({ error: "Failed to parse PDF: " + (error?.message ?? "Unknown error") }, { status: 500 });
