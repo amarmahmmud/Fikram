@@ -136,12 +136,25 @@ def train_model(
         )
 
         # ── Step 4: Format Dataset ────────────────────────────────────────────────
+        # Use the tokenizer's own chat template instead of hardcoding Llama format.
+        # This ensures DeepSeek, Mistral, Gemma, Phi, Qwen etc. all get the right format.
         def format_example(example):
             prompt = example.get("prompt", "")
             completion = example.get("completion", "")
-            return {
-                "text": f"<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n{completion}<|eot_id|>"
-            }
+            conversation = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": completion},
+            ]
+            try:
+                text = tokenizer.apply_chat_template(
+                    conversation,
+                    tokenize=False,
+                    add_generation_prompt=False,
+                )
+            except Exception:
+                # Fallback to simple format if chat template fails
+                text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+            return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
 

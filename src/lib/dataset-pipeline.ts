@@ -103,21 +103,28 @@ async function generateForChunk(
 ): Promise<DatasetPair[]> {
   const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
-  const result = await model.generateContent({
-    contents: [{
-      role: "user",
-      parts: [{
-        text: `${GENERATION_PROMPT(goal, chunkIndex, totalChunks)}\n\nDocument chunk:\n\n${text}`
-      }]
-    }],
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 4096,
-    },
-  });
+  try {
+    const result = await model.generateContent({
+      contents: [{
+        role: "user",
+        parts: [{
+          text: `${GENERATION_PROMPT(goal, chunkIndex, totalChunks)}\n\nDocument chunk:\n\n${text}`
+        }]
+      }],
+      generationConfig: {
+        temperature: 0.3,
+        maxOutputTokens: 4096,
+      },
+    });
 
-  const raw = result.response.text() || "[]";
-  return parseJsonArray(raw);
+    const raw = result.response.text() || "[]";
+    const pairs = parseJsonArray(raw);
+    console.log(`[Pipeline] Chunk ${chunkIndex + 1}/${totalChunks}: generated ${pairs.length} pairs`);
+    return pairs;
+  } catch (error: any) {
+    console.error(`[Pipeline] Error generating chunk ${chunkIndex + 1}:`, error?.message || error);
+    return [];
+  }
 }
 
 
@@ -272,7 +279,13 @@ export async function generateDataset(
     pairsGenerated: 0,
   });
 
-  const chunks = smartChunk(text);
+  // Cap chunks to avoid Gemini rate limits (15 RPM on free tier).
+  // 10 chunks × ~10 pairs each = ~100 pairs, ideal for LoRA fine-tuning.
+  let chunks = smartChunk(text);
+  if (chunks.length > 10) {
+    console.log(`[Pipeline] Document has ${chunks.length} chunks. Capping to 10 to avoid rate limits.`);
+    chunks = chunks.slice(0, 10);
+  }
   const totalChunks = chunks.length;
 
   onProgress?.({
@@ -291,12 +304,18 @@ export async function generateDataset(
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
       generateForChunk(chunk, goal, i + batchIdx, totalChunks)
-        .catch(() => [] as DatasetPair[]) // don't fail the whole pipeline for one chunk
     );
 
     const results = await Promise.all(promises);
     for (const pairs of results) {
       allPairs.push(...pairs);
+    }
+
+    console.log(`[Pipeline] Batch done: chunks ${i+1}-${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks}, total pairs: ${allPairs.length}`);
+
+    // 2-second delay between batches to stay under Gemini's 15 RPM rate limit
+    if (i + PARALLEL_LIMIT < totalChunks) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     onProgress?.({

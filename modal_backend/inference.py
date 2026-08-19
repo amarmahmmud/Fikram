@@ -181,6 +181,30 @@ class ModelInference:
             new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
             reply = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
+            # ── Clean up output ────────────────────────────────────────────────────
+            import re
+
+            # 1. Strip <think>...</think> reasoning blocks (DeepSeek R1)
+            reply = re.sub(r"<think>[\s\S]*?</think>", "", reply).strip()
+            # Handle unclosed <think> tag (still reasoning when max_tokens hit)
+            if "<think>" in reply:
+                # Try to extract content after </think>, or remove <think> entirely
+                parts = reply.split("</think>", 1)
+                reply = parts[-1].strip() if len(parts) > 1 else re.sub(r"<think>[\s\S]*", "", reply).strip()
+
+            # 2. Clean BPE byte-level artifacts using hex codes (Windows-safe)
+            # \u0120 = BPE space marker, \u010a = BPE newline marker
+            reply = reply.replace("\u0120", " ").replace("\u010a", "\n")
+            # Common multi-byte BPE artifacts for punctuation
+            reply = reply.replace("\u0122\u012e\u0136", "\u2014")  # em dash
+            reply = reply.replace("\u0122\u012e\u013b", "\u2019")  # right single quote
+            reply = reply.replace("\u0122\u012e\u013e", "\u201c")  # left double quote
+            reply = reply.replace("\u0122\u012e\u013f", "\u201d")  # right double quote
+            reply = reply.replace("\u0122\u012e\u012c", "\u2026")  # ellipsis
+
+            # 3. Final cleanup: collapse multiple blank lines, trim
+            reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
+
             print(f"[Inference] Generated reply ({len(reply)} chars) using {base_model_id}")
             return {"reply": reply, "status": "succeeded"}
 
