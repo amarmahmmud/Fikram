@@ -503,7 +503,34 @@ export default function NewJobPage() {
                 </div>
               </div>
 
-              {/* Hyperparams */}
+              {/* Non-recommended model warning */}
+              {(() => {
+                const sel = MODELS.find((m) => m.id === selectedModel);
+                if (!sel) {
+                  return (
+                    <div style={{
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      borderRadius: 8, padding: "10px 14px", marginTop: 8,
+                      fontSize: "0.75rem", color: "#ef4444",
+                    }}>
+                      ⚠️ <strong>Community model selected.</strong> This model is not verified on our platform. Training results and accuracy may be unpredictable. For best results, use a ⭐ verified model.
+                    </div>
+                  );
+                } else if (!sel.recommended && sel.quality < 7) {
+                  return (
+                    <div style={{
+                      background: "rgba(234, 179, 8, 0.08)",
+                      border: "1px solid rgba(234, 179, 8, 0.2)",
+                      borderRadius: 8, padding: "10px 14px", marginTop: 8,
+                      fontSize: "0.75rem", color: "#d97706",
+                    }}>
+                      💡 <strong>{sel.name}</strong> has a quality rating of {sel.quality}/10. For higher accuracy, consider a ⭐ recommended model like Llama 3.1 8B.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <div className={styles.configGroup}>
                 <div className={styles.configLabel}>Training Parameters</div>
                 <div className={styles.configGrid}>

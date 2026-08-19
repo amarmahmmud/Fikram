@@ -43,6 +43,7 @@ export async function POST(req: Request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         adapter_prefix: adapterPrefix,
+        base_model: job.base_model,  // Tell Modal which base model to load
         messages: messages,
         system_prompt: systemPrompt || "You are a helpful assistant trained on custom data.",
         // Pass R2 credentials so Modal can download the adapter

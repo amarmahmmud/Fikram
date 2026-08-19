@@ -50,6 +50,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           job_id: job.id,
+          base_model: baseModel,  // Pass the user's chosen model
           dataset_url: datasetUrl,
           webhook_url: webhookUrl,
           num_train_epochs: config?.epochs ?? 1,

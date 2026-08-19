@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
+import { MODELS } from "@/lib/models";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 interface Message { role: "user" | "model"; content: string; ts: string; }
@@ -197,6 +198,37 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               <button onClick={fetchJob} className="btn btn-ghost btn-sm" style={{ color: "var(--warning)" }}>Check Status ↺</button>
             </div>
           )}
+
+          {/* Non-recommended model warning */}
+          {isCompleted && !loadingJob && job && (() => {
+            const verifiedModel = MODELS.find((m) => m.id === job.base_model);
+            if (!verifiedModel) {
+              return (
+                <div style={{
+                  background: "rgba(239, 68, 68, 0.08)",
+                  borderBottom: "1px solid rgba(239, 68, 68, 0.2)",
+                  padding: "10px 16px",
+                  fontSize: "0.8125rem",
+                  color: "#ef4444",
+                }}>
+                  ⚠️ <strong>Community model:</strong> This model ({job.base_model}) is not a verified model. Accuracy and output quality may be lower than expected. For best results, use one of our verified models.
+                </div>
+              );
+            } else if (!verifiedModel.recommended && verifiedModel.quality < 7) {
+              return (
+                <div style={{
+                  background: "rgba(234, 179, 8, 0.08)",
+                  borderBottom: "1px solid rgba(234, 179, 8, 0.2)",
+                  padding: "10px 16px",
+                  fontSize: "0.8125rem",
+                  color: "var(--warning)",
+                }}>
+                  💡 <strong>Note:</strong> You trained with {verifiedModel.name} (quality {verifiedModel.quality}/10). For higher accuracy, consider using a recommended model like Llama 3.1 8B (quality 8/10).
+                </div>
+              );
+            }
+            return null;
+          })()}
 
           <div className={styles.messagesList}>
             {messages.map((m, i) => (
