@@ -51,6 +51,49 @@ UNSLOTH_MODEL_MAP = {
 
 DEFAULT_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 
+
+def _fix_bpe_text(text):
+    """
+    Fix BPE byte-level artifacts in decoded text.
+    Llama/GPT-2 tokenizers use a byte-to-unicode mapping where non-printable
+    bytes (0-32, 127-160, 173) are shifted to U+0100+. This function detects
+    sequences of these shifted characters and decodes them back to proper UTF-8.
+    """
+    # Build the GPT-2 byte decoder (inverse of bytes_to_unicode)
+    bs = list(range(33, 127)) + list(range(161, 173)) + list(range(174, 256))
+    cs = bs[:]
+    n = 0
+    for b in range(256):
+        if b not in bs:
+            bs.append(b)
+            cs.append(256 + n)
+            n += 1
+    byte_decoder = {chr(c): b for b, c in zip(bs, cs)}
+
+    # Process the text: convert BPE byte chars back to real UTF-8
+    result = []
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if ch in byte_decoder:
+            # Collect consecutive BPE byte characters
+            byte_seq = []
+            j = i
+            while j < len(text) and text[j] in byte_decoder:
+                byte_seq.append(byte_decoder[text[j]])
+                j += 1
+            # Try to decode as UTF-8
+            try:
+                decoded = bytes(byte_seq).decode("utf-8")
+                result.append(decoded)
+                i = j
+                continue
+            except (UnicodeDecodeError, ValueError):
+                pass
+        result.append(ch)
+        i += 1
+    return "".join(result)
+
 # ── Inference Web Endpoint ─────────────────────────────────────────────────────
 @app.cls(
     image=inference_image,
@@ -184,25 +227,17 @@ class ModelInference:
             # ── Clean up output ────────────────────────────────────────────────────
             import re
 
-            # 1. Strip <think>...</think> reasoning blocks (DeepSeek R1)
+            # 1. Strip reasoning/thinking blocks (DeepSeek R1 etc.)
+            if "</think>" in reply:
+                reply = reply.split("</think>")[-1].strip()
             reply = re.sub(r"<think>[\s\S]*?</think>", "", reply).strip()
-            # Handle unclosed <think> tag (still reasoning when max_tokens hit)
-            if "<think>" in reply:
-                # Try to extract content after </think>, or remove <think> entirely
-                parts = reply.split("</think>", 1)
-                reply = parts[-1].strip() if len(parts) > 1 else re.sub(r"<think>[\s\S]*", "", reply).strip()
 
-            # 2. Clean BPE byte-level artifacts using hex codes (Windows-safe)
-            # \u0120 = BPE space marker, \u010a = BPE newline marker
-            reply = reply.replace("\u0120", " ").replace("\u010a", "\n")
-            # Common multi-byte BPE artifacts for punctuation
-            reply = reply.replace("\u0122\u012e\u0136", "\u2014")  # em dash
-            reply = reply.replace("\u0122\u012e\u013b", "\u2019")  # right single quote
-            reply = reply.replace("\u0122\u012e\u013e", "\u201c")  # left double quote
-            reply = reply.replace("\u0122\u012e\u013f", "\u201d")  # right double quote
-            reply = reply.replace("\u0122\u012e\u012c", "\u2026")  # ellipsis
+            # 2. Fix BPE byte-level artifacts using the GPT-2 byte decoder.
+            #    Llama/GPT-2 tokenizers map non-printable bytes to Unicode chars
+            #    in the U+0100+ range. This reverses that mapping.
+            reply = _fix_bpe_text(reply)
 
-            # 3. Final cleanup: collapse multiple blank lines, trim
+            # 3. Final cleanup
             reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
 
             print(f"[Inference] Generated reply ({len(reply)} chars) using {base_model_id}")
