@@ -33,7 +33,7 @@ Do NOT output anything other than the raw JSON array. Do not wrap in \`\`\`json.
         // Limit text to ~50k chars to avoid token limits for Groq
         { role: "user", content: `Here is the document text:\n\n${text.substring(0, 50000)}` } 
       ],
-      model: "llama-3.3-70b-versatile",
+      model: "qwen/qwen3.6-27b",
       temperature: 0.2, // Low temp for structured adherence
       max_tokens: 6000,
     });
