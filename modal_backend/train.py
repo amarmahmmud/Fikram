@@ -52,6 +52,7 @@ def train_model(
     job_id: str,
     dataset_url: str,
     webhook_url: str,
+    base_model: str = "meta-llama/Llama-3.1-8B-Instruct",  # User's chosen model
     num_train_epochs: int = 1,      # Default 1 epoch to save cost
     learning_rate: float = 2e-4,
     max_seq_length: int = 1024,     # Smaller context = faster + less memory
@@ -61,7 +62,7 @@ def train_model(
     r2_secret_key: str = "",
     r2_bucket: str = "",
 ):
-    """Fine-tune Llama 3 8B with a user's dataset and save LoRA weights to R2."""
+    """Fine-tune the user's chosen model with their dataset and save LoRA weights to R2."""
     import torch
     import requests
     import boto3
@@ -72,7 +73,30 @@ def train_model(
     from trl import SFTTrainer
     from transformers import TrainingArguments
 
+    # Map user-facing model IDs to Unsloth's 4-bit quantized variants
+    # Unsloth provides optimized 4-bit versions for fast LoRA fine-tuning
+    UNSLOTH_MODEL_MAP = {
+        "meta-llama/Llama-3.1-8B-Instruct": "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit",
+        "meta-llama/Llama-3.2-3B-Instruct": "unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
+        "mistralai/Mistral-7B-Instruct-v0.3": "unsloth/mistral-7b-instruct-v0.3-bnb-4bit",
+        "microsoft/Phi-3-mini-4k-instruct": "unsloth/Phi-3-mini-4k-instruct-bnb-4bit",
+        "microsoft/Phi-3.5-mini-instruct": "unsloth/Phi-3.5-mini-instruct-bnb-4bit",
+        "google/gemma-2-9b-it": "unsloth/gemma-2-9b-it-bnb-4bit",
+        "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it-bnb-4bit",
+        "Qwen/Qwen2.5-7B-Instruct": "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
+        "deepseek-ai/DeepSeek-R1-Distill-Llama-8B": "unsloth/DeepSeek-R1-Distill-Llama-8B-bnb-4bit",
+        "meta-llama/CodeLlama-7b-Instruct-hf": "unsloth/codellama-7b-instruct-bnb-4bit",
+        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": "unsloth/tinyllama-chat-bnb-4bit",
+        "tiiuae/falcon-7b-instruct": "tiiuae/falcon-7b-instruct",
+        "microsoft/phi-2": "unsloth/phi-2-bnb-4bit",
+    }
+
+    # Resolve the Unsloth model name, fallback to the raw ID (for community models)
+    resolved_model = UNSLOTH_MODEL_MAP.get(base_model, base_model)
+
     print(f"[Model Factory] Starting training for job: {job_id}")
+    print(f"[Model Factory] User selected model: {base_model}")
+    print(f"[Model Factory] Resolved Unsloth model: {resolved_model}")
     print(f"[Model Factory] Dataset URL: {dataset_url}")
 
     # ── Step 1: Download JSONL dataset from R2 ────────────────────────────────
@@ -88,10 +112,10 @@ def train_model(
     print(f"[Model Factory] Loaded {len(dataset)} training examples")
 
     # ── Step 2: Load Base Model via Unsloth ───────────────────────────────────
-    print("[Model Factory] Loading base model (using cache if available)...")
+    print(f"[Model Factory] Loading model: {resolved_model} (using cache if available)...")
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name="unsloth/llama-3-8b-Instruct-bnb-4bit",
+            model_name=resolved_model,
             max_seq_length=max_seq_length,
             dtype=None,  # auto-detect
             load_in_4bit=True,  # 4-bit quantization for memory efficiency
@@ -213,6 +237,7 @@ def start_training(item: dict):
     dataset_url = item.get("dataset_url")
     webhook_url = item.get("webhook_url")
     num_train_epochs = item.get("num_train_epochs", 1)
+    base_model = item.get("base_model", "meta-llama/Llama-3.1-8B-Instruct")
     learning_rate = item.get("learning_rate", 0.0002)
     max_steps = item.get("max_steps", 30)
     r2_endpoint = item.get("r2_endpoint", "")
@@ -223,11 +248,12 @@ def start_training(item: dict):
     if not job_id or not dataset_url:
         return {"error": "Missing job_id or dataset_url", "status": "failed"}
 
-    print(f"[Model Factory Endpoint] Spawning train_model for job {job_id}...")
+    print(f"[Model Factory Endpoint] Spawning train_model for job {job_id} with model {base_model}...")
     call = train_model.spawn(
         job_id=job_id,
         dataset_url=dataset_url,
         webhook_url=webhook_url,
+        base_model=base_model,
         num_train_epochs=num_train_epochs,
         learning_rate=learning_rate,
         max_steps=max_steps,
