@@ -59,7 +59,7 @@ def train_model(
     webhook_url: str,
     base_model: str = "meta-llama/Llama-3.1-8B-Instruct",  # User's chosen model
     num_train_epochs: int = 1,      # Default 1 epoch to save cost
-    learning_rate: float = 2e-4,
+    learning_rate: float = 2e-5,    # Universal safe default for ALL models
     max_seq_length: int = 1024,     # Smaller context = faster + less memory
     max_steps: int = 30,            # Hard cap: stops after 30 steps (~5 mins on L4)
     r2_endpoint: str = "",
@@ -236,13 +236,6 @@ def train_model(
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
 
-        # Universal safety guard: fragile models like Gemma 2 suffer catastrophic
-        # forgetting (outputting gibberish) at standard high learning rates (2e-4).
-        safe_learning_rate = learning_rate
-        if "gemma" in base_model.lower():
-            safe_learning_rate = min(learning_rate, 2e-5)
-            print(f"[Model Factory] Detected Gemma model — capping learning rate to {safe_learning_rate} to prevent catastrophic forgetting")
-
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -255,7 +248,7 @@ def train_model(
                 warmup_steps=3,
                 num_train_epochs=num_train_epochs,
                 max_steps=max_steps,          # Hard cap to control cost
-                learning_rate=safe_learning_rate,
+                learning_rate=learning_rate,
                 fp16=not torch.cuda.is_bf16_supported(),
                 bf16=torch.cuda.is_bf16_supported(),
                 logging_steps=1,
