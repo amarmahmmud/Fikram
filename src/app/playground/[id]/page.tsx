@@ -10,6 +10,66 @@ import { MODELS } from "@/lib/models";
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 interface Message { role: "user" | "model"; content: string; ts: string; }
 
+/** Lightweight markdown renderer for chat messages */
+function renderMarkdown(text: string) {
+  // Split into lines and process each
+  const lines = text.split("\n");
+  const elements: React.ReactNode[] = [];
+
+  lines.forEach((line, lineIdx) => {
+    // Skip empty lines but add spacing
+    if (line.trim() === "") {
+      elements.push(<div key={`br-${lineIdx}`} style={{ height: "0.5em" }} />);
+      return;
+    }
+
+    // Process inline formatting (bold **text** and *italic*)
+    const processInline = (str: string): React.ReactNode[] => {
+      const parts: React.ReactNode[] = [];
+      // Match **bold** patterns
+      const regex = /\*\*(.+?)\*\*/g;
+      let lastIndex = 0;
+      let match;
+      while ((match = regex.exec(str)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push(str.substring(lastIndex, match.index));
+        }
+        parts.push(<strong key={`b-${match.index}`}>{match[1]}</strong>);
+        lastIndex = regex.lastIndex;
+      }
+      if (lastIndex < str.length) {
+        parts.push(str.substring(lastIndex));
+      }
+      return parts.length > 0 ? parts : [str];
+    };
+
+    // Check for numbered list items: "1. text" or "1) text"
+    const numberedMatch = line.match(/^\s*(\d+)[.)\s]+\s*(.+)/);
+    // Check for bullet points: "- text" or "* text"
+    const bulletMatch = line.match(/^\s*[-*]\s+(.+)/);
+
+    if (numberedMatch) {
+      elements.push(
+        <div key={lineIdx} style={{ display: "flex", gap: "8px", marginLeft: "4px", marginTop: "4px" }}>
+          <span style={{ color: "var(--accent-indigo)", fontWeight: 600, minWidth: "20px" }}>{numberedMatch[1]}.</span>
+          <span>{processInline(numberedMatch[2])}</span>
+        </div>
+      );
+    } else if (bulletMatch) {
+      elements.push(
+        <div key={lineIdx} style={{ display: "flex", gap: "8px", marginLeft: "4px", marginTop: "2px" }}>
+          <span style={{ color: "var(--text-muted)" }}>•</span>
+          <span>{processInline(bulletMatch[1])}</span>
+        </div>
+      );
+    } else {
+      elements.push(<div key={lineIdx}>{processInline(line)}</div>);
+    }
+  });
+
+  return <>{elements}</>;
+}
+
 export default function PlaygroundPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const supabase = createClient();
@@ -244,7 +304,9 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                     <span className={styles.messageSender}>{m.role === "user" ? "You" : (job?.name || "Model")}</span>
                     <span className={styles.messageTime}>{m.ts}</span>
                   </div>
-                  <div className={styles.messageText}>{m.content}</div>
+                  <div className={styles.messageText}>
+                    {m.role === "model" ? renderMarkdown(m.content) : m.content}
+                  </div>
                 </div>
               </div>
             ))}
@@ -271,7 +333,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                 className="btn btn-ghost btn-sm"
                 onClick={() => setShowConfig(true)}
                 title="Show Config"
-                style={{ flexShrink: 0 }}
+                style={{ flexShrink: 0, padding: "8px" }}
               >
                 ⚙
               </button>
@@ -280,10 +342,15 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               id="playground-input"
               className={styles.chatInput}
               rows={1}
-              placeholder={isCompleted ? "Type a message to test your model... (Enter to send)" : "Model is training... chat unlocks upon completion"}
+              placeholder={isCompleted ? "Ask your model anything..." : "Model is training... chat unlocks upon completion"}
               value={input}
               disabled={!isCompleted || loading}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                // Auto-resize textarea
+                e.target.style.height = "auto";
+                e.target.style.height = Math.min(e.target.scrollHeight, 150) + "px";
+              }}
               onKeyDown={handleKey}
             />
             <button
@@ -291,9 +358,9 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               className="btn btn-primary btn-sm"
               disabled={!input.trim() || loading || !isCompleted}
               onClick={sendMessage}
-              style={{ flexShrink: 0 }}
+              style={{ flexShrink: 0, padding: "10px 20px", borderRadius: "12px" }}
             >
-              Send ↑
+              {loading ? "..." : "Send ↑"}
             </button>
           </div>
         </div>

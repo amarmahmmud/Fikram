@@ -131,8 +131,30 @@
   flex: 1;
   resize: none;
   min-height: 48px;
-  max-height: 120px;
-  line-height: 1.5;
+  max-height: 150px;
+  line-height: 1.6;
+  padding: 12px 16px;
+  font-size: 0.9rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow-y: auto;
+}
+.chatInput:focus {
+  outline: none;
+  border-color: var(--accent-indigo);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+.chatInput::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.chatInput:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @media (max-width: 768px) {
