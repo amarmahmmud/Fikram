@@ -171,12 +171,13 @@ class ModelInference:
         print(f"[Inference] Base model ready: {base_model_id} (system_role={self._system_role_ok}, bpe_fix={self._needs_bpe_fix})")
 
     def _check_system_role_support(self):
-        """Check if the tokenizer's chat template supports a 'system' role."""
+        """Check if the tokenizer's chat template supports a 'system' role.
+        We actually try applying it — substring checks like 'system in template'
+        give false positives (e.g. Gemma's template contains 'System role not
+        supported' as an error message string)."""
         template = getattr(self.tokenizer, "chat_template", None)
         if not template:
             return False
-        if "system" in str(template):
-            return True
         try:
             self.tokenizer.apply_chat_template(
                 [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
@@ -199,10 +200,12 @@ class ModelInference:
     def generate(self, item: dict):
         """
         Generates chat completion using the correct base model + LoRA adapter.
+        Universally handles ALL model architectures without model-specific code.
         """
         import boto3
         import os as _os
         import torch
+        import re
         from peft import PeftModel
         from unsloth import FastLanguageModel
 
@@ -256,31 +259,39 @@ class ModelInference:
                 print("[Inference] LoRA adapter attached successfully.")
 
             # ── Format messages into chat template ─────────────────────────────────
+            # Strategy: try chat template first, fall back to plaintext if anything fails
+            prompt = None
             has_template = getattr(self.tokenizer, "chat_template", None) is not None
 
             if has_template:
-                # Build messages — guard system role if model doesn't support it
-                if self._system_role_ok:
-                    formatted_messages = [{"role": "system", "content": system_prompt}]
-                else:
-                    # Fold system prompt into first user message
-                    formatted_messages = []
+                try:
+                    # Build messages — guard system role if model doesn't support it
+                    if self._system_role_ok:
+                        formatted_messages = [{"role": "system", "content": system_prompt}]
+                    else:
+                        formatted_messages = []
 
-                for msg in messages:
-                    role = "user" if msg.get("role") in ("user",) else "assistant"
-                    content = msg.get("content", "")
-                    # If system role not supported, prepend system prompt to first user message
-                    if not self._system_role_ok and role == "user" and not formatted_messages:
-                        content = f"{system_prompt}\n\n{content}"
-                    formatted_messages.append({"role": role, "content": content})
+                    system_prepended = False
+                    for msg in messages:
+                        role = "user" if msg.get("role") in ("user",) else "assistant"
+                        content = msg.get("content", "")
+                        # Fold system prompt into first user msg when system role unsupported
+                        if not self._system_role_ok and role == "user" and not system_prepended:
+                            content = f"{system_prompt}\n\n{content}"
+                            system_prepended = True
+                        formatted_messages.append({"role": role, "content": content})
 
-                prompt = self.tokenizer.apply_chat_template(
-                    formatted_messages,
-                    tokenize=False,
-                    add_generation_prompt=True,
-                )
-            else:
-                # No chat template (base models like phi-2) — use plaintext format
+                    prompt = self.tokenizer.apply_chat_template(
+                        formatted_messages,
+                        tokenize=False,
+                        add_generation_prompt=True,
+                    )
+                except Exception as tmpl_err:
+                    print(f"[Inference] Chat template failed ({tmpl_err}), using plaintext fallback")
+                    prompt = None  # Force plaintext fallback
+
+            if prompt is None:
+                # Plaintext fallback for base models or broken templates
                 parts = [f"### System:\n{system_prompt}"]
                 for msg in messages:
                     role = "User" if msg.get("role") == "user" else "Assistant"
@@ -290,38 +301,66 @@ class ModelInference:
 
             # ── Generate response ──────────────────────────────────────────────────
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.active_model.device)
-            with torch.no_grad():
-                outputs = self.active_model.generate(
-                    **inputs,
-                    max_new_tokens=512,
-                    temperature=0.7,
-                    do_sample=True,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                )
 
-            # Decode only the generated response
+            # Ensure we have valid pad and eos token IDs for any model
+            pad_id = self.tokenizer.pad_token_id
+            if pad_id is None:
+                pad_id = self.tokenizer.eos_token_id
+            eos_id = self.tokenizer.eos_token_id
+
+            try:
+                with torch.no_grad():
+                    outputs = self.active_model.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        temperature=0.7,
+                        do_sample=True,
+                        pad_token_id=pad_id,
+                        eos_token_id=eos_id,
+                    )
+            except Exception as gen_err:
+                # Fallback to greedy decoding if sampling fails on some architectures
+                print(f"[Inference] Sampling failed ({gen_err}), falling back to greedy")
+                with torch.no_grad():
+                    outputs = self.active_model.generate(
+                        **inputs,
+                        max_new_tokens=512,
+                        do_sample=False,
+                        pad_token_id=pad_id,
+                        eos_token_id=eos_id,
+                    )
+
+            # Decode only the generated response (skip the prompt tokens)
             new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
             reply = self.tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
 
-            # ── Clean up output ────────────────────────────────────────────────────
-            import re
-
+            # ── Clean up output (universal across all models) ──────────────────────
             # 1. Strip reasoning/thinking blocks (DeepSeek R1 etc.)
             if "</think>" in reply:
                 reply = reply.split("</think>")[-1].strip()
             reply = re.sub(r"<think>[\s\S]*?</think>", "", reply).strip()
 
-            # 2. Fix BPE byte-level artifacts ONLY for tokenizers that use byte-level BPE
-            #    (Llama, GPT-2 family). Applying this to other tokenizers corrupts output.
+            # 2. Fix BPE byte-level artifacts ONLY for Llama/GPT-2 family
             if self._needs_bpe_fix:
                 reply = _fix_bpe_text(reply)
 
-            # 3. Final cleanup
+            # 3. Strip leftover template artifacts that skip_special_tokens may miss
+            common_artifacts = [
+                "<end_of_turn>", "<|im_end|>", "<|eot_id|>", "<|end|>",
+                "</s>", "<|assistant|>", "<|user|>", "### Assistant:",
+                "<|endoftext|>",
+            ]
+            for artifact in common_artifacts:
+                reply = reply.replace(artifact, "")
+
+            # 4. Final cleanup — collapse excess whitespace
             reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
 
             print(f"[Inference] Generated reply ({len(reply)} chars) using {base_model_id}")
             return {"reply": reply, "status": "succeeded"}
 
         except Exception as err:
+            import traceback
             print(f"[Inference Error] {err}")
+            traceback.print_exc()
             return {"error": str(err), "status": "failed"}
