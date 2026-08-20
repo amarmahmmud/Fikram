@@ -14,7 +14,7 @@ When a user describes their goal, you must:
 {"type":"question","text":"What is the primary language your users speak?","options":["English only","Arabic only","English + Arabic","Multiple languages"],"allowCustom":true,"multiSelect":false}
 
 After all questions are answered (usually after 2-3 exchanges), output a final config JSON:
-{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.0002,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config including why this model is the best fit"}
+{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.00002,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config including why this model is the best fit"}
 
 CRITICAL RULES:
 - Output ONLY raw JSON — no markdown fences, no explanation text, nothing else
@@ -61,7 +61,7 @@ function getFallbackResponse(userMsgCount: number) {
       recommendedModel: MODELS[0].id,
       method: "lora",
       epochs: 3,
-      learningRate: 0.0002,
+      learningRate: 0.00002,
       batchSize: 4,
       estimatedCredits: 28,
       estimatedTime: "12-18 min",

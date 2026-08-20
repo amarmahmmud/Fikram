@@ -94,7 +94,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const config = (job.config || {}) as Record<string, any>;
   const epochs = config.epochs ?? 1;
-  const lr = config.learningRate ?? 0.0002;
+  const lr = config.learningRate ?? 0.00002;
   const batchSize = config.batchSize ?? 2;
   const datasetFileName = job.dataset_url ? job.dataset_url.split("/").pop()?.split("?")[0] : "Uploaded Dataset";
 

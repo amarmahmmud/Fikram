@@ -149,10 +149,44 @@ def train_model(
         _pad_module.fix_pad_token = _original_fix_pad_token
         _tok_utils_module.fix_pad_token = _original_fix_pad_token
 
-        # Sync pad_token_id into model config
-        if tokenizer.pad_token_id is not None:
-            model.config.pad_token_id = tokenizer.pad_token_id
-        print(f"[Model Factory] Model loaded. pad_token={tokenizer.pad_token}, pad_token_id={tokenizer.pad_token_id}")
+        # ── CRITICAL FIX: Reload tokenizer from the ORIGINAL model repo ──────
+        # Unsloth auto-resolves to a quantized variant (e.g. unsloth/gemma-2-2b-it-bnb-4bit)
+        # and loads its "legacy tokenizer" which may have mismatched special token IDs.
+        # This causes token IDs to map to wrong embeddings → loss > random → gibberish.
+        # Fix: reload tokenizer from the user's original model ID.
+        from transformers import AutoTokenizer
+        original_tokenizer = AutoTokenizer.from_pretrained(
+            base_model,
+            cache_dir="/model-cache",
+            token=hf_token,
+        )
+
+        # Log the mismatch for debugging
+        print(f"[Model Factory] Unsloth tokenizer vocab: {tokenizer.vocab_size}, eos={tokenizer.eos_token_id}, bos={tokenizer.bos_token_id}")
+        print(f"[Model Factory] Original tokenizer vocab: {original_tokenizer.vocab_size}, eos={original_tokenizer.eos_token_id}, bos={original_tokenizer.bos_token_id}")
+
+        # Use the original tokenizer
+        tokenizer = original_tokenizer
+
+        # Ensure pad_token exists (some models don't have one)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+
+        # Sync model config to match the CORRECT tokenizer
+        model.config.pad_token_id = tokenizer.pad_token_id
+        model.config.eos_token_id = tokenizer.eos_token_id
+        model.config.bos_token_id = tokenizer.bos_token_id
+
+        # Assert vocab sizes match
+        assert tokenizer.vocab_size <= model.config.vocab_size, (
+            f"Tokenizer vocab ({tokenizer.vocab_size}) > model vocab ({model.config.vocab_size})! "
+            f"This WILL produce garbage outputs."
+        )
+        print(f"[Model Factory] Model loaded. Using ORIGINAL tokenizer from {base_model}. "
+              f"pad={tokenizer.pad_token}(id={tokenizer.pad_token_id}), "
+              f"eos={tokenizer.eos_token}(id={tokenizer.eos_token_id}), "
+              f"bos={tokenizer.bos_token}(id={tokenizer.bos_token_id})")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
         # Auto-detect all linear module names directly from the model.
@@ -221,6 +255,12 @@ def train_model(
             return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
+        # CRITICAL: Remove original columns so Unsloth's SFTTrainer patch
+        # doesn't auto-detect "prompt"+"completion" and bypass our formatted "text".
+        cols_to_remove = [c for c in formatted_dataset.column_names if c != "text"]
+        if cols_to_remove:
+            formatted_dataset = formatted_dataset.remove_columns(cols_to_remove)
+            print(f"[Model Factory] Removed raw columns {cols_to_remove} — forcing Unsloth to use formatted 'text'")
         # Debug: show first formatted example
         print(f"[Model Factory] Sample formatted text (first 300 chars): {formatted_dataset[0]['text'][:300]}")
 
