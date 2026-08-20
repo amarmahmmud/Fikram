@@ -179,56 +179,29 @@ def train_model(
             random_state=3407,
         )
 
-        # ── Step 4: Format Dataset ────────────────────────────────────────────────
-        # Universal chat template handling:
-        # 1. Try the tokenizer's native chat_template
-        # 2. Guard against models that don't support the "system" role
-        # 3. Fallback to simple plaintext format for base models with no template
+        # ── Step 4: Formatting Dataset ────────────────────────────────────────────
+        from unsloth.chat_templates import get_chat_template, train_on_responses_only
+        from transformers import DataCollatorForSeq2Seq
 
-        def _supports_system_role(tok):
-            """Check if the tokenizer's chat template supports a 'system' role.
-            We actually try applying it — substring checks like 'system in template'
-            give false positives (e.g. Gemma's template contains 'System role not
-            supported' as an error message string)."""
-            template = getattr(tok, "chat_template", None)
-            if not template:
-                return False
-            try:
-                tok.apply_chat_template(
-                    [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
-                    tokenize=False,
-                )
-                return True
-            except Exception:
-                return False
-
-        _has_chat_template = getattr(tokenizer, "chat_template", None) is not None
-        _system_ok = _supports_system_role(tokenizer) if _has_chat_template else False
-        print(f"[Model Factory] Chat template available: {_has_chat_template}, system role supported: {_system_ok}")
+        # Unsloth's get_chat_template applies critical fixes for Gemma 2's vocab/padding
+        tokenizer = get_chat_template(
+            tokenizer,
+            chat_template="chatml",
+            mapping={"role": "role", "content": "content", "user": "user", "assistant": "assistant"}
+        )
 
         def format_example(example):
             prompt = example.get("prompt", "")
             completion = example.get("completion", "")
-
-            if _has_chat_template:
-                # Build conversation with or without system role
-                conversation = [
-                    {"role": "user", "content": prompt},
-                    {"role": "assistant", "content": completion},
-                ]
-                try:
-                    text = tokenizer.apply_chat_template(
-                        conversation,
-                        tokenize=False,
-                        add_generation_prompt=False,
-                    )
-                except Exception:
-                    # Template exists but failed — use plaintext fallback
-                    text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
-            else:
-                # No chat template at all (base models like phi-2, falcon-base)
-                text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
-
+            conversation = [
+                {"role": "user", "content": prompt},
+                {"role": "assistant", "content": completion},
+            ]
+            text = tokenizer.apply_chat_template(
+                conversation,
+                tokenize=False,
+                add_generation_prompt=False,
+            )
             return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
@@ -242,6 +215,7 @@ def train_model(
             train_dataset=formatted_dataset,
             dataset_text_field="text",
             max_seq_length=max_seq_length,
+            data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
             args=TrainingArguments(
                 per_device_train_batch_size=2,
                 gradient_accumulation_steps=4,
@@ -260,6 +234,13 @@ def train_model(
                 output_dir="/tmp/training_output",
             ),
         )
+
+        trainer = train_on_responses_only(
+            trainer,
+            instruction_part = "<|im_start|>user\n",
+            response_part = "<|im_start|>assistant\n",
+        )
+
         trainer.train()
         print("[Model Factory] Training complete!")
 
