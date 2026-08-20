@@ -328,7 +328,14 @@ class ModelInference:
             pad_id = self.tokenizer.pad_token_id
             if pad_id is None:
                 pad_id = self.tokenizer.eos_token_id
-            eos_id = self.tokenizer.eos_token_id
+            # Collect universal terminator tokens (fixes hallucination loops on Gemma/Llama)
+            terminators = [
+                self.tokenizer.eos_token_id,
+                self.tokenizer.convert_tokens_to_ids("<|eot_id|>"),    # Llama 3
+                self.tokenizer.convert_tokens_to_ids("<end_of_turn>"), # Gemma 2
+                self.tokenizer.convert_tokens_to_ids("<|im_end|>"),    # Qwen/Phi
+            ]
+            terminators = [t for t in terminators if t is not None]
 
             try:
                 with torch.no_grad():
@@ -338,7 +345,7 @@ class ModelInference:
                         temperature=0.7,
                         do_sample=True,
                         pad_token_id=pad_id,
-                        eos_token_id=eos_id,
+                        eos_token_id=terminators,
                     )
             except Exception as gen_err:
                 # Fallback to greedy decoding if sampling fails on some architectures
@@ -349,7 +356,7 @@ class ModelInference:
                         max_new_tokens=512,
                         do_sample=False,
                         pad_token_id=pad_id,
-                        eos_token_id=eos_id,
+                        eos_token_id=terminators,
                     )
 
             # Decode only the generated response (skip the prompt tokens)

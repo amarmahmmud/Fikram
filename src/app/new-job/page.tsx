@@ -62,7 +62,7 @@ export default function NewJobPage() {
   const config: TrainingConfig = aiConfig ?? {
     baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct",
     method: "LoRA (auto-selected)",
-    epochs: 3, learningRate: 0.0002, batchSize: 4, warmupSteps: 10,
+    epochs: 3, learningRate: 0.00002, batchSize: 4, warmupSteps: 10,
     estimatedCredits: 28, estimatedTime: "12–18 min",
   };
 
@@ -138,7 +138,7 @@ export default function NewJobPage() {
             baseModel: cfg.recommendedModel ?? MODELS[0].name,
             method:    cfg.method ?? "LoRA",
             epochs:    cfg.epochs ?? 3,
-            learningRate:    cfg.learningRate ?? 0.0002,
+            learningRate:    cfg.learningRate ?? 0.00002,
             batchSize:       cfg.batchSize ?? 4,
             warmupSteps:     10,
             estimatedCredits: cfg.estimatedCredits ?? 28,
