@@ -186,11 +186,13 @@ def train_model(
         # 3. Fallback to simple plaintext format for base models with no template
 
         def _supports_system_role(tok):
-            """Check if the tokenizer's chat template supports a 'system' role."""
+            """Check if the tokenizer's chat template supports a 'system' role.
+            We actually try applying it — substring checks like 'system in template'
+            give false positives (e.g. Gemma's template contains 'System role not
+            supported' as an error message string)."""
             template = getattr(tok, "chat_template", None)
-            if template and "system" in str(template):
-                return True
-            # Quick smoke test: try applying a system message
+            if not template:
+                return False
             try:
                 tok.apply_chat_template(
                     [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
@@ -233,6 +235,14 @@ def train_model(
 
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
+
+        # Universal safety guard: fragile models like Gemma 2 suffer catastrophic
+        # forgetting (outputting gibberish) at standard high learning rates (2e-4).
+        safe_learning_rate = learning_rate
+        if "gemma" in base_model.lower():
+            safe_learning_rate = min(learning_rate, 2e-5)
+            print(f"[Model Factory] Detected Gemma model — capping learning rate to {safe_learning_rate} to prevent catastrophic forgetting")
+
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -245,11 +255,14 @@ def train_model(
                 warmup_steps=3,
                 num_train_epochs=num_train_epochs,
                 max_steps=max_steps,          # Hard cap to control cost
-                learning_rate=learning_rate,
+                learning_rate=safe_learning_rate,
                 fp16=not torch.cuda.is_bf16_supported(),
                 bf16=torch.cuda.is_bf16_supported(),
-                logging_steps=5,
+                logging_steps=1,
                 optim="adamw_8bit",
+                weight_decay=0.01,
+                lr_scheduler_type="linear",
+                seed=3407,
                 output_dir="/tmp/training_output",
             ),
         )

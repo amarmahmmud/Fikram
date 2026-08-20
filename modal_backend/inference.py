@@ -302,18 +302,14 @@ class ModelInference:
                             system_prepended = True
                         formatted_messages.append(msg)
 
-                    print(f"[Inference Debug] formatted_messages: {formatted_messages}")
                     prompt = self.tokenizer.apply_chat_template(
                         formatted_messages,
                         tokenize=False,
                         add_generation_prompt=True,
                     )
                 except Exception as tmpl_err:
-                    print(f"[Inference Debug Error] Chat template failed ({tmpl_err})")
-                    print(f"[Inference Debug Error] Raw messages: {messages}")
-                    print(f"[Inference Debug Error] Normalized msgs: {normalized_msgs}")
-                    print(f"[Inference Debug Error] Merged msgs: {merged_msgs}")
-                    print(f"[Inference Debug Error] Formatted msgs: {formatted_messages}")
+                    print(f"[Inference] Chat template failed ({tmpl_err}), using plaintext fallback")
+                    print(f"[Inference] Message roles sent: {[m['role'] for m in formatted_messages]}")
                     prompt = None  # Force plaintext fallback
 
             if prompt is None:
