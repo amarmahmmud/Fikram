@@ -59,7 +59,7 @@ def train_model(
     webhook_url: str,
     base_model: str = "meta-llama/Llama-3.1-8B-Instruct",  # User's chosen model
     num_train_epochs: int = 1,      # Default 1 epoch to save cost
-    learning_rate: float = 2e-4,
+    learning_rate: float = 2e-5,
     max_seq_length: int = 1024,     # Smaller context = faster + less memory
     max_steps: int = 30,            # Hard cap: stops after 30 steps (~5 mins on L4)
     r2_endpoint: str = "",
@@ -236,41 +236,6 @@ def train_model(
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
 
-        # ── Universal LR auto-detection via gradient probe ────────────────────
-        # Feed the model ONE training sample, measure gradient magnitude.
-        # Large gradients = fragile model → auto-lower LR.
-        # Small gradients = robust model → keep LR high.
-        # No model lists. No name checks. The model's own math decides.
-        safe_lr = learning_rate
-        try:
-            probe_text = formatted_dataset[0]["text"]
-            probe_inputs = tokenizer(
-                probe_text, return_tensors="pt",
-                truncation=True, max_length=512,
-            ).to(model.device)
-            probe_out = model(**probe_inputs, labels=probe_inputs["input_ids"])
-            probe_out.loss.backward()
-
-            grad_norm = sum(
-                p.grad.norm(2).item() ** 2
-                for p in model.parameters()
-                if p.requires_grad and p.grad is not None
-            ) ** 0.5
-            model.zero_grad()
-
-            # Robust models (Llama, Mistral) typically show grad_norm ~0.5-3.0
-            # Fragile models (Gemma) typically show grad_norm ~5.0-50.0+
-            # If gradient norm is high, scale LR down proportionally
-            SAFE_NORM = 3.0
-            if grad_norm > SAFE_NORM:
-                scale = SAFE_NORM / grad_norm
-                safe_lr = max(learning_rate * scale, 2e-5)  # floor at 2e-5
-                print(f"[Model Factory] Gradient probe: norm={grad_norm:.2f} (high) → auto LR={safe_lr:.1e}")
-            else:
-                print(f"[Model Factory] Gradient probe: norm={grad_norm:.2f} (normal) → LR={safe_lr:.1e}")
-        except Exception as probe_err:
-            print(f"[Model Factory] Gradient probe skipped ({probe_err}), using default LR={safe_lr}")
-
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -282,8 +247,8 @@ def train_model(
                 gradient_accumulation_steps=4,
                 warmup_steps=3,
                 num_train_epochs=num_train_epochs,
-                max_steps=max_steps,          # Hard cap to control cost
-                learning_rate=safe_lr,
+                max_steps=max_steps,
+                learning_rate=learning_rate,
                 fp16=not torch.cuda.is_bf16_supported(),
                 bf16=torch.cuda.is_bf16_supported(),
                 logging_steps=1,
