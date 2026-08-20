@@ -236,13 +236,13 @@ def train_model(
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
 
-        # Smart learning rate: most models handle 2e-4 fine, but fragile
-        # architectures (Gemma, etc.) suffer catastrophic forgetting at high LRs.
-        # Auto-detect and cap to 2e-5 for safety — invisible to the user.
-        _fragile = any(f in base_model.lower() for f in ["gemma"])
-        safe_lr = min(learning_rate, 2e-5) if _fragile else learning_rate
-        if _fragile:
-            print(f"[Model Factory] Fragile architecture detected — using safe LR {safe_lr}")
+        # Auto-detect optimal learning rate from the model's own config.
+        # model.config.model_type is set by HuggingFace for every model and
+        # works even for renamed/custom fine-tuned variants.
+        model_type = getattr(model.config, "model_type", "").lower()
+        _fragile_types = {"gemma", "gemma2"}  # architectures prone to gradient explosion
+        safe_lr = min(learning_rate, 2e-5) if model_type in _fragile_types else learning_rate
+        print(f"[Model Factory] Architecture: {model_type}, LR: {safe_lr}")
 
         trainer = SFTTrainer(
             model=model,
@@ -263,6 +263,7 @@ def train_model(
                 optim="adamw_8bit",
                 weight_decay=0.01,
                 lr_scheduler_type="linear",
+                max_grad_norm=0.3,            # Universal safety net: clips gradient explosions
                 seed=3407,
                 output_dir="/tmp/training_output",
             ),
