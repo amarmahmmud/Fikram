@@ -83,6 +83,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
   const [sysPrompt, setSysPrompt] = useState("You are a helpful assistant specialized in the provided business knowledge.");
   const [showConfig, setShowConfig] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchJob = useCallback(async () => {
     try {
@@ -140,6 +141,9 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     setInput("");
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
     setLoading(true);
     setLoadingStatus("Generating response with your fine-tuned model...");
 
@@ -228,7 +232,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
             <div className="input-group">
               <label className="input-label">Engine</label>
               <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                Modal.com Serverless GPU (T4/A10G)
+                Modal.com Serverless GPU (L4 / 24GB VRAM)
               </div>
             </div>
 
@@ -243,6 +247,16 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
 
         {/* Chat area */}
         <div className={styles.chatArea}>
+          {!showConfig && (
+            <button
+              className={styles.configToggle}
+              onClick={() => setShowConfig(true)}
+              title="Show Config"
+            >
+              ⚙ Model Config
+            </button>
+          )}
+
           {!isCompleted && !loadingJob && (
             <div style={{
               background: "rgba(234, 179, 8, 0.08)",
@@ -291,77 +305,88 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
           })()}
 
           <div className={styles.messagesList}>
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`${styles.message} ${m.role === "user" ? styles.messageUser : styles.messageModel}`}
-              >
-                <div className={styles.messageAvatar}>
-                  {m.role === "user" ? "👤" : "🤖"}
-                </div>
-                <div className={styles.messageContent}>
-                  <div className={styles.messageMeta}>
-                    <span className={styles.messageSender}>{m.role === "user" ? "You" : (job?.name || "Model")}</span>
-                    <span className={styles.messageTime}>{m.ts}</span>
+            <div className={styles.messagesInner}>
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className={`${styles.message} ${m.role === "user" ? styles.messageUser : styles.messageModel}`}
+                >
+                  <div className={styles.messageAvatar}>
+                    {m.role === "user" ? "👤" : "🤖"}
                   </div>
-                  <div className={styles.messageText}>
-                    {m.role === "model" ? renderMarkdown(m.content) : m.content}
-                  </div>
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className={`${styles.message} ${styles.messageModel}`}>
-                <div className={styles.messageAvatar}>🤖</div>
-                <div className={styles.messageContent}>
-                  <div className={styles.messageText}>
-                    <span className="spinner" style={{ width: 14, height: 14, display: "inline-block", marginRight: 8 }} />
-                    <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-                      {loadingStatus || "Generating..."}
-                    </span>
+                  <div className={styles.messageContent}>
+                    <div className={styles.messageMeta}>
+                      <span className={styles.messageSender}>{m.role === "user" ? "You" : (job?.name || "Model")}</span>
+                      <span className={styles.messageTime}>{m.ts}</span>
+                    </div>
+                    <div className={styles.messageText}>
+                      {m.role === "model" ? renderMarkdown(m.content) : m.content}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
+              ))}
+              {loading && (
+                <div className={`${styles.message} ${styles.messageModel}`}>
+                  <div className={styles.messageAvatar}>🤖</div>
+                  <div className={styles.messageContent}>
+                    <div className={styles.messageText}>
+                      <span className="spinner" style={{ width: 14, height: 14, display: "inline-block", marginRight: 8 }} />
+                      <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                        {loadingStatus || "Generating..."}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
           </div>
 
-          {/* Input bar */}
-          <div className={styles.inputBar}>
-            {!showConfig && (
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => setShowConfig(true)}
-                title="Show Config"
-                style={{ flexShrink: 0, padding: "8px" }}
-              >
-                ⚙
-              </button>
-            )}
-            <textarea
-              id="playground-input"
-              className={styles.chatInput}
-              rows={1}
-              placeholder={isCompleted ? "Ask your model anything..." : "Model is training... chat unlocks upon completion"}
-              value={input}
-              disabled={!isCompleted || loading}
-              onChange={(e) => {
-                setInput(e.target.value);
-                // Auto-resize textarea
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 150) + "px";
-              }}
-              onKeyDown={handleKey}
-            />
-            <button
-              id="playground-send-btn"
-              className="btn btn-primary btn-sm"
-              disabled={!input.trim() || loading || !isCompleted}
-              onClick={sendMessage}
-              style={{ flexShrink: 0, padding: "10px 20px", borderRadius: "12px" }}
-            >
-              {loading ? "..." : "Send ↑"}
-            </button>
+          {/* Elastic Wide Input Section */}
+          <div className={styles.inputSection}>
+            <div className={styles.inputWrapper}>
+              <div className={styles.inputBar}>
+                <textarea
+                  ref={textareaRef}
+                  id="playground-input"
+                  className={styles.chatInput}
+                  rows={1}
+                  placeholder={isCompleted ? "Ask your fine-tuned model anything..." : "Model is training... chat unlocks upon completion"}
+                  value={input}
+                  disabled={!isCompleted || loading}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    // Elastic dynamic auto-resize
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`;
+                  }}
+                  onKeyDown={handleKey}
+                />
+                <button
+                  id="playground-send-btn"
+                  className={styles.sendBtn}
+                  disabled={!input.trim() || loading || !isCompleted}
+                  onClick={sendMessage}
+                  title="Send message (Enter)"
+                >
+                  {loading ? (
+                    <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="12" y1="19" x2="12" y2="5"></line>
+                      <polyline points="5 12 12 5 19 12"></polyline>
+                    </svg>
+                  )}
+                </button>
+              </div>
+              <div className={styles.inputFooter}>
+                <span>Press <strong>Enter ↵</strong> to send</span>
+                <span>•</span>
+                <span><strong>Shift + Enter</strong> for new line</span>
+                <span>•</span>
+                <span>Fine-tuned LoRA weights</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

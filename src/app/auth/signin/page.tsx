@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "../auth.module.css";
 
-export default function SignInPage() {
+function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectTo = searchParams.get("redirectTo") ?? "/dashboard";
@@ -106,3 +106,19 @@ export default function SignInPage() {
     </div>
   );
 }
+
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className={styles.authPage}>
+        <div className={styles.authCard} style={{ textAlign: "center", padding: "60px 20px" }}>
+          <div className="spinner" style={{ margin: "0 auto 16px" }} />
+          <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>Loading sign in...</p>
+        </div>
+      </div>
+    }>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
