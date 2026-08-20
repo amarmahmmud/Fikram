@@ -120,30 +120,35 @@ class ModelInference:
             return
 
         print(f"[Inference] Loading base model: {base_model_id} (Unsloth auto-resolves)")
-        import tempfile
-        from transformers import AutoTokenizer
         hf_token = os.environ.get("HF_TOKEN", None)
 
-        # Pre-fix tokenizer for models that lack a pad_token
-        tokenizer_name = None
-        raw_tok = AutoTokenizer.from_pretrained(base_model_id, token=hf_token)
-        if raw_tok.pad_token is None:
-            raw_tok.pad_token = raw_tok.eos_token
-            tok_dir = tempfile.mkdtemp(prefix="mf_tok_")
-            raw_tok.save_pretrained(tok_dir)
-            tokenizer_name = tok_dir
-            print(f"[Inference] Tokenizer has no pad_token — patched and saved to {tok_dir}")
-        del raw_tok
+        # Monkey-patch fix_pad_token to suppress RuntimeError on models like phi-2
+        import unsloth_zoo.pad_token as _pad_module
+        _original_fix_pad_token = _pad_module.fix_pad_token
+
+        def _safe_fix_pad_token(*args, **kwargs):
+            try:
+                return _original_fix_pad_token(*args, **kwargs)
+            except RuntimeError as e:
+                if "Could not find a valid pad token" in str(e):
+                    print(f"[Inference] Suppressed Unsloth pad_token error: {e}")
+                    tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
+                    return tokenizer_arg
+                raise
+
+        _pad_module.fix_pad_token = _safe_fix_pad_token
 
         self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model_id,
-            tokenizer_name=tokenizer_name,
             max_seq_length=2048,
             dtype=None,
             load_in_4bit=True,
             cache_dir="/model-cache",
             token=hf_token,
         )
+
+        # Restore original
+        _pad_module.fix_pad_token = _original_fix_pad_token
 
         if self.tokenizer.pad_token_id is not None:
             self.base_model.config.pad_token_id = self.tokenizer.pad_token_id

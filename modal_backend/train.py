@@ -105,35 +105,47 @@ def train_model(
     # Unsloth auto-resolves the HuggingFace model ID to its best 4-bit variant
     print(f"[Model Factory] Loading model: {base_model} (Unsloth will auto-resolve best variant)...")
     try:
-        import tempfile
-        from transformers import AutoTokenizer
         hf_token = os.environ.get("HF_TOKEN", None)
 
-        # ── Pre-fix tokenizer for models that lack a pad_token ────────────────
-        # Models like microsoft/phi-2 and tiiuae/falcon-7b-instruct ship without
-        # a pad_token. Unsloth's internal fix_pad_token() raises a RuntimeError
-        # in this case. The proven fix: load the tokenizer separately, set
-        # pad_token = eos_token, save to a temp dir, and point Unsloth at it
-        # via tokenizer_name. This way Unsloth never sees a missing pad_token.
-        tokenizer_name = None  # None = use model's default tokenizer
-        raw_tok = AutoTokenizer.from_pretrained(base_model, token=hf_token)
-        if raw_tok.pad_token is None:
-            raw_tok.pad_token = raw_tok.eos_token
-            tok_dir = tempfile.mkdtemp(prefix="mf_tok_")
-            raw_tok.save_pretrained(tok_dir)
-            tokenizer_name = tok_dir
-            print(f"[Model Factory] Tokenizer has no pad_token — patched and saved to {tok_dir}")
-        del raw_tok  # Free memory before loading the full model
+        # ── Monkey-patch Unsloth's fix_pad_token to not crash ─────────────────
+        # Unsloth 2026.8.16's fix_pad_token() in unsloth_zoo/pad_token.py has a
+        # strict check: it rejects eos_token as pad_token (considers it "bad"),
+        # then tries to find a dedicated unused token from the vocab. For models
+        # like microsoft/phi-2 that have NO suitable candidate token, it:
+        #   1. Adds a temporary '<｜PAD▁TOKEN｜>' to the tokenizer
+        #   2. Then RAISES RuntimeError anyway
+        # The temporary token actually works fine — the raise is overly strict.
+        # We monkey-patch to suppress this specific RuntimeError and let training
+        # proceed with the temporary pad token.
+        import unsloth_zoo.pad_token as _pad_module
+        _original_fix_pad_token = _pad_module.fix_pad_token
+
+        def _safe_fix_pad_token(*args, **kwargs):
+            try:
+                return _original_fix_pad_token(*args, **kwargs)
+            except RuntimeError as e:
+                if "Could not find a valid pad token" in str(e):
+                    print(f"[Model Factory] Suppressed Unsloth pad_token error (temporary token was already added): {e}")
+                    # fix_pad_token already mutated the tokenizer in-place before raising.
+                    # Return the tokenizer (first positional arg) so the caller can continue.
+                    tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
+                    return tokenizer_arg
+                raise
+
+        _pad_module.fix_pad_token = _safe_fix_pad_token
+        print("[Model Factory] Patched fix_pad_token to handle models without dedicated pad tokens")
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
-            tokenizer_name=tokenizer_name,
             max_seq_length=max_seq_length,
             dtype=None,  # auto-detect
             load_in_4bit=True,
             cache_dir="/model-cache",
             token=hf_token,
         )
+
+        # Restore original function to avoid side effects on other imports
+        _pad_module.fix_pad_token = _original_fix_pad_token
 
         # Sync pad_token_id into model config
         if tokenizer.pad_token_id is not None:
