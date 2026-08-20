@@ -265,21 +265,38 @@ class ModelInference:
 
             if has_template:
                 try:
-                    # Build messages — guard system role if model doesn't support it
+                    # Guard system role if model doesn't support it
                     if self._system_role_ok:
                         formatted_messages = [{"role": "system", "content": system_prompt}]
                     else:
                         formatted_messages = []
 
                     system_prepended = False
+                    
+                    # 1. Normalize roles
+                    normalized_msgs = []
                     for msg in messages:
                         role = "user" if msg.get("role") in ("user",) else "assistant"
-                        content = msg.get("content", "")
-                        # Fold system prompt into first user msg when system role unsupported
-                        if not self._system_role_ok and role == "user" and not system_prepended:
-                            content = f"{system_prompt}\n\n{content}"
+                        normalized_msgs.append({"role": role, "content": msg.get("content", "")})
+                    
+                    # 2. Merge consecutive messages of the same role to guarantee alternation
+                    # Strict models like Gemma will crash if roles don't strictly alternate.
+                    merged_msgs = []
+                    for msg in normalized_msgs:
+                        if not merged_msgs:
+                            merged_msgs.append(msg)
+                        elif merged_msgs[-1]["role"] == msg["role"]:
+                            # Same role as previous, merge content with a newline
+                            merged_msgs[-1]["content"] += f"\n\n{msg['content']}"
+                        else:
+                            merged_msgs.append(msg)
+                            
+                    # 3. Fold system prompt if needed
+                    for msg in merged_msgs:
+                        if not self._system_role_ok and msg["role"] == "user" and not system_prepended:
+                            msg["content"] = f"{system_prompt}\n\n{msg['content']}"
                             system_prepended = True
-                        formatted_messages.append({"role": role, "content": content})
+                        formatted_messages.append(msg)
 
                     prompt = self.tokenizer.apply_chat_template(
                         formatted_messages,
