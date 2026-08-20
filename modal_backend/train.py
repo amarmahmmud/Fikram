@@ -59,7 +59,7 @@ def train_model(
     webhook_url: str,
     base_model: str = "meta-llama/Llama-3.1-8B-Instruct",  # User's chosen model
     num_train_epochs: int = 1,      # Default 1 epoch to save cost
-    learning_rate: float = 2e-5,    # Universal safe default for ALL models
+    learning_rate: float = 2e-4,
     max_seq_length: int = 1024,     # Smaller context = faster + less memory
     max_steps: int = 30,            # Hard cap: stops after 30 steps (~5 mins on L4)
     r2_endpoint: str = "",
@@ -236,6 +236,14 @@ def train_model(
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
 
+        # Smart learning rate: most models handle 2e-4 fine, but fragile
+        # architectures (Gemma, etc.) suffer catastrophic forgetting at high LRs.
+        # Auto-detect and cap to 2e-5 for safety — invisible to the user.
+        _fragile = any(f in base_model.lower() for f in ["gemma"])
+        safe_lr = min(learning_rate, 2e-5) if _fragile else learning_rate
+        if _fragile:
+            print(f"[Model Factory] Fragile architecture detected — using safe LR {safe_lr}")
+
         trainer = SFTTrainer(
             model=model,
             tokenizer=tokenizer,
@@ -248,7 +256,7 @@ def train_model(
                 warmup_steps=3,
                 num_train_epochs=num_train_epochs,
                 max_steps=max_steps,          # Hard cap to control cost
-                learning_rate=learning_rate,
+                learning_rate=safe_lr,
                 fp16=not torch.cuda.is_bf16_supported(),
                 bf16=torch.cuda.is_bf16_supported(),
                 logging_steps=1,
