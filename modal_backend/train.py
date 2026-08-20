@@ -236,13 +236,40 @@ def train_model(
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
 
-        # Auto-detect optimal learning rate from the model's own config.
-        # model.config.model_type is set by HuggingFace for every model and
-        # works even for renamed/custom fine-tuned variants.
-        model_type = getattr(model.config, "model_type", "").lower()
-        _fragile_types = {"gemma", "gemma2"}  # architectures prone to gradient explosion
-        safe_lr = min(learning_rate, 2e-5) if model_type in _fragile_types else learning_rate
-        print(f"[Model Factory] Architecture: {model_type}, LR: {safe_lr}")
+        # ── Universal LR auto-detection via gradient probe ────────────────────
+        # Feed the model ONE training sample, measure gradient magnitude.
+        # Large gradients = fragile model → auto-lower LR.
+        # Small gradients = robust model → keep LR high.
+        # No model lists. No name checks. The model's own math decides.
+        safe_lr = learning_rate
+        try:
+            probe_text = formatted_dataset[0]["text"]
+            probe_inputs = tokenizer(
+                probe_text, return_tensors="pt",
+                truncation=True, max_length=512,
+            ).to(model.device)
+            probe_out = model(**probe_inputs, labels=probe_inputs["input_ids"])
+            probe_out.loss.backward()
+
+            grad_norm = sum(
+                p.grad.norm(2).item() ** 2
+                for p in model.parameters()
+                if p.requires_grad and p.grad is not None
+            ) ** 0.5
+            model.zero_grad()
+
+            # Robust models (Llama, Mistral) typically show grad_norm ~0.5-3.0
+            # Fragile models (Gemma) typically show grad_norm ~5.0-50.0+
+            # If gradient norm is high, scale LR down proportionally
+            SAFE_NORM = 3.0
+            if grad_norm > SAFE_NORM:
+                scale = SAFE_NORM / grad_norm
+                safe_lr = max(learning_rate * scale, 2e-5)  # floor at 2e-5
+                print(f"[Model Factory] Gradient probe: norm={grad_norm:.2f} (high) → auto LR={safe_lr:.1e}")
+            else:
+                print(f"[Model Factory] Gradient probe: norm={grad_norm:.2f} (normal) → LR={safe_lr:.1e}")
+        except Exception as probe_err:
+            print(f"[Model Factory] Gradient probe skipped ({probe_err}), using default LR={safe_lr}")
 
         trainer = SFTTrainer(
             model=model,
