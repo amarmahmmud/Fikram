@@ -120,29 +120,34 @@ class ModelInference:
             return
 
         print(f"[Inference] Loading base model: {base_model_id} (Unsloth auto-resolves)")
+        import tempfile
         from transformers import AutoTokenizer
         hf_token = os.environ.get("HF_TOKEN", None)
-        
-        # Pre-check tokenizer
-        raw_tokenizer = AutoTokenizer.from_pretrained(base_model_id, token=hf_token)
-        tokenizer_kwargs = {}
-        if raw_tokenizer.pad_token is None:
-            tokenizer_kwargs["pad_token"] = raw_tokenizer.eos_token
-            print(f"[Inference] Tokenizer has no pad_token. Will initialize with pad_token={raw_tokenizer.eos_token}")
+
+        # Pre-fix tokenizer for models that lack a pad_token
+        tokenizer_name = None
+        raw_tok = AutoTokenizer.from_pretrained(base_model_id, token=hf_token)
+        if raw_tok.pad_token is None:
+            raw_tok.pad_token = raw_tok.eos_token
+            tok_dir = tempfile.mkdtemp(prefix="mf_tok_")
+            raw_tok.save_pretrained(tok_dir)
+            tokenizer_name = tok_dir
+            print(f"[Inference] Tokenizer has no pad_token — patched and saved to {tok_dir}")
+        del raw_tok
 
         self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model_id,
+            tokenizer_name=tokenizer_name,
             max_seq_length=2048,
             dtype=None,
             load_in_4bit=True,
             cache_dir="/model-cache",
             token=hf_token,
-            fix_tokenizer=False,
-            **tokenizer_kwargs
         )
 
         if self.tokenizer.pad_token_id is not None:
             self.base_model.config.pad_token_id = self.tokenizer.pad_token_id
+        print(f"[Inference] Model loaded. pad_token={self.tokenizer.pad_token}, pad_token_id={self.tokenizer.pad_token_id}")
 
         self.loaded_base_model_id = base_model_id
         self.loaded_adapter_prefix = None  # Force adapter reload

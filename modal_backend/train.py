@@ -105,29 +105,40 @@ def train_model(
     # Unsloth auto-resolves the HuggingFace model ID to its best 4-bit variant
     print(f"[Model Factory] Loading model: {base_model} (Unsloth will auto-resolve best variant)...")
     try:
+        import tempfile
         from transformers import AutoTokenizer
         hf_token = os.environ.get("HF_TOKEN", None)
-        
-        # Pre-check tokenizer to see if it lacks a pad_token
-        raw_tokenizer = AutoTokenizer.from_pretrained(base_model, token=hf_token)
-        tokenizer_kwargs = {}
-        if raw_tokenizer.pad_token is None:
-            tokenizer_kwargs["pad_token"] = raw_tokenizer.eos_token
-            print(f"[Model Factory] Tokenizer has no pad_token. Will initialize with pad_token={raw_tokenizer.eos_token}")
+
+        # ── Pre-fix tokenizer for models that lack a pad_token ────────────────
+        # Models like microsoft/phi-2 and tiiuae/falcon-7b-instruct ship without
+        # a pad_token. Unsloth's internal fix_pad_token() raises a RuntimeError
+        # in this case. The proven fix: load the tokenizer separately, set
+        # pad_token = eos_token, save to a temp dir, and point Unsloth at it
+        # via tokenizer_name. This way Unsloth never sees a missing pad_token.
+        tokenizer_name = None  # None = use model's default tokenizer
+        raw_tok = AutoTokenizer.from_pretrained(base_model, token=hf_token)
+        if raw_tok.pad_token is None:
+            raw_tok.pad_token = raw_tok.eos_token
+            tok_dir = tempfile.mkdtemp(prefix="mf_tok_")
+            raw_tok.save_pretrained(tok_dir)
+            tokenizer_name = tok_dir
+            print(f"[Model Factory] Tokenizer has no pad_token — patched and saved to {tok_dir}")
+        del raw_tok  # Free memory before loading the full model
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
+            tokenizer_name=tokenizer_name,
             max_seq_length=max_seq_length,
             dtype=None,  # auto-detect
-            load_in_4bit=True,  # 4-bit quantization for memory efficiency
+            load_in_4bit=True,
             cache_dir="/model-cache",
             token=hf_token,
-            fix_tokenizer=False,  # Disable internal tokenizer patching
-            **tokenizer_kwargs    # Passes pad_token directly to avoid unsloth_zoo crash
         )
 
+        # Sync pad_token_id into model config
         if tokenizer.pad_token_id is not None:
             model.config.pad_token_id = tokenizer.pad_token_id
+        print(f"[Model Factory] Model loaded. pad_token={tokenizer.pad_token}, pad_token_id={tokenizer.pad_token_id}")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
         # Use "all-linear" to auto-detect linear layers for ANY architecture.
