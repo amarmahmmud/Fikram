@@ -280,18 +280,22 @@ class ModelInference:
                         normalized_msgs.append({"role": role, "content": msg.get("content", "")})
                     
                     # 2. Merge consecutive messages of the same role to guarantee alternation
-                    # Strict models like Gemma will crash if roles don't strictly alternate.
                     merged_msgs = []
                     for msg in normalized_msgs:
                         if not merged_msgs:
                             merged_msgs.append(msg)
                         elif merged_msgs[-1]["role"] == msg["role"]:
-                            # Same role as previous, merge content with a newline
                             merged_msgs[-1]["content"] += f"\n\n{msg['content']}"
                         else:
                             merged_msgs.append(msg)
                             
-                    # 3. Fold system prompt if needed
+                    # 3. CRITICAL: Models like Gemma require the history to START with a 'user' message.
+                    # The frontend playground seeds the chat with a hardcoded greeting (assistant).
+                    # We must strip any leading 'assistant' messages to prevent template crashes.
+                    while merged_msgs and merged_msgs[0]["role"] == "assistant":
+                        merged_msgs.pop(0)
+                            
+                    # 4. Fold system prompt if needed
                     for msg in merged_msgs:
                         if not self._system_role_ok and msg["role"] == "user" and not system_prepended:
                             msg["content"] = f"{system_prompt}\n\n{msg['content']}"
