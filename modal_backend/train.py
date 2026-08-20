@@ -105,24 +105,29 @@ def train_model(
     # Unsloth auto-resolves the HuggingFace model ID to its best 4-bit variant
     print(f"[Model Factory] Loading model: {base_model} (Unsloth will auto-resolve best variant)...")
     try:
+        from transformers import AutoTokenizer
+        hf_token = os.environ.get("HF_TOKEN", None)
+        
+        # Pre-check tokenizer to see if it lacks a pad_token
+        raw_tokenizer = AutoTokenizer.from_pretrained(base_model, token=hf_token)
+        tokenizer_kwargs = {}
+        if raw_tokenizer.pad_token is None:
+            tokenizer_kwargs["pad_token"] = raw_tokenizer.eos_token
+            print(f"[Model Factory] Tokenizer has no pad_token. Will initialize with pad_token={raw_tokenizer.eos_token}")
+
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
             max_seq_length=max_seq_length,
             dtype=None,  # auto-detect
             load_in_4bit=True,  # 4-bit quantization for memory efficiency
             cache_dir="/model-cache",
-            token=os.environ.get("HF_TOKEN", None),
-            fix_tokenizer=False,  # Disable internal tokenizer patching that crashes on models without pad_token
+            token=hf_token,
+            fix_tokenizer=False,  # Disable internal tokenizer patching
+            **tokenizer_kwargs    # Passes pad_token directly to avoid unsloth_zoo crash
         )
 
-        # Some models (e.g. microsoft/phi-2) ship without a pad_token, which
-        # causes Unsloth's tokenizer patcher to raise a RuntimeError.  Setting
-        # pad_token = eos_token is the standard safe fallback.
-        if tokenizer.pad_token is None or tokenizer.pad_token_id is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.pad_token_id = tokenizer.eos_token_id
+        if tokenizer.pad_token_id is not None:
             model.config.pad_token_id = tokenizer.pad_token_id
-            print(f"[Model Factory] Set pad_token to eos_token: {tokenizer.pad_token}")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
         # Use "all-linear" to auto-detect linear layers for ANY architecture.
