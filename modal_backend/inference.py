@@ -255,8 +255,18 @@ class ModelInference:
                 print(f"[Inference] Attaching LoRA adapter from {adapter_dir}...")
                 self.active_model = PeftModel.from_pretrained(self.base_model, adapter_dir)
                 FastLanguageModel.for_inference(self.active_model)
+                
+                # Load the tokenizer that was saved during training!
+                # This ensures the inference server uses the exact same universal chat template 
+                # (like ChatML) that was used during training.
+                from transformers import AutoTokenizer
+                self.tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+                
+                # Recalculate system role support since the new tokenizer might have different capabilities
+                self._system_role_ok = self._check_system_role_support()
+                
                 self.loaded_adapter_prefix = adapter_prefix
-                print("[Inference] LoRA adapter attached successfully.")
+                print(f"[Inference] LoRA adapter attached successfully. (system_role={self._system_role_ok})")
 
             # ── Format messages into chat template ─────────────────────────────────
             # Strategy: try chat template first, fall back to plaintext if anything fails

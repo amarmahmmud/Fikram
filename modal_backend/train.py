@@ -186,7 +186,7 @@ def train_model(
         # Unsloth's get_chat_template applies critical fixes for Gemma 2's vocab/padding
         tokenizer = get_chat_template(
             tokenizer,
-            chat_template="chatml",
+            chat_template="chatml", # universally standardizes all models to a clean format
             mapping={"role": "role", "content": "content", "user": "user", "assistant": "assistant"}
         )
 
