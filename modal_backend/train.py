@@ -179,32 +179,50 @@ def train_model(
             random_state=3407,
         )
 
-        # ── Step 4: Formatting Dataset ────────────────────────────────────────────
-        from unsloth.chat_templates import get_chat_template, train_on_responses_only
-        from transformers import DataCollatorForSeq2Seq
+        # ── Step 4: Format Dataset using model's NATIVE chat template ────────────
+        # Every instruct model ships with its own chat template that handles
+        # BOS/EOS/padding correctly. Using the native template is the only truly
+        # universal approach — no external format (like ChatML) can be forced onto
+        # every model's vocabulary.
 
-        # Unsloth's get_chat_template applies critical fixes for Gemma 2's vocab/padding
-        tokenizer = get_chat_template(
-            tokenizer,
-            chat_template="chatml", # universally standardizes all models to a clean format
-            mapping={"role": "role", "content": "content", "user": "user", "assistant": "assistant"}
-        )
+        def _supports_system_role(tok):
+            """Check if the tokenizer's chat template supports a 'system' role."""
+            try:
+                tok.apply_chat_template(
+                    [{"role": "system", "content": "t"}, {"role": "user", "content": "t"}],
+                    tokenize=False,
+                )
+                return True
+            except Exception:
+                return False
+
+        _has_template = getattr(tokenizer, "chat_template", None) is not None
+        _system_ok = _supports_system_role(tokenizer) if _has_template else False
+        print(f"[Model Factory] Chat template: {_has_template}, system role: {_system_ok}")
 
         def format_example(example):
             prompt = example.get("prompt", "")
             completion = example.get("completion", "")
-            conversation = [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": completion},
-            ]
-            text = tokenizer.apply_chat_template(
-                conversation,
-                tokenize=False,
-                add_generation_prompt=False,
-            )
+
+            if _has_template:
+                msgs = [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": completion},
+                ]
+                try:
+                    text = tokenizer.apply_chat_template(
+                        msgs, tokenize=False, add_generation_prompt=False,
+                    )
+                except Exception:
+                    text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+            else:
+                text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+
             return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
+        # Debug: show first formatted example
+        print(f"[Model Factory] Sample formatted text (first 300 chars): {formatted_dataset[0]['text'][:300]}")
 
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")
@@ -215,7 +233,6 @@ def train_model(
             train_dataset=formatted_dataset,
             dataset_text_field="text",
             max_seq_length=max_seq_length,
-            data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer),
             args=TrainingArguments(
                 per_device_train_batch_size=2,
                 gradient_accumulation_steps=4,
@@ -234,8 +251,6 @@ def train_model(
                 output_dir="/tmp/training_output",
             ),
         )
-
-        trainer = train_on_responses_only(trainer)
 
         trainer.train()
         print("[Model Factory] Training complete!")
