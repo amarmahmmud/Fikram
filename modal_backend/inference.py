@@ -7,6 +7,11 @@ This creates a persistent web endpoint that:
 1. Loads the correct base model (user's chosen model) into GPU VRAM
 2. Hot-loads the user's LoRA adapter from Cloudflare R2
 3. Generates chat responses with low latency
+
+Universal compatibility:
+- Handles missing pad tokens for any model
+- Guards against unsupported system roles (Gemma, Phi, etc.)
+- Conditionally applies BPE byte-fix only for Llama/GPT-2 family
 """
 
 import modal
@@ -134,7 +139,39 @@ class ModelInference:
         self.loaded_base_model_id = base_model_id
         self.loaded_adapter_prefix = None  # Force adapter reload
         self.active_model = self.base_model
-        print(f"[Inference] Base model ready: {base_model_id}")
+
+        # Cache whether this model supports the "system" role
+        self._system_role_ok = self._check_system_role_support()
+
+        # Cache whether this tokenizer uses byte-level BPE (Llama/GPT-2 family)
+        self._needs_bpe_fix = self._check_byte_level_bpe()
+
+        print(f"[Inference] Base model ready: {base_model_id} (system_role={self._system_role_ok}, bpe_fix={self._needs_bpe_fix})")
+
+    def _check_system_role_support(self):
+        """Check if the tokenizer's chat template supports a 'system' role."""
+        template = getattr(self.tokenizer, "chat_template", None)
+        if not template:
+            return False
+        if "system" in str(template):
+            return True
+        try:
+            self.tokenizer.apply_chat_template(
+                [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
+                tokenize=False,
+            )
+            return True
+        except Exception:
+            return False
+
+    def _check_byte_level_bpe(self):
+        """Detect if tokenizer uses byte-level BPE (Llama, GPT-2 family).
+        These tokenizers map non-printable bytes to Unicode chars in U+0100+ range
+        and need the _fix_bpe_text post-processing. Other tokenizers (Phi, Gemma,
+        Qwen, Falcon, etc.) do NOT and would get their output corrupted."""
+        tok_class = type(self.tokenizer).__name__.lower()
+        byte_level_families = ["llama", "gpt2", "roberta", "bart", "codellama"]
+        return any(family in tok_class for family in byte_level_families)
 
     @modal.fastapi_endpoint(method="POST")
     def generate(self, item: dict):
@@ -197,16 +234,37 @@ class ModelInference:
                 print("[Inference] LoRA adapter attached successfully.")
 
             # ── Format messages into chat template ─────────────────────────────────
-            formatted_messages = [{"role": "system", "content": system_prompt}]
-            for msg in messages:
-                role = "user" if msg.get("role") in ("user",) else "assistant"
-                formatted_messages.append({"role": role, "content": msg.get("content", "")})
+            has_template = getattr(self.tokenizer, "chat_template", None) is not None
 
-            prompt = self.tokenizer.apply_chat_template(
-                formatted_messages,
-                tokenize=False,
-                add_generation_prompt=True,
-            )
+            if has_template:
+                # Build messages — guard system role if model doesn't support it
+                if self._system_role_ok:
+                    formatted_messages = [{"role": "system", "content": system_prompt}]
+                else:
+                    # Fold system prompt into first user message
+                    formatted_messages = []
+
+                for msg in messages:
+                    role = "user" if msg.get("role") in ("user",) else "assistant"
+                    content = msg.get("content", "")
+                    # If system role not supported, prepend system prompt to first user message
+                    if not self._system_role_ok and role == "user" and not formatted_messages:
+                        content = f"{system_prompt}\n\n{content}"
+                    formatted_messages.append({"role": role, "content": content})
+
+                prompt = self.tokenizer.apply_chat_template(
+                    formatted_messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            else:
+                # No chat template (base models like phi-2) — use plaintext format
+                parts = [f"### System:\n{system_prompt}"]
+                for msg in messages:
+                    role = "User" if msg.get("role") == "user" else "Assistant"
+                    parts.append(f"### {role}:\n{msg.get('content', '')}")
+                parts.append("### Assistant:")
+                prompt = "\n\n".join(parts)
 
             # ── Generate response ──────────────────────────────────────────────────
             inputs = self.tokenizer(prompt, return_tensors="pt").to(self.active_model.device)
@@ -216,7 +274,7 @@ class ModelInference:
                     max_new_tokens=512,
                     temperature=0.7,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id,
+                    pad_token_id=self.tokenizer.pad_token_id,
                 )
 
             # Decode only the generated response
@@ -231,10 +289,10 @@ class ModelInference:
                 reply = reply.split("</think>")[-1].strip()
             reply = re.sub(r"<think>[\s\S]*?</think>", "", reply).strip()
 
-            # 2. Fix BPE byte-level artifacts using the GPT-2 byte decoder.
-            #    Llama/GPT-2 tokenizers map non-printable bytes to Unicode chars
-            #    in the U+0100+ range. This reverses that mapping.
-            reply = _fix_bpe_text(reply)
+            # 2. Fix BPE byte-level artifacts ONLY for tokenizers that use byte-level BPE
+            #    (Llama, GPT-2 family). Applying this to other tokenizers corrupts output.
+            if self._needs_bpe_fix:
+                reply = _fix_bpe_text(reply)
 
             # 3. Final cleanup
             reply = re.sub(r"\n{3,}", "\n\n", reply).strip()

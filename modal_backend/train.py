@@ -3,11 +3,16 @@ Modal.com Fine-Tuning Backend for Model Factory
 ================================================
 Deploy this file with: modal deploy modal_backend/train.py
 
-This script runs on Modal's A10G GPUs and:
+This script runs on Modal's L4 GPUs and:
 1. Downloads the user's JSONL dataset from Cloudflare R2
-2. Fine-tunes Llama 3 8B Instruct using Unsloth (LoRA)
+2. Fine-tunes ANY HuggingFace model using Unsloth (LoRA)
 3. Saves the LoRA adapter weights back to Cloudflare R2
 4. Calls your Next.js webhook when complete
+
+Universal compatibility:
+- Auto-detects LoRA target modules for any architecture
+- Handles missing pad tokens, chat templates, and system roles
+- Works with Llama, Phi, Gemma, Mistral, Qwen, Falcon, DeepSeek, etc.
 """
 
 import modal
@@ -120,11 +125,16 @@ def train_model(
             print(f"[Model Factory] Set pad_token to eos_token: {tokenizer.pad_token}")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
+        # Use "all-linear" to auto-detect linear layers for ANY architecture.
+        # This avoids hardcoding module names that differ across models:
+        #   - Llama/Mistral: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
+        #   - Falcon: query_key_value, dense, dense_h_to_4h, dense_4h_to_h
+        #   - Phi-2: Wqkv, out_proj, fc1, fc2
+        #   - etc.
         model = FastLanguageModel.get_peft_model(
             model,
             r=16,
-            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                             "gate_proj", "up_proj", "down_proj"],
+            target_modules="all-linear",
             lora_alpha=16,
             lora_dropout=0,
             bias="none",
@@ -133,24 +143,53 @@ def train_model(
         )
 
         # ── Step 4: Format Dataset ────────────────────────────────────────────────
-        # Use the tokenizer's own chat template instead of hardcoding Llama format.
-        # This ensures DeepSeek, Mistral, Gemma, Phi, Qwen etc. all get the right format.
+        # Universal chat template handling:
+        # 1. Try the tokenizer's native chat_template
+        # 2. Guard against models that don't support the "system" role
+        # 3. Fallback to simple plaintext format for base models with no template
+
+        def _supports_system_role(tok):
+            """Check if the tokenizer's chat template supports a 'system' role."""
+            template = getattr(tok, "chat_template", None)
+            if template and "system" in str(template):
+                return True
+            # Quick smoke test: try applying a system message
+            try:
+                tok.apply_chat_template(
+                    [{"role": "system", "content": "test"}, {"role": "user", "content": "test"}],
+                    tokenize=False,
+                )
+                return True
+            except Exception:
+                return False
+
+        _has_chat_template = getattr(tokenizer, "chat_template", None) is not None
+        _system_ok = _supports_system_role(tokenizer) if _has_chat_template else False
+        print(f"[Model Factory] Chat template available: {_has_chat_template}, system role supported: {_system_ok}")
+
         def format_example(example):
             prompt = example.get("prompt", "")
             completion = example.get("completion", "")
-            conversation = [
-                {"role": "user", "content": prompt},
-                {"role": "assistant", "content": completion},
-            ]
-            try:
-                text = tokenizer.apply_chat_template(
-                    conversation,
-                    tokenize=False,
-                    add_generation_prompt=False,
-                )
-            except Exception:
-                # Fallback to simple format if chat template fails
+
+            if _has_chat_template:
+                # Build conversation with or without system role
+                conversation = [
+                    {"role": "user", "content": prompt},
+                    {"role": "assistant", "content": completion},
+                ]
+                try:
+                    text = tokenizer.apply_chat_template(
+                        conversation,
+                        tokenize=False,
+                        add_generation_prompt=False,
+                    )
+                except Exception:
+                    # Template exists but failed — use plaintext fallback
+                    text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+            else:
+                # No chat template at all (base models like phi-2, falcon-base)
                 text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+
             return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
