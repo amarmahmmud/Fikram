@@ -32,22 +32,12 @@ inference_image = (
 
 model_cache = modal.Volume.from_name("model-factory-model-cache", create_if_missing=True)
 
-# Map user-facing model IDs to Unsloth's 4-bit quantized variants
-UNSLOTH_MODEL_MAP = {
-    "meta-llama/Llama-3.1-8B-Instruct": "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit",
-    "meta-llama/Llama-3.2-3B-Instruct": "unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
-    "mistralai/Mistral-7B-Instruct-v0.3": "unsloth/mistral-7b-instruct-v0.3-bnb-4bit",
-    "microsoft/Phi-3-mini-4k-instruct": "unsloth/Phi-3-mini-4k-instruct-bnb-4bit",
-    "microsoft/Phi-3.5-mini-instruct": "unsloth/Phi-3.5-mini-instruct-bnb-4bit",
-    "google/gemma-2-9b-it": "unsloth/gemma-2-9b-it-bnb-4bit",
-    "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it-bnb-4bit",
-    "Qwen/Qwen2.5-7B-Instruct": "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
-    "deepseek-ai/DeepSeek-R1-Distill-Llama-8B": "unsloth/DeepSeek-R1-Distill-Llama-8B-bnb-4bit",
-    "meta-llama/CodeLlama-7b-Instruct-hf": "unsloth/codellama-7b-bnb-4bit",
-    "TinyLlama/TinyLlama-1.1B-Chat-v1.0": "unsloth/tinyllama-chat-bnb-4bit",
-    "tiiuae/falcon-7b-instruct": "tiiuae/falcon-7b-instruct",
-    "microsoft/phi-2": "unsloth/phi-2",
-}
+# ────────────────────────────────────────────────────────────────────────────
+# UNIVERSAL MODEL LOADING
+# No hardcoded model map needed. Unsloth's FastLanguageModel.from_pretrained()
+# automatically resolves ANY HuggingFace model ID to its best 4-bit variant.
+# This means every model on HuggingFace works out of the box.
+# ────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
 
@@ -115,18 +105,18 @@ class ModelInference:
         print("[Inference Container] Ready — model will be loaded on first request.")
 
     def _load_base_model(self, base_model_id: str):
-        """Load (or swap) the base model into GPU VRAM."""
+        """Load (or swap) the base model into GPU VRAM.
+        Unsloth auto-resolves any HuggingFace model ID to its best 4-bit variant.
+        """
         from unsloth import FastLanguageModel
-
-        resolved = UNSLOTH_MODEL_MAP.get(base_model_id, base_model_id)
 
         # Skip reload if same model is already loaded
         if self.loaded_base_model_id == base_model_id and self.base_model is not None:
             return
 
-        print(f"[Inference] Loading base model: {base_model_id} → {resolved}")
+        print(f"[Inference] Loading base model: {base_model_id} (Unsloth auto-resolves)")
         self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
-            model_name=resolved,
+            model_name=base_model_id,
             max_seq_length=2048,
             dtype=None,
             load_in_4bit=True,
@@ -135,7 +125,7 @@ class ModelInference:
         self.loaded_base_model_id = base_model_id
         self.loaded_adapter_prefix = None  # Force adapter reload
         self.active_model = self.base_model
-        print(f"[Inference] Base model ready: {resolved}")
+        print(f"[Inference] Base model ready: {base_model_id}")
 
     @modal.fastapi_endpoint(method="POST")
     def generate(self, item: dict):

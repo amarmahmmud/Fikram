@@ -73,30 +73,15 @@ def train_model(
     from trl import SFTTrainer
     from transformers import TrainingArguments
 
-    # Map user-facing model IDs to Unsloth's 4-bit quantized variants
-    # Unsloth provides optimized 4-bit versions for fast LoRA fine-tuning
-    UNSLOTH_MODEL_MAP = {
-        "meta-llama/Llama-3.1-8B-Instruct": "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit",
-        "meta-llama/Llama-3.2-3B-Instruct": "unsloth/Llama-3.2-3B-Instruct-bnb-4bit",
-        "mistralai/Mistral-7B-Instruct-v0.3": "unsloth/mistral-7b-instruct-v0.3-bnb-4bit",
-        "microsoft/Phi-3-mini-4k-instruct": "unsloth/Phi-3-mini-4k-instruct-bnb-4bit",
-        "microsoft/Phi-3.5-mini-instruct": "unsloth/Phi-3.5-mini-instruct-bnb-4bit",
-        "google/gemma-2-9b-it": "unsloth/gemma-2-9b-it-bnb-4bit",
-        "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it-bnb-4bit",
-        "Qwen/Qwen2.5-7B-Instruct": "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
-        "deepseek-ai/DeepSeek-R1-Distill-Llama-8B": "unsloth/DeepSeek-R1-Distill-Llama-8B-bnb-4bit",
-        "meta-llama/CodeLlama-7b-Instruct-hf": "unsloth/codellama-7b-bnb-4bit",
-        "TinyLlama/TinyLlama-1.1B-Chat-v1.0": "unsloth/tinyllama-chat-bnb-4bit",
-        "tiiuae/falcon-7b-instruct": "tiiuae/falcon-7b-instruct",
-        "microsoft/phi-2": "unsloth/phi-2",
-    }
-
-    # Resolve the Unsloth model name, fallback to the raw ID (for community models)
-    resolved_model = UNSLOTH_MODEL_MAP.get(base_model, base_model)
+    # ────────────────────────────────────────────────────────────────────────────
+    # UNIVERSAL MODEL LOADING
+    # Unsloth's FastLanguageModel.from_pretrained() automatically resolves ANY
+    # HuggingFace model ID to its best available 4-bit quantized variant.
+    # No manual mapping needed — this works with every model on HuggingFace.
+    # ────────────────────────────────────────────────────────────────────────────
 
     print(f"[Model Factory] Starting training for job: {job_id}")
     print(f"[Model Factory] User selected model: {base_model}")
-    print(f"[Model Factory] Resolved Unsloth model: {resolved_model}")
     print(f"[Model Factory] Dataset URL: {dataset_url}")
 
     # ── Step 1: Download JSONL dataset from R2 ────────────────────────────────
@@ -112,10 +97,11 @@ def train_model(
     print(f"[Model Factory] Loaded {len(dataset)} training examples")
 
     # ── Step 2: Load Base Model via Unsloth ───────────────────────────────────
-    print(f"[Model Factory] Loading model: {resolved_model} (using cache if available)...")
+    # Unsloth auto-resolves the HuggingFace model ID to its best 4-bit variant
+    print(f"[Model Factory] Loading model: {base_model} (Unsloth will auto-resolve best variant)...")
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=resolved_model,
+            model_name=base_model,
             max_seq_length=max_seq_length,
             dtype=None,  # auto-detect
             load_in_4bit=True,  # 4-bit quantization for memory efficiency
