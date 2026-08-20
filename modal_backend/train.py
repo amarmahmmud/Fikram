@@ -235,11 +235,7 @@ def train_model(
             ),
         )
 
-        trainer = train_on_responses_only(
-            trainer,
-            instruction_part = "<|im_start|>user\n",
-            response_part = "<|im_start|>assistant\n",
-        )
+        trainer = train_on_responses_only(trainer)
 
         trainer.train()
         print("[Model Factory] Training complete!")
