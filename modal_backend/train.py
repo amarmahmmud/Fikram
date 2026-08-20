@@ -118,6 +118,7 @@ def train_model(
         # We monkey-patch to suppress this specific RuntimeError and let training
         # proceed with the temporary pad token.
         import unsloth_zoo.pad_token as _pad_module
+        import unsloth_zoo.tokenizer_utils as _tok_utils_module
         _original_fix_pad_token = _pad_module.fix_pad_token
 
         def _safe_fix_pad_token(*args, **kwargs):
@@ -125,15 +126,15 @@ def train_model(
                 return _original_fix_pad_token(*args, **kwargs)
             except RuntimeError as e:
                 if "Could not find a valid pad token" in str(e):
-                    print(f"[Model Factory] Suppressed Unsloth pad_token error (temporary token was already added): {e}")
-                    # fix_pad_token already mutated the tokenizer in-place before raising.
-                    # Return the tokenizer (first positional arg) so the caller can continue.
+                    print(f"[Model Factory] Suppressed Unsloth pad_token error (temporary token already added)")
                     tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
                     return tokenizer_arg
                 raise
 
+        # Patch BOTH namespaces — tokenizer_utils has its own imported copy
         _pad_module.fix_pad_token = _safe_fix_pad_token
-        print("[Model Factory] Patched fix_pad_token to handle models without dedicated pad tokens")
+        _tok_utils_module.fix_pad_token = _safe_fix_pad_token
+        print("[Model Factory] Patched fix_pad_token in both namespaces")
 
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
@@ -144,8 +145,9 @@ def train_model(
             token=hf_token,
         )
 
-        # Restore original function to avoid side effects on other imports
+        # Restore originals
         _pad_module.fix_pad_token = _original_fix_pad_token
+        _tok_utils_module.fix_pad_token = _original_fix_pad_token
 
         # Sync pad_token_id into model config
         if tokenizer.pad_token_id is not None:
@@ -153,16 +155,23 @@ def train_model(
         print(f"[Model Factory] Model loaded. pad_token={tokenizer.pad_token}, pad_token_id={tokenizer.pad_token_id}")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
-        # Use "all-linear" to auto-detect linear layers for ANY architecture.
-        # This avoids hardcoding module names that differ across models:
-        #   - Llama/Mistral: q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj
-        #   - Falcon: query_key_value, dense, dense_h_to_4h, dense_4h_to_h
-        #   - Phi-2: Wqkv, out_proj, fc1, fc2
-        #   - etc.
+        # Auto-detect all linear module names directly from the model.
+        # This is truly universal — works for ANY architecture:
+        #   Llama → q_proj, k_proj, ...  |  Falcon → query_key_value, dense, ...
+        #   Phi-2 → Wqkv, out_proj, ...  |  Gemma → q_proj, k_proj, ...
+        target_modules = list(set(
+            name.split(".")[-1]
+            for name, module in model.named_modules()
+            if isinstance(module, torch.nn.Linear)
+            and "lm_head" not in name
+            and "embed" not in name
+        ))
+        print(f"[Model Factory] Auto-detected LoRA target modules: {target_modules}")
+
         model = FastLanguageModel.get_peft_model(
             model,
             r=16,
-            target_modules="all-linear",
+            target_modules=target_modules,
             lora_alpha=16,
             lora_dropout=0,
             bias="none",

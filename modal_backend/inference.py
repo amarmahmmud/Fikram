@@ -123,7 +123,9 @@ class ModelInference:
         hf_token = os.environ.get("HF_TOKEN", None)
 
         # Monkey-patch fix_pad_token to suppress RuntimeError on models like phi-2
+        # Must patch BOTH namespaces — tokenizer_utils holds its own imported copy
         import unsloth_zoo.pad_token as _pad_module
+        import unsloth_zoo.tokenizer_utils as _tok_utils_module
         _original_fix_pad_token = _pad_module.fix_pad_token
 
         def _safe_fix_pad_token(*args, **kwargs):
@@ -131,12 +133,13 @@ class ModelInference:
                 return _original_fix_pad_token(*args, **kwargs)
             except RuntimeError as e:
                 if "Could not find a valid pad token" in str(e):
-                    print(f"[Inference] Suppressed Unsloth pad_token error: {e}")
+                    print(f"[Inference] Suppressed Unsloth pad_token error (temporary token already added)")
                     tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
                     return tokenizer_arg
                 raise
 
         _pad_module.fix_pad_token = _safe_fix_pad_token
+        _tok_utils_module.fix_pad_token = _safe_fix_pad_token
 
         self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model_id,
@@ -147,8 +150,9 @@ class ModelInference:
             token=hf_token,
         )
 
-        # Restore original
+        # Restore originals
         _pad_module.fix_pad_token = _original_fix_pad_token
+        _tok_utils_module.fix_pad_token = _original_fix_pad_token
 
         if self.tokenizer.pad_token_id is not None:
             self.base_model.config.pad_token_id = self.tokenizer.pad_token_id
