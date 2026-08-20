@@ -139,8 +139,8 @@ def train_model(
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model,
             max_seq_length=max_seq_length,
-            dtype=None,  # auto-detect
-            load_in_4bit=True,
+            dtype=torch.bfloat16,
+            load_in_4bit=False,   # 4-bit quant is BROKEN for Gemma 2 on this lib combo — use bf16
             cache_dir="/model-cache",
             token=hf_token,
         )
@@ -149,44 +149,21 @@ def train_model(
         _pad_module.fix_pad_token = _original_fix_pad_token
         _tok_utils_module.fix_pad_token = _original_fix_pad_token
 
-        # ── CRITICAL FIX: Reload tokenizer from the ORIGINAL model repo ──────
-        # Unsloth auto-resolves to a quantized variant (e.g. unsloth/gemma-2-2b-it-bnb-4bit)
-        # and loads its "legacy tokenizer" which may have mismatched special token IDs.
-        # This causes token IDs to map to wrong embeddings → loss > random → gibberish.
-        # Fix: reload tokenizer from the user's original model ID.
-        from transformers import AutoTokenizer
-        original_tokenizer = AutoTokenizer.from_pretrained(
-            base_model,
-            cache_dir="/model-cache",
-            token=hf_token,
-        )
+        # ── Tokenizer diagnostics ─────────────────────────────────────────────
+        # Log tokenizer details to verify it matches the model's embedding matrix
+        print(f"[Model Factory] Tokenizer class: {type(tokenizer).__name__}")
+        print(f"[Model Factory] Tokenizer vocab_size: {tokenizer.vocab_size}, model vocab_size: {model.config.vocab_size}")
+        print(f"[Model Factory] pad={tokenizer.pad_token}(id={tokenizer.pad_token_id}), "
+              f"eos={tokenizer.eos_token}(id={tokenizer.eos_token_id}), "
+              f"bos={tokenizer.bos_token}(id={tokenizer.bos_token_id})")
 
-        # Log the mismatch for debugging
-        print(f"[Model Factory] Unsloth tokenizer vocab: {tokenizer.vocab_size}, eos={tokenizer.eos_token_id}, bos={tokenizer.bos_token_id}")
-        print(f"[Model Factory] Original tokenizer vocab: {original_tokenizer.vocab_size}, eos={original_tokenizer.eos_token_id}, bos={original_tokenizer.bos_token_id}")
-
-        # Use the original tokenizer
-        tokenizer = original_tokenizer
-
-        # Ensure pad_token exists (some models don't have one)
+        # Ensure pad_token exists
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             tokenizer.pad_token_id = tokenizer.eos_token_id
 
-        # Sync model config to match the CORRECT tokenizer
+        # Sync model config to match tokenizer
         model.config.pad_token_id = tokenizer.pad_token_id
-        model.config.eos_token_id = tokenizer.eos_token_id
-        model.config.bos_token_id = tokenizer.bos_token_id
-
-        # Assert vocab sizes match
-        assert tokenizer.vocab_size <= model.config.vocab_size, (
-            f"Tokenizer vocab ({tokenizer.vocab_size}) > model vocab ({model.config.vocab_size})! "
-            f"This WILL produce garbage outputs."
-        )
-        print(f"[Model Factory] Model loaded. Using ORIGINAL tokenizer from {base_model}. "
-              f"pad={tokenizer.pad_token}(id={tokenizer.pad_token_id}), "
-              f"eos={tokenizer.eos_token}(id={tokenizer.eos_token_id}), "
-              f"bos={tokenizer.bos_token}(id={tokenizer.bos_token_id})")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
         # Auto-detect all linear module names directly from the model.
@@ -263,6 +240,27 @@ def train_model(
             print(f"[Model Factory] Removed raw columns {cols_to_remove} — forcing Unsloth to use formatted 'text'")
         # Debug: show first formatted example
         print(f"[Model Factory] Sample formatted text (first 300 chars): {formatted_dataset[0]['text'][:300]}")
+
+        # ── DIAGNOSTIC: Manual loss check before SFTTrainer ──────────────────
+        # This computes loss directly through the model, bypassing SFTTrainer.
+        # If this loss is ~2-4, the model+tokenizer are fine and SFTTrainer is broken.
+        # If this loss is ~20-30, the model or tokenization is fundamentally broken.
+        try:
+            test_text = formatted_dataset[0]["text"]
+            test_enc = tokenizer(test_text, return_tensors="pt", truncation=True, max_length=512, add_special_tokens=False)
+            test_ids = test_enc.input_ids.to(model.device)
+            print(f"[DIAG] Token count: {test_ids.shape[1]}")
+            print(f"[DIAG] First 30 token IDs: {test_ids[0][:30].tolist()}")
+            print(f"[DIAG] Decoded first 30 tokens: {tokenizer.decode(test_ids[0][:30])}")
+            with torch.no_grad():
+                diag_out = model(input_ids=test_ids, labels=test_ids)
+            print(f"[DIAG] *** Manual base-model loss: {diag_out.loss.item():.4f} ***")
+            if diag_out.loss.item() > 10:
+                print(f"[DIAG] WARNING: Loss > 10 means model+tokenizer mismatch or broken quantization!")
+            else:
+                print(f"[DIAG] OK: Loss is normal. If SFTTrainer loss is high, the issue is in SFTTrainer/Unsloth.")
+        except Exception as diag_err:
+            print(f"[DIAG] Diagnostic failed: {diag_err}")
 
         # ── Step 5: Train ─────────────────────────────────────────────────────────
         print("[Model Factory] Starting LoRA fine-tuning...")

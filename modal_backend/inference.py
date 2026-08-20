@@ -114,6 +114,7 @@ class ModelInference:
         Unsloth auto-resolves any HuggingFace model ID to its best 4-bit variant.
         """
         from unsloth import FastLanguageModel
+        import torch
 
         # Skip reload if same model is already loaded
         if self.loaded_base_model_id == base_model_id and self.base_model is not None:
@@ -144,8 +145,8 @@ class ModelInference:
         self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
             model_name=base_model_id,
             max_seq_length=2048,
-            dtype=None,
-            load_in_4bit=True,
+            dtype=torch.bfloat16,
+            load_in_4bit=False,   # 4-bit quant is broken for Gemma 2 on this lib combo
             cache_dir="/model-cache",
             token=hf_token,
         )
