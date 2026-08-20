@@ -121,7 +121,16 @@ class ModelInference:
             dtype=None,
             load_in_4bit=True,
             cache_dir="/model-cache",
+            token=os.environ.get("HF_TOKEN", None),
+            fix_tokenizer=False,
         )
+
+        # Fallback for models without a pad_token (e.g. microsoft/phi-2)
+        if self.tokenizer.pad_token is None or self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+            self.base_model.config.pad_token_id = self.tokenizer.pad_token_id
+
         self.loaded_base_model_id = base_model_id
         self.loaded_adapter_prefix = None  # Force adapter reload
         self.active_model = self.base_model

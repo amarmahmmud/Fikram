@@ -106,7 +106,18 @@ def train_model(
             dtype=None,  # auto-detect
             load_in_4bit=True,  # 4-bit quantization for memory efficiency
             cache_dir="/model-cache",
+            token=os.environ.get("HF_TOKEN", None),
+            fix_tokenizer=False,  # Disable internal tokenizer patching that crashes on models without pad_token
         )
+
+        # Some models (e.g. microsoft/phi-2) ship without a pad_token, which
+        # causes Unsloth's tokenizer patcher to raise a RuntimeError.  Setting
+        # pad_token = eos_token is the standard safe fallback.
+        if tokenizer.pad_token is None or tokenizer.pad_token_id is None:
+            tokenizer.pad_token = tokenizer.eos_token
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+            model.config.pad_token_id = tokenizer.pad_token_id
+            print(f"[Model Factory] Set pad_token to eos_token: {tokenizer.pad_token}")
 
         # ── Step 3: Apply LoRA ────────────────────────────────────────────────────
         model = FastLanguageModel.get_peft_model(
