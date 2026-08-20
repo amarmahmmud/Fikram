@@ -85,10 +85,10 @@ def train_model(
         "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it-bnb-4bit",
         "Qwen/Qwen2.5-7B-Instruct": "unsloth/Qwen2.5-7B-Instruct-bnb-4bit",
         "deepseek-ai/DeepSeek-R1-Distill-Llama-8B": "unsloth/DeepSeek-R1-Distill-Llama-8B-bnb-4bit",
-        "meta-llama/CodeLlama-7b-Instruct-hf": "unsloth/codellama-7b-instruct-bnb-4bit",
+        "meta-llama/CodeLlama-7b-Instruct-hf": "unsloth/codellama-7b-bnb-4bit",
         "TinyLlama/TinyLlama-1.1B-Chat-v1.0": "unsloth/tinyllama-chat-bnb-4bit",
         "tiiuae/falcon-7b-instruct": "tiiuae/falcon-7b-instruct",
-        "microsoft/phi-2": "unsloth/phi-2-bnb-4bit",
+        "microsoft/phi-2": "unsloth/phi-2",
     }
 
     # Resolve the Unsloth model name, fallback to the raw ID (for community models)
