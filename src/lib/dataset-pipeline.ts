@@ -85,7 +85,7 @@ Generate 4 TYPES of pairs:
 3. **Comparison/Analysis** — "What's the difference between...?", "Why is X better than Y?" (deeper understanding)
 4. **Scenario-Based** — "If a user wanted to..., what should they...?" (contextual advice)
 
-Generate between 8 and 15 pairs for this chunk. Each pair must be a JSON object with "prompt" and "completion" keys.
+Generate between 15 and 25 pairs for this chunk. Each pair must be a JSON object with "prompt" and "completion" keys.
 
 Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
 
@@ -95,11 +95,37 @@ Example:
   {"prompt": "How would you apply the Two-Minute Rule to start exercising?", "completion": "Scale the habit down: instead of 'run 5 miles', start with 'put on running shoes'. The goal is to make starting effortless."}
 ]`;
 
+// Second-pass prompt focused specifically on direct fact/number/name recall
+const RECALL_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a FACTUAL RECALL dataset for fine-tuning.
+
+User's Goal: ${goal || "Extract knowledge into Q&A format."}
+
+You are processing chunk ${chunkIndex + 1} of ${totalChunks} from a document. Generate direct, blunt Q&A pairs for EVERY specific number, name, date, percentage, proper noun, measurement, and concrete fact in this text.
+
+Rules:
+- Keep questions SHORT and LITERAL: "Who...?", "What...?", "How much...?", "When...?", "How many...?"
+- Answers must quote or closely paraphrase the source text — no interpretation or scenario framing
+- Cover EVERY specific fact, even minor ones — names of people, organizations, places, exact numbers, dates, technical terms
+- If the same fact can be asked about from different angles (e.g. "Who did X?" and "What did Person do?"), include BOTH
+- Do NOT generate scenario-based or application questions — those are handled separately
+
+Generate between 10 and 20 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
+
+Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
+
+Example:
+[
+  {"prompt": "What percentage efficiency did the new solar cells achieve?", "completion": "The new perovskite solar cells achieved 33.7% efficiency in laboratory tests."},
+  {"prompt": "Who led the research team at MIT?", "completion": "Dr. Sarah Chen led the research team at MIT's Department of Materials Science."}
+]`;
+
 async function generateForChunk(
   text: string,
   goal: string,
   chunkIndex: number,
-  totalChunks: number
+  totalChunks: number,
+  promptTemplate: (goal: string, chunkIndex: number, totalChunks: number) => string = GENERATION_PROMPT,
+  label: string = "general",
 ): Promise<DatasetPair[]> {
   const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
 
@@ -108,21 +134,21 @@ async function generateForChunk(
       contents: [{
         role: "user",
         parts: [{
-          text: `${GENERATION_PROMPT(goal, chunkIndex, totalChunks)}\n\nDocument chunk:\n\n${text}`
+          text: `${promptTemplate(goal, chunkIndex, totalChunks)}\n\nDocument chunk:\n\n${text}`
         }]
       }],
       generationConfig: {
         temperature: 0.3,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       },
     });
 
     const raw = result.response.text() || "[]";
     const pairs = parseJsonArray(raw);
-    console.log(`[Pipeline] Chunk ${chunkIndex + 1}/${totalChunks}: generated ${pairs.length} pairs`);
+    console.log(`[Pipeline] Chunk ${chunkIndex + 1}/${totalChunks} (${label}): generated ${pairs.length} pairs`);
     return pairs;
   } catch (error: any) {
-    console.error(`[Pipeline] Error generating chunk ${chunkIndex + 1}:`, error?.message || error);
+    console.error(`[Pipeline] Error generating chunk ${chunkIndex + 1} (${label}):`, error?.message || error);
     return [];
   }
 }
@@ -279,12 +305,12 @@ export async function generateDataset(
     pairsGenerated: 0,
   });
 
-  // Cap chunks to avoid Gemini rate limits (15 RPM on free tier).
-  // 6 chunks processed sequentially = ~60 pairs, good for LoRA fine-tuning.
+  // Cap chunks at 20 to keep generation time reasonable while ensuring
+  // enough data volume for effective LoRA fine-tuning (target: 100+ pairs).
   let chunks = smartChunk(text);
-  if (chunks.length > 6) {
-    console.log(`[Pipeline] Document has ${chunks.length} chunks. Capping to 6 to avoid rate limits.`);
-    chunks = chunks.slice(0, 6);
+  if (chunks.length > 20) {
+    console.log(`[Pipeline] Document has ${chunks.length} chunks. Capping to 20.`);
+    chunks = chunks.slice(0, 20);
   }
   const totalChunks = chunks.length;
 
@@ -296,7 +322,7 @@ export async function generateDataset(
     pairsGenerated: 0,
   });
 
-  // ── Stage 2: Generate in parallel batches ──
+  // ── Stage 2a: General generation pass (diverse Q&A types) ──
   const allPairs: DatasetPair[] = [];
   // Process ONE chunk at a time to avoid Gemini rate limits on free tier
   const PARALLEL_LIMIT = 1;
@@ -304,7 +330,7 @@ export async function generateDataset(
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, goal, i + batchIdx, totalChunks)
+      generateForChunk(chunk, goal, i + batchIdx, totalChunks, GENERATION_PROMPT, "general")
     );
 
     const results = await Promise.all(promises);
@@ -312,7 +338,7 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] Chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] General pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     // 4-second delay between requests to stay well under Gemini's 15 RPM limit
     if (i + PARALLEL_LIMIT < totalChunks) {
@@ -321,9 +347,41 @@ export async function generateDataset(
 
     onProgress?.({
       stage: "generating",
-      message: `Processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
+      message: `General pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
       chunksTotal: totalChunks,
       chunksProcessed: Math.min(i + PARALLEL_LIMIT, totalChunks),
+      pairsGenerated: allPairs.length,
+    });
+  }
+
+  console.log(`[Pipeline] General pass complete. Pairs so far: ${allPairs.length}`);
+
+  // ── Stage 2b: Recall-focused generation pass (names, numbers, dates) ──
+  // Uses a different prompt to generate blunt factual-recall pairs that
+  // complement the general pass's reasoning/scenario pairs.
+  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
+    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
+    const promises = batch.map((chunk, batchIdx) =>
+      generateForChunk(chunk, goal, i + batchIdx, totalChunks, RECALL_PROMPT, "recall")
+    );
+
+    const results = await Promise.all(promises);
+    for (const pairs of results) {
+      allPairs.push(...pairs);
+    }
+
+    console.log(`[Pipeline] Recall pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+
+    // 4-second delay between requests
+    if (i + PARALLEL_LIMIT < totalChunks) {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    }
+
+    onProgress?.({
+      stage: "generating",
+      message: `Recall pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
+      chunksTotal: totalChunks,
+      chunksProcessed: totalChunks + Math.min(i + PARALLEL_LIMIT, totalChunks),
       pairsGenerated: allPairs.length,
     });
   }

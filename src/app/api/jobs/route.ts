@@ -54,9 +54,9 @@ export async function POST(req: Request) {
           dataset_url: datasetUrl,
           webhook_url: webhookUrl,
           num_train_epochs: config?.epochs ?? 1,
-          learning_rate: config?.learningRate ?? 0.00002,
+          learning_rate: config?.learningRate ?? 0.00005,
           ...(config?.maxSeqLength ? { max_seq_length: config.maxSeqLength } : {}),
-          max_steps: 30,  // Cap for cost control
+          max_steps: 200,  // Hard cap for cost control — enough for 100+ example datasets
           // Pass R2 credentials so Modal can upload the trained adapter
           r2_endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
           r2_access_key: process.env.R2_ACCESS_KEY_ID,

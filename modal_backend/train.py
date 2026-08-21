@@ -220,9 +220,9 @@ def train_model(
     webhook_url: str,
     base_model: str = "meta-llama/Llama-3.1-8B-Instruct",  # User's chosen model
     num_train_epochs: int = 1,      # Default 1 epoch to save cost
-    learning_rate: float = 2e-5,
+    learning_rate: float = 5e-5,
     max_seq_length: int = 1024,     # Smaller context = faster + less memory
-    max_steps: int = 30,            # Hard cap: stops after 30 steps (~5 mins on L4)
+    max_steps: int = 200,           # Hard cap: enough for 100+ example datasets
     lora_r: int = 16,
     lora_alpha: int = 16,
     r2_endpoint: str = "",
