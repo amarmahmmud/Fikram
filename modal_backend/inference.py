@@ -24,13 +24,10 @@ inference_image = (
     .apt_install("git")
     .pip_install(
         "torch==2.3.0",
-        "xformers",
-        extra_index_url="https://download.pytorch.org/whl/cu121",
-    )
-    .pip_install(
-        "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
+        "transformers",
         "peft",
         "boto3",
+        "requests",
         "fastapi",
     )
 )
@@ -39,9 +36,6 @@ model_cache = modal.Volume.from_name("model-factory-model-cache", create_if_miss
 
 # ────────────────────────────────────────────────────────────────────────────
 # UNIVERSAL MODEL LOADING
-# No hardcoded model map needed. Unsloth's FastLanguageModel.from_pretrained()
-# automatically resolves ANY HuggingFace model ID to its best 4-bit variant.
-# This means every model on HuggingFace works out of the box.
 # ────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
@@ -110,50 +104,31 @@ class ModelInference:
         print("[Inference Container] Ready — model will be loaded on first request.")
 
     def _load_base_model(self, base_model_id: str):
-        """Load (or swap) the base model into GPU VRAM.
-        Unsloth auto-resolves any HuggingFace model ID to its best 4-bit variant.
-        """
-        from unsloth import FastLanguageModel
+        """Load (or swap) the base model into GPU VRAM."""
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from peft import PeftModel
         import torch
 
         # Skip reload if same model is already loaded
         if self.loaded_base_model_id == base_model_id and self.base_model is not None:
             return
 
-        print(f"[Inference] Loading base model: {base_model_id} (Unsloth auto-resolves)")
+        print(f"[Inference] Loading base model: {base_model_id}")
         hf_token = os.environ.get("HF_TOKEN", None)
 
-        # Monkey-patch fix_pad_token to suppress RuntimeError on models like phi-2
-        # Must patch BOTH namespaces — tokenizer_utils holds its own imported copy
-        import unsloth_zoo.pad_token as _pad_module
-        import unsloth_zoo.tokenizer_utils as _tok_utils_module
-        _original_fix_pad_token = _pad_module.fix_pad_token
-
-        def _safe_fix_pad_token(*args, **kwargs):
-            try:
-                return _original_fix_pad_token(*args, **kwargs)
-            except RuntimeError as e:
-                if "Could not find a valid pad token" in str(e):
-                    print(f"[Inference] Suppressed Unsloth pad_token error (temporary token already added)")
-                    tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
-                    return tokenizer_arg
-                raise
-
-        _pad_module.fix_pad_token = _safe_fix_pad_token
-        _tok_utils_module.fix_pad_token = _safe_fix_pad_token
-
-        self.base_model, self.tokenizer = FastLanguageModel.from_pretrained(
-            model_name=base_model_id,
-            max_seq_length=2048,
-            dtype=torch.bfloat16,
-            load_in_4bit=False,   # 4-bit quant is broken for Gemma 2 on this lib combo
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            base_model_id,
             cache_dir="/model-cache",
             token=hf_token,
         )
 
-        # Restore originals
-        _pad_module.fix_pad_token = _original_fix_pad_token
-        _tok_utils_module.fix_pad_token = _original_fix_pad_token
+        self.base_model = AutoModelForCausalLM.from_pretrained(
+            base_model_id,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            cache_dir="/model-cache",
+            token=hf_token,
+        )
 
         if self.tokenizer.pad_token_id is not None:
             self.base_model.config.pad_token_id = self.tokenizer.pad_token_id
@@ -208,7 +183,6 @@ class ModelInference:
         import torch
         import re
         from peft import PeftModel
-        from unsloth import FastLanguageModel
 
         try:
             adapter_prefix = item.get("adapter_prefix")

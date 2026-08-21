@@ -31,10 +31,12 @@ training_image = (
         "xformers",
         extra_index_url="https://download.pytorch.org/whl/cu121",
     )
-    # Let unsloth pin its own compatible versions of trl/datasets/transformers
+    # Use standard transformers, peft, trl since unsloth's patching is broken for Gemma 2
     .pip_install(
-        "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git",
+        "transformers",
         "peft",
+        "trl",
+        "datasets",
         "boto3",
         "requests",
     )
@@ -74,9 +76,9 @@ def train_model(
     import json
     import tempfile
     from datasets import load_dataset
-    from unsloth import FastLanguageModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+    from peft import get_peft_model, LoraConfig
     from trl import SFTTrainer
-    from transformers import TrainingArguments
 
     # ────────────────────────────────────────────────────────────────────────────
     # UNIVERSAL MODEL LOADING
@@ -101,53 +103,25 @@ def train_model(
     dataset = load_dataset("json", data_files=dataset_path, split="train")
     print(f"[Model Factory] Loaded {len(dataset)} training examples")
 
-    # ── Step 2: Load Base Model via Unsloth ───────────────────────────────────
-    # Unsloth auto-resolves the HuggingFace model ID to its best 4-bit variant
-    print(f"[Model Factory] Loading model: {base_model} (Unsloth will auto-resolve best variant)...")
+    # ── Step 2: Load Base Model via Transformers ──────────────────────────────────
+    print(f"[Model Factory] Loading model: {base_model} (using standard Transformers in bf16)...")
     try:
         hf_token = os.environ.get("HF_TOKEN", None)
 
-        # ── Monkey-patch Unsloth's fix_pad_token to not crash ─────────────────
-        # Unsloth 2026.8.16's fix_pad_token() in unsloth_zoo/pad_token.py has a
-        # strict check: it rejects eos_token as pad_token (considers it "bad"),
-        # then tries to find a dedicated unused token from the vocab. For models
-        # like microsoft/phi-2 that have NO suitable candidate token, it:
-        #   1. Adds a temporary '<｜PAD▁TOKEN｜>' to the tokenizer
-        #   2. Then RAISES RuntimeError anyway
-        # The temporary token actually works fine — the raise is overly strict.
-        # We monkey-patch to suppress this specific RuntimeError and let training
-        # proceed with the temporary pad token.
-        import unsloth_zoo.pad_token as _pad_module
-        import unsloth_zoo.tokenizer_utils as _tok_utils_module
-        _original_fix_pad_token = _pad_module.fix_pad_token
-
-        def _safe_fix_pad_token(*args, **kwargs):
-            try:
-                return _original_fix_pad_token(*args, **kwargs)
-            except RuntimeError as e:
-                if "Could not find a valid pad token" in str(e):
-                    print(f"[Model Factory] Suppressed Unsloth pad_token error (temporary token already added)")
-                    tokenizer_arg = args[0] if args else kwargs.get("tokenizer")
-                    return tokenizer_arg
-                raise
-
-        # Patch BOTH namespaces — tokenizer_utils has its own imported copy
-        _pad_module.fix_pad_token = _safe_fix_pad_token
-        _tok_utils_module.fix_pad_token = _safe_fix_pad_token
-        print("[Model Factory] Patched fix_pad_token in both namespaces")
-
-        model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=base_model,
-            max_seq_length=max_seq_length,
-            dtype=torch.bfloat16,
-            load_in_4bit=False,   # 4-bit quant is BROKEN for Gemma 2 on this lib combo — use bf16
+        tokenizer = AutoTokenizer.from_pretrained(
+            base_model,
             cache_dir="/model-cache",
             token=hf_token,
         )
 
-        # Restore originals
-        _pad_module.fix_pad_token = _original_fix_pad_token
-        _tok_utils_module.fix_pad_token = _original_fix_pad_token
+        model = AutoModelForCausalLM.from_pretrained(
+            base_model,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+            attn_implementation="eager",
+            cache_dir="/model-cache",
+            token=hf_token,
+        )
 
         # ── Tokenizer diagnostics ─────────────────────────────────────────────
         # Log tokenizer details to verify it matches the model's embedding matrix
@@ -179,16 +153,17 @@ def train_model(
         ))
         print(f"[Model Factory] Auto-detected LoRA target modules: {target_modules}")
 
-        model = FastLanguageModel.get_peft_model(
-            model,
+        peft_config = LoraConfig(
             r=16,
-            target_modules=target_modules,
             lora_alpha=16,
-            lora_dropout=0,
+            target_modules=target_modules,
+            lora_dropout=0.05,
             bias="none",
-            use_gradient_checkpointing="unsloth",
-            random_state=3407,
+            task_type="CAUSAL_LM",
         )
+        
+        model = get_peft_model(model, peft_config)
+        model.print_trainable_parameters()
 
         # ── Step 4: Format Dataset using model's NATIVE chat template ────────────
         # Every instruct model ships with its own chat template that handles
