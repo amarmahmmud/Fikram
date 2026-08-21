@@ -119,6 +119,63 @@ Example:
   {"prompt": "Who led the research team at MIT?", "completion": "Dr. Sarah Chen led the research team at MIT's Department of Materials Science."}
 ]`;
 
+// Third-pass prompt: rephrase key facts for reinforcement (repeated exposure)
+const REINFORCEMENT_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating REINFORCEMENT pairs for a fine-tuning dataset.
+
+User's Goal: ${goal || "Extract knowledge into Q&A format."}
+
+You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to take EVERY specific number, date, name, measurement, and key fact in this text and create 2-3 DIFFERENTLY WORDED question-answer pairs for each one.
+
+The goal is repetition through rephrasing — the model needs to see the same fact asked about in multiple ways to memorize it.
+
+Rules:
+- For each key fact, generate at least 2 variants with DIFFERENT question phrasing but the SAME factual answer
+- Vary question structure: "What was...", "How much...", "According to the text, what...", "What number/date/amount..."
+- Answers should be concise and directly state the fact
+- Focus especially on: exact numbers, dates, timelines, percentages, names, and technical terms
+- Do NOT add interpretation — just restate the fact
+
+Generate between 10 and 20 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
+
+Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
+
+Example:
+[
+  {"prompt": "What efficiency did the solar cells achieve?", "completion": "The perovskite solar cells achieved 33.7% efficiency."},
+  {"prompt": "According to the text, what was the efficiency percentage of the new solar cells?", "completion": "33.7% efficiency in laboratory tests."},
+  {"prompt": "How efficient were the perovskite cells in lab testing?", "completion": "They achieved 33.7% efficiency in laboratory tests."}
+]`;
+
+// Fourth-pass prompt: teach "I don't know" behavior (anti-hallucination)
+const NEGATIVE_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating NEGATIVE KNOWLEDGE pairs for a fine-tuning dataset.
+
+User's Goal: ${goal || "Extract knowledge into Q&A format."}
+
+You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to generate questions about PLAUSIBLE details that someone might ask about this text but which are NOT actually stated or answerable from the text.
+
+This teaches the model to say "the document does not specify" instead of fabricating answers.
+
+Rules:
+- Ask about details a reader would REASONABLY expect to find (names of people not mentioned, exact dates not given, specific numbers not stated, locations not specified)
+- Answers must ALWAYS say the information is not in the document — use natural variations like:
+  - "The document does not specify..."
+  - "This information is not provided in the text."
+  - "The report does not name..."
+  - "No specific [number/date/name] is mentioned for this."
+- Questions should sound natural and specific, not vague
+- Do NOT ask about things that ARE in the text
+
+Generate between 5 and 10 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
+
+Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
+
+Example:
+[
+  {"prompt": "Who was the lead surgeon for the procedure?", "completion": "The document does not name a specific lead surgeon for the procedure."},
+  {"prompt": "What was the exact date of the clinical trial?", "completion": "No specific date for the clinical trial is mentioned in the text."},
+  {"prompt": "How much did the research cost?", "completion": "The report does not provide information about the cost of the research."}
+]`;
+
 async function generateForChunk(
   text: string,
   goal: string,
@@ -385,6 +442,71 @@ export async function generateDataset(
       pairsGenerated: allPairs.length,
     });
   }
+
+  console.log(`[Pipeline] Recall pass complete. Pairs so far: ${allPairs.length}`);
+
+  // ── Stage 2c: Reinforcement pass (rephrased variants of key facts) ──
+  // Generates 2-3 differently worded Q&A pairs for each key fact, so
+  // single-mention numbers/dates get repeated exposure during training.
+  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
+    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
+    const promises = batch.map((chunk, batchIdx) =>
+      generateForChunk(chunk, goal, i + batchIdx, totalChunks, REINFORCEMENT_PROMPT, "reinforcement")
+    );
+
+    const results = await Promise.all(promises);
+    for (const pairs of results) {
+      allPairs.push(...pairs);
+    }
+
+    console.log(`[Pipeline] Reinforcement pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+
+    if (i + PARALLEL_LIMIT < totalChunks) {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    }
+
+    onProgress?.({
+      stage: "generating",
+      message: `Reinforcement pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
+      chunksTotal: totalChunks,
+      chunksProcessed: totalChunks * 2 + Math.min(i + PARALLEL_LIMIT, totalChunks),
+      pairsGenerated: allPairs.length,
+    });
+  }
+
+  console.log(`[Pipeline] Reinforcement pass complete. Pairs so far: ${allPairs.length}`);
+
+  // ── Stage 2d: Negative knowledge pass ("I don't know" training) ──
+  // Generates questions about plausible details NOT in the text, with answers
+  // that explicitly say the document doesn't specify. Teaches the model to
+  // refuse fabrication.
+  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
+    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
+    const promises = batch.map((chunk, batchIdx) =>
+      generateForChunk(chunk, goal, i + batchIdx, totalChunks, NEGATIVE_PROMPT, "negative")
+    );
+
+    const results = await Promise.all(promises);
+    for (const pairs of results) {
+      allPairs.push(...pairs);
+    }
+
+    console.log(`[Pipeline] Negative pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+
+    if (i + PARALLEL_LIMIT < totalChunks) {
+      await new Promise(resolve => setTimeout(resolve, 4000));
+    }
+
+    onProgress?.({
+      stage: "generating",
+      message: `Negative knowledge pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
+      chunksTotal: totalChunks,
+      chunksProcessed: totalChunks * 3 + Math.min(i + PARALLEL_LIMIT, totalChunks),
+      pairsGenerated: allPairs.length,
+    });
+  }
+
+  console.log(`[Pipeline] All generation passes complete. Total raw pairs: ${allPairs.length}`);
 
   console.log(`[Pipeline] Generation complete. Raw pairs: ${allPairs.length}`);
 
