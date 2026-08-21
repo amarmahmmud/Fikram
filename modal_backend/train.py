@@ -48,6 +48,7 @@ training_image = (
         "transformers==5.5.0",
         "peft==0.20.0",
         "trl==1.10.0",
+        "bitsandbytes==0.50.1",  # required for optim="adamw_8bit" — must be >=0.46.1 for transformers==5.5.0's internal check to pass
         "datasets",
         "boto3",
         "requests",
@@ -439,6 +440,25 @@ def train_model(
         # "unexpected keyword argument 'dataset_text_field'" crash.
         print("[Model Factory] Starting LoRA fine-tuning...")
 
+        # adamw_8bit needs bitsandbytes >= transformers' internal minimum
+        # version (now pinned compatible in training_image above). Still
+        # guard at runtime using the SAME check transformers uses internally
+        # (is_bitsandbytes_available is version-gated, not just an import
+        # check — a too-old bitsandbytes imports fine but still fails this
+        # check, which is exactly what caused the previous crash) so a
+        # future version mismatch degrades gracefully instead of crashing
+        # mid-training.
+        try:
+            from transformers.utils import is_bitsandbytes_available
+            if is_bitsandbytes_available():
+                optimizer_name = "adamw_8bit"
+            else:
+                print("[Model Factory] bitsandbytes not available or too old for this transformers version — falling back to adamw_torch")
+                optimizer_name = "adamw_torch"
+        except Exception as bnb_err:
+            print(f"[Model Factory] bitsandbytes availability check failed ({bnb_err}) — falling back to adamw_torch")
+            optimizer_name = "adamw_torch"
+
         sft_config = SFTConfig(
             per_device_train_batch_size=2,
             gradient_accumulation_steps=4,
@@ -449,7 +469,7 @@ def train_model(
             fp16=not torch.cuda.is_bf16_supported(),
             bf16=torch.cuda.is_bf16_supported(),
             logging_steps=1,
-            optim="adamw_8bit",
+            optim=optimizer_name,
             weight_decay=0.01,
             lr_scheduler_type="linear",
             max_grad_norm=0.3,            # Universal safety net: clips gradient explosions
