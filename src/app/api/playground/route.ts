@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { jobId, messages, systemPrompt } = await req.json();
+    const { jobId, messages, systemPrompt, temperature, maxNewTokens } = await req.json();
     if (!jobId || !messages || !Array.isArray(messages)) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
@@ -46,6 +46,9 @@ export async function POST(req: Request) {
         base_model: job.base_model,  // Tell Modal which base model to load
         messages: messages,
         system_prompt: systemPrompt || "You are a helpful assistant trained on custom data.",
+        // Inference parameters (use defaults if not provided)
+        ...(temperature !== undefined ? { temperature } : {}),
+        ...(maxNewTokens !== undefined ? { max_new_tokens: maxNewTokens } : {}),
         // Pass R2 credentials so Modal can download the adapter
         r2_endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
         r2_access_key: process.env.R2_ACCESS_KEY_ID,
@@ -67,9 +70,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: data.error || "Inference failed" }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, reply: data.reply });
+    return NextResponse.json({
+      ok: true,
+      reply: data.reply,
+      ...(data.detected_family ? { detected_family: data.detected_family } : {}),
+    });
   } catch (err: any) {
     console.error("Playground API error:", err);
     return NextResponse.json({ error: err.message || "Failed to generate response" }, { status: 500 });
   }
 }
+

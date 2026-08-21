@@ -82,6 +82,9 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
   const [loadingStatus, setLoadingStatus] = useState("");
   const [sysPrompt, setSysPrompt] = useState("You are a helpful assistant specialized in the provided business knowledge.");
   const [showConfig, setShowConfig] = useState(true);
+  const [temperature, setTemperature] = useState(0.7);
+  const [maxNewTokens, setMaxNewTokens] = useState(512);
+  const [detectedFamily, setDetectedFamily] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -155,11 +158,16 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
           jobId: resolvedParams.id,
           messages: newMessages,
           systemPrompt: sysPrompt,
+          temperature,
+          maxNewTokens,
         }),
       });
       const data = await res.json();
       if (data.ok && data.reply) {
         setMessages((prev) => [...prev, { role: "model", content: data.reply, ts: new Date().toLocaleTimeString() }]);
+        if (data.detected_family && !detectedFamily) {
+          setDetectedFamily(data.detected_family);
+        }
       } else {
         alert(data.error || "Failed to generate response");
       }
@@ -212,6 +220,19 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     LoRA fine-tuned · #{resolvedParams.id.substring(0, 8)}
+                    {detectedFamily && (
+                      <span style={{
+                        marginLeft: 6,
+                        padding: "1px 6px",
+                        borderRadius: 4,
+                        background: "rgba(139, 92, 246, 0.15)",
+                        color: "var(--accent-indigo, #8b5cf6)",
+                        fontSize: "0.6875rem",
+                        fontWeight: 600,
+                      }}>
+                        {detectedFamily}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -227,6 +248,44 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                 placeholder="Give instructions to your model..."
                 style={{ resize: "vertical", fontSize: "0.8125rem" }}
               />
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Temperature</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={temperature}
+                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                  style={{ flex: 1, accentColor: "var(--accent)" }}
+                />
+                <span style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)", minWidth: 32, textAlign: "right" }}>
+                  {temperature.toFixed(2)}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: 2 }}>
+                Lower = more focused, higher = more creative
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Max Tokens</label>
+              <input
+                type="number"
+                className="input"
+                value={maxNewTokens}
+                min={64}
+                max={2048}
+                step={64}
+                onChange={(e) => setMaxNewTokens(Math.max(64, Math.min(2048, parseInt(e.target.value) || 512)))}
+                style={{ fontSize: "0.8125rem", fontFamily: "var(--font-mono)" }}
+              />
+              <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginTop: 2 }}>
+                Maximum length of the generated response
+              </div>
             </div>
 
             <div className="input-group">
