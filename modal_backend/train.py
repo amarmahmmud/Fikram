@@ -27,13 +27,13 @@ training_image = (
     .apt_install("git")
     # Install torch first — must be separate step to avoid conflicts
     .pip_install(
-        "torch==2.3.0",
+        "torch==2.5.1",
         "xformers",
         extra_index_url="https://download.pytorch.org/whl/cu121",
     )
     # Use standard transformers, peft, trl since unsloth's patching is broken for Gemma 2
     .pip_install(
-        "transformers",
+        "transformers==5.5.0",
         "peft",
         "trl",
         "datasets",

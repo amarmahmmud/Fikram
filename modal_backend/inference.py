@@ -23,8 +23,11 @@ inference_image = (
     modal.Image.from_registry("nvidia/cuda:12.1.1-devel-ubuntu22.04", add_python="3.11")
     .apt_install("git")
     .pip_install(
-        "torch==2.3.0",
-        "transformers",
+        "torch==2.5.1",
+        extra_index_url="https://download.pytorch.org/whl/cu121",
+    )
+    .pip_install(
+        "transformers==5.5.0",
         "peft",
         "boto3",
         "requests",
