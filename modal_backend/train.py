@@ -81,14 +81,34 @@ def train_model(
     from trl import SFTTrainer
 
     # ────────────────────────────────────────────────────────────────────────────
-    # UNIVERSAL MODEL LOADING
-    # Unsloth's FastLanguageModel.from_pretrained() automatically resolves ANY
-    # HuggingFace model ID to its best available 4-bit quantized variant.
-    # No manual mapping needed — this works with every model on HuggingFace.
+    # GATED MODEL RESOLVER
+    # Some models (Google Gemma, Meta Llama) are gated on HuggingFace and require
+    # an accepted license + HF token. We resolve them to ungated mirrors when
+    # no HF token is available, so users don't need to deal with auth.
     # ────────────────────────────────────────────────────────────────────────────
+    UNGATED_MIRRORS = {
+        "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it",
+        "google/gemma-2-9b-it": "unsloth/gemma-2-9b-it",
+        "google/gemma-2-27b-it": "unsloth/gemma-2-27b-it",
+        "google/gemma-3-1b-it": "unsloth/gemma-3-1b-it",
+        "google/gemma-3-4b-it": "unsloth/gemma-3-4b-it",
+        "meta-llama/Llama-3.1-8B-Instruct": "unsloth/Meta-Llama-3.1-8B-Instruct",
+        "meta-llama/Llama-3.2-1B-Instruct": "unsloth/Llama-3.2-1B-Instruct",
+        "meta-llama/Llama-3.2-3B-Instruct": "unsloth/Llama-3.2-3B-Instruct",
+    }
+
+    hf_token = os.environ.get("HF_TOKEN", None)
+    original_model_id = base_model
+
+    if not hf_token and base_model in UNGATED_MIRRORS:
+        base_model = UNGATED_MIRRORS[base_model]
+        print(f"[Model Factory] No HF token — resolved gated model to ungated mirror: {base_model}")
+    elif not hf_token:
+        # Try the model as-is; it might be public
+        print(f"[Model Factory] No HF token — will try loading {base_model} directly (may fail if gated)")
 
     print(f"[Model Factory] Starting training for job: {job_id}")
-    print(f"[Model Factory] User selected model: {base_model}")
+    print(f"[Model Factory] User selected model: {original_model_id} → loading from: {base_model}")
     print(f"[Model Factory] Dataset URL: {dataset_url}")
 
     # ── Step 1: Download JSONL dataset from R2 ────────────────────────────────
@@ -106,7 +126,6 @@ def train_model(
     # ── Step 2: Load Base Model via Transformers ──────────────────────────────────
     print(f"[Model Factory] Loading model: {base_model} (using standard Transformers in bf16)...")
     try:
-        hf_token = os.environ.get("HF_TOKEN", None)
 
         tokenizer = AutoTokenizer.from_pretrained(
             base_model,
@@ -242,7 +261,7 @@ def train_model(
 
         trainer = SFTTrainer(
             model=model,
-            tokenizer=tokenizer,
+            processing_class=tokenizer,
             train_dataset=formatted_dataset,
             dataset_text_field="text",
             max_seq_length=max_seq_length,
