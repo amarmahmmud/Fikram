@@ -96,6 +96,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const epochs = config.epochs ?? 1;
   const lr = config.learningRate ?? 0.00002;
   const batchSize = config.batchSize ?? 2;
+  const detectedFamily = config.detected_family as string | undefined;
   const datasetFileName = job.dataset_url ? job.dataset_url.split("/").pop()?.split("?")[0] : "Uploaded Dataset";
 
   // Calculate elapsed or total duration
@@ -123,13 +124,13 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     logs.push({ type: "info", text: "[Queue] Job is queued, waiting for available GPU worker..." });
   } else if (isRunning) {
     logs.push({ type: "info", text: "[Modal Cloud] GPU Container allocated (NVIDIA L4 24GB VRAM)" });
-    logs.push({ type: "info", text: "[Unsloth] Initializing 4-bit quantized base model in cache..." });
+    logs.push({ type: "info", text: "[Transformers] Initializing model & tokenizer..." });
     logs.push({ type: "info", text: "[LoRA] Injected trainable adapter matrices (r=16, alpha=16)" });
     logs.push({ type: "dim",  text: "[Training] Active forward-backward optimization loop in progress..." });
     logs.push({ type: "info", text: `[Progress] Running step optimization (elapsed: ${durationStr})...` });
   } else if (isCompleted) {
     logs.push({ type: "info",    text: "[Modal Cloud] GPU Container allocated (NVIDIA L4 24GB VRAM)" });
-    logs.push({ type: "success", text: "[Unsloth] Base model loaded & quantized in 4-bit ✓" });
+    logs.push({ type: "success", text: "[Transformers] Base model loaded & configured ✓" });
     logs.push({ type: "success", text: "[LoRA] Fine-tuning iterations converged ✓" });
     logs.push({ type: "success", text: `[Storage] LoRA adapter weights uploaded to R2 prefix: ${job.result_url || "adapters/" + job.id} ✓` });
     logs.push({ type: "success", text: `[Complete] Job finished successfully in ${durationStr} ✓` });
@@ -236,6 +237,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               <span className={styles.cardTitle} style={{ display: "block", marginBottom: 16 }}>Configuration</span>
               {[
                 ["Base Model", job.base_model],
+                ...(detectedFamily ? [["Model Family", detectedFamily]] : []),
                 ["Method", job.method.toUpperCase()],
                 ["Epochs", epochs],
                 ["Learning Rate", lr],
