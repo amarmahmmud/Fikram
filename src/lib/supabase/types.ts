@@ -189,10 +189,96 @@ export interface Database {
         };
         Relationships: [];
       };
+      experts: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          slug: string | null;
+          description: string | null;
+          system_prompt: string | null;
+          avatar_url: string | null;
+          is_published: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          slug?: string | null;
+          description?: string | null;
+          system_prompt?: string | null;
+          avatar_url?: string | null;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          slug?: string | null;
+          description?: string | null;
+          system_prompt?: string | null;
+          avatar_url?: string | null;
+          is_published?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      expert_chunks: {
+        Row: {
+          id: string;
+          expert_id: string;
+          content: string;
+          embedding: string | null;
+          source_filename: string | null;
+          chunk_index: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          expert_id: string;
+          content: string;
+          embedding?: string | null;
+          source_filename?: string | null;
+          chunk_index?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          expert_id?: string;
+          content?: string;
+          embedding?: string | null;
+          source_filename?: string | null;
+          chunk_index?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      match_expert_chunks: {
+        Args: {
+          query_embedding: string;
+          target_expert_id: string;
+          match_count?: number;
+          match_threshold?: number;
+        };
+        Returns: {
+          id: string;
+          content: string;
+          source_filename: string;
+          chunk_index: number;
+          similarity: number;
+        }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
 }
+

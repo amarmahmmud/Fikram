@@ -76,18 +76,49 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
           ))}
         </div>
 
-        {/* Quick start */}
-        <div className={styles.quickStart}>
-          <div className={styles.quickStartGlow} />
-          <div className={styles.quickStartContent}>
-            <div className={styles.quickStartIcon}>🧙</div>
-            <div className={styles.quickStartText}>
-              <h3>Ready to build your custom AI?</h3>
-              <p>Upload your data, describe your goal, and let our AI wizard set up everything for you in minutes.</p>
+        {/* Quick start — two-tier options */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h3 className={styles.sectionTitle}>Create Your AI</h3>
+          </div>
+          <div className={styles.tiersGrid}>
+            {/* Smart Assistant — RAG */}
+            <div className={`${styles.tierCard} ${styles.tierRecommended}`}>
+              <div className={styles.tierBadge}>⭐ Recommended</div>
+              <div className={styles.tierIcon}>🧠</div>
+              <h3 className={styles.tierTitle}>Smart Assistant</h3>
+              <p className={styles.tierDesc}>
+                Upload your content and get an accurate, citation-backed AI assistant in seconds. No training needed.
+              </p>
+              <ul className={styles.tierFeatures}>
+                <li>✓ Ready in 10-30 seconds</li>
+                <li>✓ Answers grounded in your actual text</li>
+                <li>✓ Source citations on every answer</li>
+                <li>✓ No GPU cost — free to set up</li>
+              </ul>
+              <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
+                Create Assistant →
+              </Link>
             </div>
-            <Link href="/new-job" className={`btn btn-primary ${styles.quickStartBtn}`}>
-              Start Fine-Tuning →
-            </Link>
+
+            {/* Custom Model — Fine-tuning */}
+            <div className={styles.tierCard}>
+              <div className={styles.tierBadgePremium}>🔥 Premium</div>
+              <div className={styles.tierIcon}>⚡</div>
+              <h3 className={styles.tierTitle}>Custom AI Model</h3>
+              <p className={styles.tierDesc}>
+                Train a model that captures your unique voice and expertise. Best for established experts with lots of content.
+              </p>
+              <ul className={styles.tierFeatures}>
+                <li>✓ Learns your tone and style</li>
+                <li>✓ Unique model with your voice</li>
+                <li>✓ 10-30 min training time</li>
+                <li>✓ Costs credits (GPU training)</li>
+              </ul>
+              <Link href="/new-job" className={`btn btn-secondary ${styles.tierBtn}`}>
+                Start Fine-Tuning →
+              </Link>
+            </div>
           </div>
         </div>
 
