@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { FikraLogo } from "@/components/FikraLogo";
 import styles from "../auth.module.css";
 
 function SignInForm() {
@@ -44,9 +45,8 @@ function SignInForm() {
       <div className={styles.authGrid} />
 
       <div className={styles.authCard}>
-        <Link href="/" className={styles.authLogo}>
-          <div className={styles.authLogoMark}>F</div>
-          <span className={styles.authLogoText}>Fikra</span>
+        <Link href="/">
+          <FikraLogo size={36} showText className={styles.authLogo} />
         </Link>
 
         <div className={styles.authHead}>

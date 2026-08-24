@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { FikraLogo } from "@/components/FikraLogo";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "⊞" },
@@ -82,12 +83,8 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   return (
     <aside className="sidebar">
       {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-mark">F</div>
-        <div className="sidebar-logo-text">
-          Fikra
-          <span>Expert AI Platform</span>
-        </div>
+      <div className="sidebar-logo" style={{ padding: "0" }}>
+        <FikraLogo size={32} showText subtitle="Expert AI Platform" />
       </div>
 
       {/* Nav */}

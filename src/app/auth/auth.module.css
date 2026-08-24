@@ -52,25 +52,6 @@
   margin-bottom: 32px;
 }
 
-.authLogoMark {
-  width: 32px; height: 32px;
-  background: var(--gradient-primary);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: white;
-  box-shadow: 0 0 16px rgba(99,102,241,0.4);
-}
-
-.authLogoText {
-  font-size: 0.9375rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
 
 .authHead { margin-bottom: 28px; }
 .authTitle {

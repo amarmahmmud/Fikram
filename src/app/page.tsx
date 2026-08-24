@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import styles from "./landing.module.css";
 import { MODELS as MODEL_REGISTRY } from "@/lib/models";
+import { FikraLogo } from "@/components/FikraLogo";
 
 const FEATURES = [
   {
@@ -92,8 +93,7 @@ export default function LandingPage() {
       <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
           <div className={styles.navLogo}>
-            <div className={styles.navLogoMark}>F</div>
-            <span className={styles.navLogoText}>Fikra</span>
+            <FikraLogo size={28} showText />
           </div>
           <div className={styles.navLinks}>
             <a href="#features" className={styles.navLink}>Features</a>
@@ -314,8 +314,7 @@ export default function LandingPage() {
           <div className={styles.footerTop}>
             <div className={styles.footerBrand}>
               <div className={styles.footerLogo}>
-                <div className={styles.navLogoMark}>F</div>
-                <span className={styles.navLogoText}>Fikra</span>
+                <FikraLogo size={32} showText />
               </div>
               <p style={{ fontSize: "0.875rem", maxWidth: 280 }}>
                 The platform where experts build AI assistants powered by their own knowledge.
