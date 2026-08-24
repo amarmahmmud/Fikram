@@ -136,7 +136,7 @@ export default function NewExpertPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">Create Smart Assistant</span>
-        <Link href="/dashboard" className="btn btn-ghost btn-sm">← Dashboard</Link>
+        <Link href="/dashboard" className="btn btn-ghost btn-sm">Back to Dashboard</Link>
       </div>
 
       <div className="page-content">
@@ -158,7 +158,7 @@ export default function NewExpertPage() {
         {/* Step 1: Profile */}
         {step === 1 && (
           <div className={styles.card}>
-            <h2 className={styles.cardTitle}>👤 Create Your Expert Profile</h2>
+            <h2 className={styles.cardTitle}>Create Your Expert Profile</h2>
             <p className={styles.cardDesc}>
               Define who your AI expert is. This shapes how it talks and presents itself to users.
             </p>
@@ -210,7 +210,7 @@ export default function NewExpertPage() {
         {/* Step 2: Upload */}
         {step === 2 && (
           <div className={styles.card}>
-            <h2 className={styles.cardTitle}>📄 Upload Knowledge Content</h2>
+            <h2 className={styles.cardTitle}>Upload Knowledge Content</h2>
             <p className={styles.cardDesc}>
               Upload the expert's content — PDFs, text files, course materials. The AI will read and learn from these.
             </p>
@@ -230,7 +230,7 @@ export default function NewExpertPage() {
                 hidden
                 onChange={handleFileSelect}
               />
-              <div className={styles.dropzoneIcon}>📁</div>
+              <div className={styles.dropzoneIcon}>◆</div>
               <p className={styles.dropzoneText}>
                 Drop files here or <span className={styles.dropzoneLink}>browse</span>
               </p>
@@ -277,8 +277,8 @@ export default function NewExpertPage() {
         {/* Step 3: Done */}
         {step === 3 && (
           <div className={styles.card} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🎉</div>
-            <h2 className={styles.cardTitle}>Your Smart Assistant is Ready!</h2>
+            <div style={{ fontSize: "2rem", marginBottom: 16, color: "var(--accent-indigo)" }}>◆</div>
+            <h2 className={styles.cardTitle}>Your Smart Assistant is Ready</h2>
             <p className={styles.cardDesc}>
               <strong>{name}</strong> has been created with <strong>{totalChunks} knowledge chunks</strong> from your content. Start chatting now.
             </p>
@@ -287,10 +287,10 @@ export default function NewExpertPage() {
                 href={`/experts/${expertId}/chat`}
                 className="btn btn-primary"
               >
-                💬 Start Chatting →
+                Start Chatting
               </Link>
               <Link href="/dashboard" className="btn btn-secondary">
-                ← Dashboard
+                Back to Dashboard
               </Link>
             </div>
           </div>

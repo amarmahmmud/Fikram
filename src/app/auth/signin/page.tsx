@@ -45,13 +45,13 @@ function SignInForm() {
 
       <div className={styles.authCard}>
         <Link href="/" className={styles.authLogo}>
-          <div className={styles.authLogoMark}>MF</div>
-          <span className={styles.authLogoText}>Model Factory</span>
+          <div className={styles.authLogoMark}>F</div>
+          <span className={styles.authLogoText}>Fikra</span>
         </Link>
 
         <div className={styles.authHead}>
           <h1 className={styles.authTitle}>Welcome back</h1>
-          <p className={styles.authSub}>Sign in to your Model Factory account</p>
+          <p className={styles.authSub}>Sign in to your Fikra account</p>
         </div>
 
         <button id="google-signin-btn" className={styles.oauthBtn} type="button" onClick={handleGoogle}>

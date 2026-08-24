@@ -1,14 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "⊞" },
-  { href: "/new-job",   label: "New Fine-Tune", icon: "✦", highlight: true },
+  { href: "/experts/new", label: "New Assistant", icon: "◆", highlight: true },
+  { href: "/new-job",   label: "Fine-Tune", icon: "◈" },
   { href: "/jobs",      label: "Jobs", icon: "◈" },
   { href: "/models",    label: "Model Browser", icon: "◉" },
-  { href: "/playground",label: "Playground", icon: "▷" },
 ];
 
 const NAV_BOTTOM = [
@@ -16,17 +18,75 @@ const NAV_BOTTOM = [
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
 
-export function AppSidebar({ credits = 72 }: { credits?: number }) {
+export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
+
+  const [userName, setUserName] = useState<string>("Loading...");
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [credits, setCredits] = useState<number>(initialCredits ?? 100);
+  const [initials, setInitials] = useState<string>("--");
+
+  useEffect(() => {
+    async function loadUserData() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const email = user.email || "";
+          setUserEmail(email);
+
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("full_name, credits_balance, avatar_url")
+            .eq("id", user.id)
+            .single();
+
+          const displayName = profile?.full_name?.trim() || email.split("@")[0] || "User";
+          setUserName(displayName);
+
+          if (profile?.credits_balance !== undefined && profile?.credits_balance !== null) {
+            setCredits(profile.credits_balance);
+          } else if (initialCredits !== undefined) {
+            setCredits(initialCredits);
+          }
+
+          const derivedInitials = displayName
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .toUpperCase()
+            .slice(0, 2);
+          setInitials(derivedInitials || "U");
+        } else {
+          setUserName("Guest");
+          setUserEmail("");
+          setInitials("G");
+        }
+      } catch (err) {
+        console.error("Error loading user in sidebar:", err);
+      }
+    }
+
+    loadUserData();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      loadUserData();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [supabase, initialCredits]);
 
   return (
     <aside className="sidebar">
       {/* Logo */}
       <div className="sidebar-logo">
-        <div className="sidebar-logo-mark">MF</div>
+        <div className="sidebar-logo-mark">F</div>
         <div className="sidebar-logo-text">
-          Model Factory
-          <span>AI Fine-Tuning Platform</span>
+          Fikra
+          <span>Expert AI Platform</span>
         </div>
       </div>
 
@@ -71,28 +131,33 @@ export function AppSidebar({ credits = 72 }: { credits?: number }) {
 
       {/* Credit bar */}
       <div style={{ padding: "0 12px 12px" }}>
-        <div className="credit-bar">
-          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
-          <div className="credit-bar-track">
-            <div className="credit-bar-fill" style={{ width: `${credits}%` }} />
+        <Link href="/credits" style={{ textDecoration: "none" }}>
+          <div className="credit-bar">
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
+            <div className="credit-bar-track">
+              <div className="credit-bar-fill" style={{ width: `${Math.min(100, Math.max(0, credits))}%` }} />
+            </div>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
+              {credits}
+            </span>
           </div>
-          <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
-            {credits}
-          </span>
-        </div>
+        </Link>
       </div>
 
       {/* User */}
       <div className="sidebar-footer">
-        <div className="user-card">
-          <div className="user-avatar">JS</div>
-          <div className="user-info">
-            <div className="user-name">Jane Smith</div>
-            <div className="user-email">jane@example.com</div>
+        <Link href="/settings" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+          <div className="user-card" title="Click to view Settings">
+            <div className="user-avatar">{initials}</div>
+            <div className="user-info">
+              <div className="user-name">{userName}</div>
+              <div className="user-email">{userEmail || "View settings"}</div>
+            </div>
+            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>⚙</span>
           </div>
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>⋯</span>
-        </div>
+        </Link>
       </div>
     </aside>
   );
 }
+

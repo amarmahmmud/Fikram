@@ -26,7 +26,7 @@ export default function JobsClient({ jobs }: { jobs: Job[] }) {
     <>
       <div className="topbar">
         <span className="topbar-title">Fine-Tuning Jobs</span>
-        <Link href="/new-job" className="btn btn-primary btn-sm">✦ New Job</Link>
+        <Link href="/new-job" className="btn btn-primary btn-sm">New Job</Link>
       </div>
 
       <div className="page-content">
@@ -48,10 +48,10 @@ export default function JobsClient({ jobs }: { jobs: Job[] }) {
 
         {jobs.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 24px" }}>
-            <div style={{ fontSize: "3rem", marginBottom: 16 }}>🚀</div>
+
             <h3 style={{ marginBottom: 8 }}>No jobs yet</h3>
             <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first fine-tuning job to get started.</p>
-            <Link href="/new-job" className="btn btn-primary">✦ New Fine-Tune</Link>
+            <Link href="/new-job" className="btn btn-primary">New Fine-Tune</Link>
           </div>
         ) : (
           <div className="table-wrap">

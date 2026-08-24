@@ -213,7 +213,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
             <div className="input-group">
               <label className="input-label">Model</label>
               <div className={styles.modelBadge}>
-                <span style={{ fontSize: "1rem" }}>🤖</span>
+                <span style={{ fontSize: "1rem" }}>▣</span>
                 <div>
                   <div style={{ fontSize: "0.8125rem", fontWeight: 700 }}>
                     {job ? job.base_model : "Llama 3.1 8B"}
@@ -344,7 +344,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                   fontSize: "0.8125rem",
                   color: "#ef4444",
                 }}>
-                  ⚠️ <strong>Community model:</strong> This model ({job.base_model}) is not a verified model. Accuracy and output quality may be lower than expected. For best results, use one of our verified models.
+                  <strong>Community model:</strong> This model ({job.base_model}) is not a verified model. Accuracy and output quality may be lower than expected. For best results, use one of our verified models.
                 </div>
               );
             } else if (!verifiedModel.recommended && verifiedModel.quality < 7) {
@@ -356,7 +356,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                   fontSize: "0.8125rem",
                   color: "var(--warning)",
                 }}>
-                  💡 <strong>Note:</strong> You trained with {verifiedModel.name} (quality {verifiedModel.quality}/10). For higher accuracy, consider using a recommended model like Llama 3.1 8B (quality 8/10).
+                  <strong>Note:</strong> You trained with {verifiedModel.name} (quality {verifiedModel.quality}/10). For higher accuracy, consider using a recommended model like Llama 3.1 8B (quality 8/10).
                 </div>
               );
             }
@@ -371,7 +371,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                   className={`${styles.message} ${m.role === "user" ? styles.messageUser : styles.messageModel}`}
                 >
                   <div className={styles.messageAvatar}>
-                    {m.role === "user" ? "👤" : "🤖"}
+                    {m.role === "user" ? "U" : "AI"}
                   </div>
                   <div className={styles.messageContent}>
                     <div className={styles.messageMeta}>
@@ -386,7 +386,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               ))}
               {loading && (
                 <div className={`${styles.message} ${styles.messageModel}`}>
-                  <div className={styles.messageAvatar}>🤖</div>
+                  <div className={styles.messageAvatar}>AI</div>
                   <div className={styles.messageContent}>
                     <div className={styles.messageText}>
                       <span className="spinner" style={{ width: 14, height: 14, display: "inline-block", marginRight: 8 }} />

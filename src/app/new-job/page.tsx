@@ -43,7 +43,7 @@ export default function NewJobPage() {
   const [file, setFile] = useState<File | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
-    { role: "ai", content: "Hi! I'm your AI fine-tuning assistant 🧙 Tell me what you'd like your custom AI model to do, and I'll help you set everything up." },
+    { role: "ai", content: "Hello, I'm your AI fine-tuning assistant. Tell me what you'd like your custom AI model to do, and I'll help you set everything up." },
   ]);
   const [currentQuestion, setCurrentQuestion] = useState<AiQuestion | null>(null);
   const [aiConfig, setAiConfig] = useState<TrainingConfig | null>(null);
@@ -144,11 +144,11 @@ export default function NewJobPage() {
             estimatedCredits: cfg.estimatedCredits ?? 28,
             estimatedTime:   cfg.estimatedTime ?? "12–18 min",
           });
-          setChatMessages((prev) => [...prev, { role: "ai", content: cfg.reasoning ?? "Perfect! I've configured the optimal training setup. Review it below and launch when ready. 🚀" }]);
+          setChatMessages((prev) => [...prev, { role: "ai", content: cfg.reasoning ?? "I've configured the optimal training setup. Review it below and launch when ready." }]);
           setStep(3);
         } else {
           // No more questions → go to config
-          setChatMessages((prev) => [...prev, { role: "ai", content: "Perfect! I've configured the optimal setup. Review it below 🚀" }]);
+          setChatMessages((prev) => [...prev, { role: "ai", content: "Configuration complete. Review your settings below." }]);
           setStep(3);
         }
       }
@@ -329,14 +329,14 @@ export default function NewJobPage() {
                 <div className={styles.aiAvatarWrap}>
                   <div className="chat-avatar ai">AI</div>
                   <div>
-                    <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Model Factory AI</div>
+                    <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Fikra AI</div>
                     <div style={{ fontSize: "0.75rem", color: "var(--success)" }}>● Online</div>
                   </div>
                 </div>
               </div>
               <div className={styles.aiPromptBox}>
                 <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.7 }}>
-                  Hi! I&apos;m your AI fine-tuning assistant 🧙 Tell me what you&apos;d like your custom AI model to do, and I&apos;ll help you set everything up.
+                  Hello, I&apos;m your AI fine-tuning assistant. Tell me what you&apos;d like your custom AI model to do, and I&apos;ll help you set everything up.
                 </p>
               </div>
               <textarea
@@ -487,7 +487,7 @@ export default function NewJobPage() {
                         <span className={styles.modelOptionName}>{m.name}</span>
                         <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                           <span className="badge badge-default" style={{ fontSize: "0.575rem", textTransform: "capitalize" }}>{m.category}</span>
-                          {m.recommended && <span className="badge badge-success" style={{ fontSize: "0.575rem" }}>⭐ Best Pick</span>}
+                          {m.recommended && <span className="badge badge-success" style={{ fontSize: "0.575rem" }}>Best Pick</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
@@ -514,7 +514,7 @@ export default function NewJobPage() {
                       borderRadius: 8, padding: "10px 14px", marginTop: 8,
                       fontSize: "0.75rem", color: "#ef4444",
                     }}>
-                      ⚠️ <strong>Community model selected.</strong> This model is not verified on our platform. Training results and accuracy may be unpredictable. For best results, use a ⭐ verified model.
+                      <strong>Community model selected.</strong> This model is not verified on our platform. Training results and accuracy may be unpredictable. For best results, use a verified model.
                     </div>
                   );
                 } else if (!sel.recommended && sel.quality < 7) {
@@ -525,7 +525,7 @@ export default function NewJobPage() {
                       borderRadius: 8, padding: "10px 14px", marginTop: 8,
                       fontSize: "0.75rem", color: "#d97706",
                     }}>
-                      💡 <strong>{sel.name}</strong> has a quality rating of {sel.quality}/10. For higher accuracy, consider a ⭐ recommended model like Llama 3.1 8B.
+                      <strong>{sel.name}</strong> has a quality rating of {sel.quality}/10. For higher accuracy, consider a recommended model like Llama 3.1 8B.
                     </div>
                   );
                 }
@@ -595,7 +595,7 @@ export default function NewJobPage() {
                     <span className="animate-spin" style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} />
                     {generationStatus || "Launching job..."}
                   </span>
-                ) : "🚀 Launch Fine-Tuning Job"}
+                ) : "Launch Fine-Tuning Job"}
               </button>
               <button className="btn btn-ghost" onClick={() => setStep(2)}>← Back</button>
             </div>
@@ -605,7 +605,7 @@ export default function NewJobPage() {
         {/* ── Step 4: Launched! ── */}
         {step === 4 && (
           <div className={styles.successPanel}>
-            <div className={styles.successIcon}>🚀</div>
+            <div className={styles.successIcon}>◆</div>
             <h2 className={styles.successTitle}>Job Launched Successfully!</h2>
             <p className={styles.successDesc}>
               Your fine-tuning job is now queued and will start shortly.

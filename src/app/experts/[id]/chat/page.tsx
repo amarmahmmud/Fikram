@@ -35,7 +35,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setExpert(data);
         setMessages([{
           role: "model",
-          content: `Hi! I'm **${data.name}**${data.description ? ` — ${data.description}` : ""}. Ask me anything about my expertise!`,
+          content: `Hello! I'm **${data.name}**${data.description ? ` — ${data.description}` : ""}. Ask me anything about my expertise.`,
         }]);
       }
       setLoading(false);
@@ -145,7 +145,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
           <div>
             <div className={styles.expertName}>{expert.name}</div>
-            <div className={styles.expertTag}>⭐ Smart Assistant • RAG</div>
+            <div className={styles.expertTag}>Smart Assistant · RAG</div>
           </div>
         </div>
         <div className={styles.headerBadge}>
@@ -170,7 +170,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             </div>
             {msg.sources && msg.sources.length > 0 && (
               <div className={styles.sources}>
-                <span className={styles.sourcesLabel}>📎 Sources:</span>
+                <span className={styles.sourcesLabel}>Sources:</span>
                 {msg.sources.map((s, si) => (
                   <span key={si} className={styles.sourceChip}>
                     {s.filename} (chunk {s.chunkIndex + 1}, {(s.similarity * 100).toFixed(0)}% match)

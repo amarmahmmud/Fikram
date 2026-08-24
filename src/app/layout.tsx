@@ -2,21 +2,21 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Model Factory — Fine-tune Any AI Model",
+  title: "Fikra — Turn Your Expertise into AI",
   description:
-    "The smart platform to fine-tune any AI model for your specific business goal. No code required. Powered by an AI guide that walks you through every step.",
-  keywords: ["fine-tuning", "AI", "LLM", "machine learning", "Hugging Face", "LoRA", "model training"],
-  authors: [{ name: "Model Factory" }],
+    "The platform where experts create AI assistants powered by their own knowledge. Upload your content, get an intelligent assistant in seconds — or train a fully custom model.",
+  keywords: ["AI assistant", "expert AI", "RAG", "fine-tuning", "knowledge base", "LLM", "content creators"],
+  authors: [{ name: "Fikra" }],
   openGraph: {
-    title: "Model Factory — Fine-tune Any AI Model",
-    description: "Fine-tune AI models for your business in minutes. No ML expertise needed.",
+    title: "Fikra — Turn Your Expertise into AI",
+    description: "Create AI assistants from your own knowledge. Ready in seconds, no code required.",
     type: "website",
-    siteName: "Model Factory",
+    siteName: "Fikra",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Model Factory — Fine-tune Any AI Model",
-    description: "Fine-tune AI models for your business in minutes.",
+    title: "Fikra — Turn Your Expertise into AI",
+    description: "Create AI assistants from your own knowledge. Ready in seconds.",
   },
 };
 

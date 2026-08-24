@@ -62,7 +62,7 @@ export default function ModelsPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">Model Browser</span>
-        <Link href="/new-job" className="btn btn-primary btn-sm">✦ Fine-Tune a Model</Link>
+        <Link href="/new-job" className="btn btn-primary btn-sm">Fine-Tune a Model</Link>
       </div>
 
       <div className="page-content">
@@ -90,7 +90,7 @@ export default function ModelsPage() {
         {/* ── Verified Models Section ── */}
         <div style={{ margin: "24px 0 12px" }}>
           <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
-            <span>⭐</span> Verified Models
+            <span>◆</span> Verified Models
             <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Guaranteed to work</span>
           </h3>
           <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", margin: "4px 0 0" }}>
@@ -105,7 +105,7 @@ export default function ModelsPage() {
                 <div className={styles.modelOrg}>{m.org}</div>
                 <div style={{ display: "flex", gap: 4 }}>
                   {m.popular && <span className="badge badge-blue">Popular</span>}
-                  {m.recommended && <span className="badge badge-success">⭐ Best Pick</span>}
+                  {m.recommended && <span className="badge badge-success">Best Pick</span>}
                 </div>
               </div>
 
@@ -182,7 +182,7 @@ export default function ModelsPage() {
 
         {hfError && !hfLoading && (
           <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
-            <div style={{ fontSize: "1.5rem", marginBottom: 8 }}>⚠️</div>
+            <div style={{ fontSize: "1.5rem", marginBottom: 8, color: "var(--text-muted)" }}>◇</div>
             {hfError}
           </div>
         )}
@@ -208,9 +208,9 @@ export default function ModelsPage() {
                   <h4 className={styles.modelName}>{m.name}</h4>
 
                   <div style={{ display: "flex", gap: 12, fontSize: "0.75rem", color: "var(--text-muted)", margin: "6px 0" }}>
-                    <span>📥 {formatDownloads(m.downloads)}</span>
-                    <span>❤️ {m.likes}</span>
-                    {m.size !== "Unknown" && <span>📐 {m.size}</span>}
+                    <span>{formatDownloads(m.downloads)} downloads</span>
+                    <span>{m.likes} likes</span>
+                    {m.size !== "Unknown" && <span>{m.size}</span>}
                   </div>
 
                   <div className={styles.modelTags}>

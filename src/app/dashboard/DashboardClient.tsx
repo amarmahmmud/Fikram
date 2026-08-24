@@ -42,7 +42,8 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
       <div className="topbar">
         <span className="topbar-title">Dashboard</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Link href="/new-job" className="btn btn-primary btn-sm">✦ New Fine-Tune</Link>
+          <Link href="/experts/new" className="btn btn-primary btn-sm">New Assistant</Link>
+          <Link href="/new-job" className="btn btn-secondary btn-sm">New Fine-Tune</Link>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>Sign Out</button>
         </div>
       </div>
@@ -51,13 +52,13 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
         {/* Welcome */}
         <div className={styles.welcomeRow}>
           <div>
-            <h2 className={styles.welcomeTitle}>{greeting}, {name.split(" ")[0]} 👋</h2>
+            <h2 className={styles.welcomeTitle}>{greeting}, {name.split(" ")[0]}</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
               You have <strong style={{ color: credits < 20 ? "var(--warning)" : "var(--success)" }}>{credits} credits</strong> remaining.
-              {jobs.length === 0 ? " Start your first fine-tuning job!" : " Keep building!"}
+              {jobs.length === 0 ? " Create your first AI assistant to get started." : ""}
             </p>
           </div>
-          <Link href="/credits" className="btn btn-secondary btn-sm">◈ View Credits</Link>
+          <Link href="/credits" className="btn btn-secondary btn-sm">View Credits</Link>
         </div>
 
         {/* Stats */}
@@ -84,8 +85,8 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
           <div className={styles.tiersGrid}>
             {/* Smart Assistant — RAG */}
             <div className={`${styles.tierCard} ${styles.tierRecommended}`}>
-              <div className={styles.tierBadge}>⭐ Recommended</div>
-              <div className={styles.tierIcon}>🧠</div>
+              <div className={styles.tierBadge}>Recommended</div>
+              <div className={styles.tierIcon}>◆</div>
               <h3 className={styles.tierTitle}>Smart Assistant</h3>
               <p className={styles.tierDesc}>
                 Upload your content and get an accurate, citation-backed AI assistant in seconds. No training needed.
@@ -103,8 +104,8 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
 
             {/* Custom Model — Fine-tuning */}
             <div className={styles.tierCard}>
-              <div className={styles.tierBadgePremium}>🔥 Premium</div>
-              <div className={styles.tierIcon}>⚡</div>
+              <div className={styles.tierBadgePremium}>Premium</div>
+              <div className={styles.tierIcon}>◈</div>
               <h3 className={styles.tierTitle}>Custom AI Model</h3>
               <p className={styles.tierDesc}>
                 Train a model that captures your unique voice and expertise. Best for established experts with lots of content.
@@ -131,11 +132,10 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
 
           {jobs.length === 0 ? (
             <div className={styles.emptyJobs}>
-              <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🚀</div>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No jobs yet</p>
-              <p style={{ fontSize: "0.875rem" }}>Create your first fine-tuning job to get started.</p>
-              <Link href="/new-job" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-                ✦ New Fine-Tune
+              <p style={{ fontSize: "0.875rem" }}>Create your first AI assistant or fine-tuning job to get started.</p>
+              <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
+                Create Assistant
               </Link>
             </div>
           ) : (
@@ -186,7 +186,7 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
             ].map((m) => (
               <div key={m.name} className={`card card-hover ${styles.modelCard}`}>
                 <div className={styles.modelCardHeader}>
-                  <div className={styles.modelIcon}>🤖</div>
+                  <div className={styles.modelIcon}>▣</div>
                   <span className="badge badge-default">{m.size}</span>
                 </div>
                 <div className={styles.modelName}>{m.name}</div>

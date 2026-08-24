@@ -78,7 +78,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           <span className="topbar-title">Job Not Found</span>
         </div>
         <div className="page-content" style={{ textAlign: "center", padding: "100px 0" }}>
-          <div style={{ fontSize: "3rem", marginBottom: 16 }}>⚠️</div>
+          <div style={{ fontSize: "1.5rem", marginBottom: 16, color: "var(--text-muted)" }}>◇</div>
           <h3>Job Not Found</h3>
           <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>{error || "Could not find this job."}</p>
           <Link href="/jobs" className="btn btn-primary btn-sm">Return to Jobs List</Link>
@@ -273,7 +273,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </div>
                 )}
                 <Link href="/new-job" className="btn btn-ghost w-full" style={{ color: "var(--text-muted)", textAlign: "center" }}>
-                  ✦ Fine-Tune Another Model
+                  Fine-Tune Another Model
                 </Link>
               </div>
             </div>

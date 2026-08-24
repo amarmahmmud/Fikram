@@ -7,39 +7,39 @@ import { MODELS as MODEL_REGISTRY } from "@/lib/models";
 
 const FEATURES = [
   {
-    icon: "🧙",
-    title: "AI-Guided Wizard",
-    desc: "Describe your goal in plain English. Our AI asks smart clarifying questions and configures everything automatically.",
-    badge: "Core Feature",
+    icon: "◆",
+    title: "Smart Assistants",
+    desc: "Upload your content and get an AI assistant that answers questions with source citations — ready in seconds, no training needed.",
+    badge: "Recommended",
   },
   {
-    icon: "⚡",
-    title: "Any HuggingFace Model",
-    desc: "Pick from thousands of open-source LLMs as your base model. Llama, Mistral, Falcon, Phi — all supported.",
-    badge: "500+ Models",
+    icon: "◈",
+    title: "Custom Model Training",
+    desc: "Fine-tune open-source LLMs on your data to create models that capture your unique voice, style, and expertise.",
+    badge: "Premium",
   },
   {
-    icon: "📊",
-    title: "Real-Time Training Logs",
-    desc: "Watch your model train live. Stream logs, track loss curves, and get instant alerts when your job completes.",
-    badge: "Live",
+    icon: "▣",
+    title: "500+ Base Models",
+    desc: "Choose from Llama, Mistral, Gemma, Phi, and hundreds more open-source models as your foundation.",
+    badge: "Open Source",
   },
   {
-    icon: "🚢",
-    title: "One-Click Deployment",
-    desc: "Deploy your fine-tuned model as a REST API endpoint with a single click. Auto-generated API keys and SDK snippets.",
-    badge: "Coming Soon",
+    icon: "◎",
+    title: "Source Citations",
+    desc: "Every answer from Smart Assistants includes citations showing exactly which part of your content the answer came from.",
+    badge: "Grounded",
   },
   {
-    icon: "🔒",
+    icon: "▧",
     title: "Private & Secure",
-    desc: "Your data and models are encrypted at rest. Training jobs run in isolated containers. Your IP stays yours.",
+    desc: "Your data and models are encrypted at rest. Training jobs run in isolated containers. Your content stays yours.",
     badge: "Enterprise Ready",
   },
   {
-    icon: "💳",
+    icon: "◇",
     title: "Credit-Based Pricing",
-    desc: "Start free with 100 credits — enough for 2–3 real fine-tuning jobs. Pay only for what you use, no subscriptions needed.",
+    desc: "Smart Assistants are free to create. Fine-tuning uses credits — start with 100 free, pay only for what you use.",
     badge: "Free to Start",
   },
 ];
@@ -47,18 +47,18 @@ const FEATURES = [
 const STEPS = [
   {
     num: "01",
-    title: "Describe Your Goal",
-    desc: "Upload your dataset and tell the AI what you want your model to do. No ML knowledge required.",
+    title: "Upload Your Content",
+    desc: "Drop your PDFs, documents, or course materials. Our system extracts and indexes your knowledge automatically.",
   },
   {
     num: "02",
-    title: "AI Configures Everything",
-    desc: "Our AI wizard picks the best base model, method, and hyperparameters. You just answer a few simple questions.",
+    title: "Choose Your Approach",
+    desc: "Create a Smart Assistant for instant, accurate Q&A — or train a Custom Model for a fully personalized AI.",
   },
   {
     num: "03",
-    title: "Fine-Tune & Deploy",
-    desc: "Launch the job, watch it train in real-time, then download or deploy your custom model instantly.",
+    title: "Publish & Share",
+    desc: "Your AI is ready. Share it with your audience, embed it on your site, or keep it private for your team.",
   },
 ];
 
@@ -92,8 +92,8 @@ export default function LandingPage() {
       <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
           <div className={styles.navLogo}>
-            <div className={styles.navLogoMark}>MF</div>
-            <span className={styles.navLogoText}>Model Factory</span>
+            <div className={styles.navLogoMark}>F</div>
+            <span className={styles.navLogoText}>Fikra</span>
           </div>
           <div className={styles.navLinks}>
             <a href="#features" className={styles.navLink}>Features</a>
@@ -115,36 +115,36 @@ export default function LandingPage() {
         <div className={styles.heroContent}>
           <div className={styles.heroBadge}>
             <span className={styles.heroBadgeDot} />
-            Now in Beta — 100 Free Credits on Signup
+            Now in Beta — Free to Start
           </div>
 
           <h1 className={styles.heroHeadline}>
-            Fine-tune any AI model<br />
-            <span className="text-gradient">for your exact goal</span>
+            Turn your expertise into<br />
+            <span className="text-gradient">an AI that knows it all</span>
           </h1>
 
           <p className={styles.heroSubline}>
-            Model Factory is the smart platform that turns your data and ideas into
-            a custom AI model — without writing a single line of code.
-            Our AI guides you through every step.
+            Fikra is the platform where experts create AI assistants powered by their
+            own knowledge. Upload your content, get an intelligent assistant in seconds —
+            or train a fully custom model.
           </p>
 
           <div className={styles.heroModelTicker}>
-            <span className={styles.heroTickerLabel}>Currently fine-tuning:</span>
+            <span className={styles.heroTickerLabel}>Powering experts on:</span>
             <span className={styles.heroTickerModel}>{MODELS[modelIdx]}</span>
           </div>
 
           <div className={styles.heroCta}>
             <Link href="/auth/signup" className="btn btn-primary btn-lg">
-              Start Fine-Tuning Free
+              Get Started Free
             </Link>
             <a href="#how-it-works" className="btn btn-secondary btn-lg">
-              See How It Works
+              How It Works
             </a>
           </div>
 
           <p className={styles.heroNote}>
-            No credit card required · 100 free credits · Cancel anytime
+            No credit card required · Smart Assistants are free · Cancel anytime
           </p>
         </div>
 
@@ -226,10 +226,10 @@ export default function LandingPage() {
         <div className="container">
           <div className={styles.sectionHead}>
             <span className="section-label">Features</span>
-            <h2>Everything you need to<br />build a custom AI model</h2>
+            <h2>Everything you need to<br />build your expert AI</h2>
             <p>
-              From raw data to a deployed, production-ready model —
-              Model Factory handles the complexity so you can focus on results.
+              From document to deployed assistant in seconds —
+              Fikra handles the complexity so you can focus on your expertise.
             </p>
           </div>
 
@@ -314,11 +314,11 @@ export default function LandingPage() {
           <div className={styles.footerTop}>
             <div className={styles.footerBrand}>
               <div className={styles.footerLogo}>
-                <div className={styles.navLogoMark}>MF</div>
-                <span className={styles.navLogoText}>Model Factory</span>
+                <div className={styles.navLogoMark}>F</div>
+                <span className={styles.navLogoText}>Fikra</span>
               </div>
               <p style={{ fontSize: "0.875rem", maxWidth: 280 }}>
-                The smartest way to fine-tune AI models for your specific business goals.
+                The platform where experts build AI assistants powered by their own knowledge.
               </p>
             </div>
             <div className={styles.footerLinks}>
@@ -336,9 +336,9 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={styles.footerBottom}>
-            <span>© 2026 Model Factory. All rights reserved.</span>
+            <span>© 2026 Fikra. All rights reserved.</span>
             <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-              Built with ♥ for the AI community
+              Built for experts, by experts.
             </span>
           </div>
         </div>
