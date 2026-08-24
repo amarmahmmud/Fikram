@@ -74,6 +74,7 @@ const MODELS = MODEL_REGISTRY.filter((m) => m.popular || m.recommended).map((m) 
 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [modelIdx, setModelIdx] = useState(0);
 
   useEffect(() => {
@@ -90,7 +91,7 @@ export default function LandingPage() {
   return (
     <div className={styles.page}>
       {/* ── Navbar ── */}
-      <nav className={`${styles.nav} ${scrolled ? styles.navScrolled : ""}`}>
+      <nav className={`${styles.nav} ${scrolled || mobileNavOpen ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
           <div className={styles.navLogo}>
             <FikraLogo size={28} showText />
@@ -104,7 +105,32 @@ export default function LandingPage() {
             <Link href="/auth/signin" className="btn btn-ghost btn-sm">Sign In</Link>
             <Link href="/auth/signup" className="btn btn-primary btn-sm">Get Started Free</Link>
           </div>
+          <button 
+            className={styles.mobileNavToggle}
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            aria-label="Toggle navigation menu"
+          >
+            {mobileNavOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+            )}
+          </button>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileNavOpen && (
+          <div className={styles.mobileNavMenu}>
+            <a href="#features" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Features</a>
+            <a href="#how-it-works" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>How It Works</a>
+            <a href="#pricing" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
+            <div className={styles.mobileNavDivider} />
+            <div className={styles.mobileNavActions}>
+              <Link href="/auth/signin" className="btn btn-secondary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%" }}>Sign In</Link>
+              <Link href="/auth/signup" className="btn btn-primary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%" }}>Get Started Free</Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* ── Hero ── */}

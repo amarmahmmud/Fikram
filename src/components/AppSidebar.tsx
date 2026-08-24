@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
 
@@ -21,7 +21,6 @@ const NAV_BOTTOM = [
 
 export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const pathname = usePathname();
-  const router = useRouter();
   const supabase = createClient();
 
   const [userName, setUserName] = useState<string>("Loading...");
@@ -30,10 +29,17 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const [initials, setInitials] = useState<string>("--");
   const [isOpen, setIsOpen] = useState(false);
 
-  // Close sidebar on route change
+  // Lock body scroll when mobile sidebar is open
   useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     async function loadUserData() {
@@ -88,98 +94,116 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
 
   return (
     <>
-      {/* Mobile toggle button */}
+      {/* Mobile hamburger toggle button (visible on phones when sidebar is closed) */}
       <button 
-        className="mobile-sidebar-toggle"
-        onClick={() => setIsOpen(!isOpen)}
-        aria-label="Toggle Menu"
+        className={`mobile-sidebar-toggle ${isOpen ? "hidden" : ""}`}
+        onClick={() => setIsOpen(true)}
+        aria-label="Open menu"
+        aria-expanded={isOpen}
       >
-        {isOpen ? (
-           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        ) : (
-           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-        )}
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
       </button>
 
-      {/* Mobile overlay */}
-      {isOpen && (
-        <div className="mobile-sidebar-overlay" onClick={() => setIsOpen(false)} />
-      )}
+      {/* Mobile backdrop overlay */}
+      <div 
+        className={`mobile-sidebar-overlay ${isOpen ? "active" : ""}`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden={!isOpen}
+      />
 
-      <aside className={`sidebar ${isOpen ? "open" : ""}`}>
-      {/* Logo */}
-      <div className="sidebar-logo" style={{ padding: "0" }}>
-        <FikraLogo size={32} showText subtitle="Expert AI Platform" />
-      </div>
-
-      {/* Nav */}
-      <nav className="sidebar-nav">
-        <span className="sidebar-section-label">Workspace</span>
-
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`nav-item ${pathname === item.href ? "active" : ""}`}
-            style={item.highlight && pathname !== item.href ? {
-              background: "rgba(99,102,241,0.08)",
-              borderColor: "rgba(99,102,241,0.15)",
-              color: "var(--text-primary)",
-            } : {}}
+      {/* Sidebar drawer */}
+      <aside className={`sidebar ${isOpen ? "open" : ""}`} aria-label="Sidebar navigation">
+        {/* Header with Logo and dedicated Mobile Close button */}
+        <div className="sidebar-logo">
+          <Link href="/dashboard" onClick={() => setIsOpen(false)} style={{ display: "inline-flex", textDecoration: "none" }}>
+            <FikraLogo size={30} showText subtitle="Expert AI Platform" />
+          </Link>
+          <button 
+            className="sidebar-close-btn"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close menu"
           >
-            <span style={{ fontSize: "1rem" }}>{item.icon}</span>
-            {item.label}
-            {item.highlight && (
-              <span className="badge badge-indigo" style={{ marginLeft: "auto", fontSize: "0.625rem", padding: "2px 6px" }}>
-                New
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Navigation items */}
+        <nav className="sidebar-nav">
+          <span className="sidebar-section-label">Workspace</span>
+
+          {NAV.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setIsOpen(false)}
+              className={`nav-item ${pathname === item.href ? "active" : ""}`}
+              style={item.highlight && pathname !== item.href ? {
+                background: "rgba(99,102,241,0.08)",
+                borderColor: "rgba(99,102,241,0.15)",
+                color: "var(--text-primary)",
+              } : {}}
+            >
+              <span style={{ fontSize: "1rem" }}>{item.icon}</span>
+              <span>{item.label}</span>
+              {item.highlight && (
+                <span className="badge badge-indigo" style={{ marginLeft: "auto", fontSize: "0.625rem", padding: "2px 6px" }}>
+                  New
+                </span>
+              )}
+            </Link>
+          ))}
+
+          <span className="sidebar-section-label" style={{ marginTop: 8 }}>Account</span>
+
+          {NAV_BOTTOM.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={() => setIsOpen(false)}
+              className={`nav-item ${pathname === item.href ? "active" : ""}`}
+            >
+              <span style={{ fontSize: "1rem" }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+
+        {/* Credit bar */}
+        <div style={{ padding: "0 12px 12px" }}>
+          <Link href="/credits" onClick={() => setIsOpen(false)} style={{ textDecoration: "none", display: "block" }}>
+            <div className="credit-bar">
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
+              <div className="credit-bar-track">
+                <div className="credit-bar-fill" style={{ width: `${Math.min(100, Math.max(0, credits))}%` }} />
+              </div>
+              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
+                {credits}
               </span>
-            )}
-          </Link>
-        ))}
-
-        <span className="sidebar-section-label" style={{ marginTop: 8 }}>Account</span>
-
-        {NAV_BOTTOM.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`nav-item ${pathname === item.href ? "active" : ""}`}
-          >
-            <span style={{ fontSize: "1rem" }}>{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-
-      {/* Credit bar */}
-      <div style={{ padding: "0 12px 12px" }}>
-        <Link href="/credits" style={{ textDecoration: "none" }}>
-          <div className="credit-bar">
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
-            <div className="credit-bar-track">
-              <div className="credit-bar-fill" style={{ width: `${Math.min(100, Math.max(0, credits))}%` }} />
             </div>
-            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
-              {credits}
-            </span>
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
 
-      {/* User */}
-      <div className="sidebar-footer">
-        <Link href="/settings" style={{ textDecoration: "none", color: "inherit", display: "block" }}>
-          <div className="user-card" title="Click to view Settings">
-            <div className="user-avatar">{initials}</div>
-            <div className="user-info">
-              <div className="user-name">{userName}</div>
-              <div className="user-email">{userEmail || "View settings"}</div>
+        {/* User footer */}
+        <div className="sidebar-footer">
+          <Link href="/settings" onClick={() => setIsOpen(false)} style={{ textDecoration: "none", color: "inherit", display: "block" }}>
+            <div className="user-card" title="Click to view Settings">
+              <div className="user-avatar">{initials}</div>
+              <div className="user-info">
+                <div className="user-name">{userName}</div>
+                <div className="user-email">{userEmail || "View settings"}</div>
+              </div>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>⚙</span>
             </div>
-            <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>⚙</span>
-          </div>
-        </Link>
-      </div>
-    </aside>
+          </Link>
+        </div>
+      </aside>
     </>
   );
 }
