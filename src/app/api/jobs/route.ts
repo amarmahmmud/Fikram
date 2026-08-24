@@ -82,19 +82,21 @@ export async function POST(req: Request) {
         started_at:   new Date().toISOString(),
       }).eq("id", job.id);
     } else {
-      // No dataset or Modal credentials configured — mark as running for testing
-      console.warn("Modal credentials not set or no dataset — marking job as running without training");
+      // No dataset or Modal credentials configured
+      console.warn("Modal credentials not set or no dataset — marking job as failed");
       await supabase.from("jobs").update({
-        status: "running",
-        started_at: new Date().toISOString(),
+        status: "failed",
+        logs: "Cannot start training: Missing dataset URL or Modal training endpoint.",
+        finished_at: new Date().toISOString(),
       }).eq("id", job.id);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Modal training trigger error:", err);
-    // Don't fail the whole request — job is saved, mark it running
+    // Honestly mark job as failed
     await supabase.from("jobs").update({
-      status: "running",
-      started_at: new Date().toISOString(),
+      status: "failed",
+      logs: `Failed to trigger GPU training worker: ${err.message || String(err)}`,
+      finished_at: new Date().toISOString(),
     }).eq("id", job.id);
   }
 

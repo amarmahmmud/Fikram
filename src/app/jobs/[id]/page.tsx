@@ -15,6 +15,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [job, setJob] = useState<Job | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchJob = useCallback(async () => {
     try {
@@ -55,6 +56,27 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     return () => clearInterval(interval);
   }, [job, fetchJob]);
 
+  async function handleMarkFailed() {
+    if (!job) return;
+    if (!confirm("Are you sure you want to mark this job as failed?")) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch("/api/jobs/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id, action: "fail" }),
+      });
+      const data = await res.json();
+      if (data.ok && data.job) {
+        setJob(data.job);
+      }
+    } catch (err) {
+      console.error("Failed to mark job as failed:", err);
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <>
@@ -90,7 +112,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const isCompleted = job.status === "completed";
   const isRunning   = job.status === "running";
   const isPending   = job.status === "pending";
-  const isFailed    = job.status === "failed";
+  const isFailed    = job.status === "failed" || job.status === "cancelled";
 
   const config = (job.config || {}) as Record<string, any>;
   const epochs = config.epochs ?? 1;
@@ -103,7 +125,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   let durationStr = "—";
   if (job.started_at) {
     const start = new Date(job.started_at).getTime();
-    const end = job.finished_at ? new Date(job.finished_at).getTime() : Date.now();
+    const end = job.finished_at || job.completed_at ? new Date(job.finished_at || job.completed_at || "").getTime() : Date.now();
     const diffSec = Math.max(0, Math.floor((end - start) / 1000));
     const mins = Math.floor(diffSec / 60);
     const secs = diffSec % 60;
@@ -135,7 +157,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     logs.push({ type: "success", text: `[Storage] LoRA adapter weights uploaded to R2 prefix: ${job.result_url || "adapters/" + job.id} ✓` });
     logs.push({ type: "success", text: `[Complete] Job finished successfully in ${durationStr} ✓` });
   } else if (isFailed) {
-    logs.push({ type: "error", text: "[Error] Training execution failed or was interrupted." });
+    logs.push({ type: "error", text: "[Error] Training execution failed or was terminated." });
+    if (job.logs) {
+      logs.push({ type: "error", text: `[Reason] ${job.logs.trim()}` });
+    }
   }
 
   return (
@@ -159,19 +184,23 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <p className={styles.jobMeta}>
               Job <span className="font-mono">#{job.id.substring(0, 8)}</span>
               &nbsp;·&nbsp;Created {new Date(job.created_at).toLocaleString()}
-              {job.finished_at && <>&nbsp;·&nbsp;Completed {new Date(job.finished_at).toLocaleString()}</>}
+              {(job.finished_at || job.completed_at) && (
+                <>&nbsp;·&nbsp;Finished {new Date(job.finished_at || job.completed_at || "").toLocaleString()}</>
+              )}
             </p>
           </div>
           <div className={styles.headerActions}>
-            <Link 
-              href={`/playground/${job.id}`} 
-              className={`btn btn-sm ${isCompleted ? "btn-primary" : "btn-secondary"}`}
-            >
-              {isCompleted ? "▷ Test in Playground" : "⏳ Open Playground"}
-            </Link>
+            {isCompleted && (
+              <Link 
+                href={`/playground/${job.id}`} 
+                className="btn btn-sm btn-primary"
+              >
+                ▷ Test in Playground
+              </Link>
+            )}
             {job.dataset_url && (
               <a href={job.dataset_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
-                ↗ View Dataset
+                View Dataset
               </a>
             )}
           </div>
@@ -184,7 +213,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="card">
               <div className={styles.cardHead}>
                 <span className={styles.cardTitle}>Training Pipeline Status</span>
-                <span className="font-mono" style={{ fontSize: "0.8125rem", color: isCompleted ? "var(--success)" : isRunning ? "var(--warning)" : "var(--text-muted)" }}>
+                <span className="font-mono" style={{ fontSize: "0.8125rem", color: isCompleted ? "var(--success)" : isRunning ? "var(--warning)" : isFailed ? "var(--error)" : "var(--text-muted)" }}>
                   {isCompleted ? "100% (Completed)" : isRunning ? "Training on Modal GPU..." : isFailed ? "Failed" : "Queued"}
                 </span>
               </div>
@@ -213,7 +242,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: 8, fontFamily: "var(--font-mono)" }}>
                   pipeline_events.log
                 </span>
-                <span className={`badge ${isCompleted ? "badge-success" : isRunning ? "badge-warning" : "badge-default"}`} style={{ marginLeft: "auto", fontSize: "0.625rem" }}>
+                <span className={`badge ${isCompleted ? "badge-success" : isRunning ? "badge-warning" : isFailed ? "badge-error" : "badge-default"}`} style={{ marginLeft: "auto", fontSize: "0.625rem" }}>
                   ● {job.status.toUpperCase()}
                 </span>
               </div>
@@ -244,7 +273,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 ["Batch Size", batchSize],
                 ["Dataset File", datasetFileName],
                 ["Duration", durationStr],
-                ["Credits Deducted", `${job.credits_used || 28} credits`],
+                ["Credits", `${job.credits_used || 28} credits`],
               ].map(([label, value]) => (
                 <div key={String(label)} className={styles.configRow}>
                   <span className={styles.configLabel}>{label}</span>
@@ -259,19 +288,34 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="card">
               <span className={styles.cardTitle} style={{ display: "block", marginBottom: 16 }}>Actions</span>
               <div className={styles.actionsList}>
-                <Link 
-                  href={`/playground/${job.id}`} 
-                  className={`btn ${isCompleted ? "btn-primary" : "btn-secondary"} w-full`} 
-                  style={{ textAlign: "center" }}
-                >
-                  ▷ {isCompleted ? "Test in Playground" : "Open Playground"}
-                </Link>
+                {isCompleted && (
+                  <Link 
+                    href={`/playground/${job.id}`} 
+                    className="btn btn-primary w-full" 
+                    style={{ textAlign: "center" }}
+                  >
+                    ▷ Test in Playground
+                  </Link>
+                )}
+
+                {(isRunning || isPending) && (
+                  <button
+                    className="btn btn-secondary w-full"
+                    onClick={handleMarkFailed}
+                    disabled={actionLoading}
+                    style={{ color: "var(--error)", borderColor: "rgba(239, 68, 68, 0.3)" }}
+                  >
+                    {actionLoading ? "Updating..." : "Mark as Failed"}
+                  </button>
+                )}
+
                 {job.result_url && (
                   <div className={styles.configRow} style={{ padding: "8px 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     <span>LoRA Prefix:</span>
                     <span className="font-mono" style={{ color: "var(--accent)" }}>{job.result_url}</span>
                   </div>
                 )}
+
                 <Link href="/new-job" className="btn btn-ghost w-full" style={{ color: "var(--text-muted)", textAlign: "center" }}>
                   Fine-Tune Another Model
                 </Link>

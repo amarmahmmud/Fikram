@@ -1,6 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 
@@ -14,19 +17,63 @@ const STATUS_MAP: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-export default function JobsClient({ jobs }: { jobs: Job[] }) {
+export default function JobsClient({ jobs: initialJobs }: { jobs: Job[] }) {
+  const router = useRouter();
+  const supabase = createClient();
+  const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [syncing, setSyncing] = useState(false);
+
+  // Background sync for all running/pending jobs
+  async function syncAllJobs() {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/jobs/sync");
+      const json = await res.json();
+      if (json.ok) {
+        // Fetch fresh list from Supabase
+        const { data } = await supabase
+          .from("jobs")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (data) setJobs(data);
+      }
+    } catch (err) {
+      console.error("Failed to sync jobs:", err);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  useEffect(() => {
+    // Run sync on load if there are running or pending jobs
+    const hasActive = initialJobs.some((j) => j.status === "running" || j.status === "pending");
+    if (hasActive) {
+      syncAllJobs();
+    }
+  }, []);
+
   const counts = {
     total:     jobs.length,
     running:   jobs.filter((j) => j.status === "running").length,
     completed: jobs.filter((j) => j.status === "completed").length,
-    failed:    jobs.filter((j) => j.status === "failed").length,
+    failed:    jobs.filter((j) => j.status === "failed" || j.status === "cancelled").length,
   };
 
   return (
     <>
       <div className="topbar">
         <span className="topbar-title">Fine-Tuning Jobs</span>
-        <Link href="/new-job" className="btn btn-primary btn-sm">New Job</Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button 
+            className="btn btn-ghost btn-sm" 
+            onClick={syncAllJobs} 
+            disabled={syncing}
+            title="Refresh and sync job statuses with GPU and storage"
+          >
+            {syncing ? "Syncing..." : "Sync Status"}
+          </button>
+          <Link href="/new-job" className="btn btn-primary btn-sm">New Job</Link>
+        </div>
       </div>
 
       <div className="page-content">
@@ -48,7 +95,6 @@ export default function JobsClient({ jobs }: { jobs: Job[] }) {
 
         {jobs.length === 0 ? (
           <div style={{ textAlign: "center", padding: "80px 24px" }}>
-
             <h3 style={{ marginBottom: 8 }}>No jobs yet</h3>
             <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first fine-tuning job to get started.</p>
             <Link href="/new-job" className="btn btn-primary">New Fine-Tune</Link>

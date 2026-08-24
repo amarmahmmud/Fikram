@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -17,15 +18,36 @@ const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-export default function DashboardClient({ profile, jobs }: { profile: Profile | null; jobs: Job[] }) {
+export default function DashboardClient({ profile, jobs: initialJobs }: { profile: Profile | null; jobs: Job[] }) {
   const router = useRouter();
   const supabase = createClient();
+  const [jobs, setJobs] = useState<Job[]>(initialJobs);
 
   const credits = profile?.credits_balance ?? 0;
   const name = profile?.full_name ?? profile?.email?.split("@")[0] ?? "there";
   const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  // Auto-sync jobs on load to ensure honest status
+  useEffect(() => {
+    const hasActive = initialJobs.some((j: Job) => j.status === "running" || j.status === "pending");
+    if (hasActive) {
+      fetch("/api/jobs/sync")
+        .then((res) => res.json())
+        .then(async (json) => {
+          if (json.ok) {
+            const { data } = await supabase
+              .from("jobs")
+              .select("*")
+              .order("created_at", { ascending: false })
+              .limit(5);
+            if (data) setJobs(data);
+          }
+        })
+        .catch((err) => console.error("Dashboard sync error:", err));
+    }
+  }, [initialJobs, supabase]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();
@@ -34,8 +56,8 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
   }
 
   const totalJobs     = jobs.length;
-  const completedJobs = jobs.filter((j) => j.status === "completed").length;
-  const creditsUsed   = jobs.reduce((a, j) => a + j.credits_used, 0);
+  const completedJobs = jobs.filter((j: Job) => j.status === "completed").length;
+  const creditsUsed   = jobs.reduce((a: number, j: Job) => a + j.credits_used, 0);
 
   return (
     <>
@@ -140,7 +162,7 @@ export default function DashboardClient({ profile, jobs }: { profile: Profile | 
             </div>
           ) : (
             <div className={styles.jobsList}>
-              {jobs.map((job) => {
+              {jobs.map((job: Job) => {
                 const s = STATUS_BADGE[job.status] ?? STATUS_BADGE.pending;
                 return (
                   <Link key={job.id} href={`/jobs/${job.id}`} className={styles.jobRow}>
