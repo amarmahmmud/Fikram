@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, use } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
+import { PublishModal } from "@/components/PublishModal";
 
 interface Message {
   role: "user" | "model";
@@ -20,6 +21,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Load expert info
@@ -148,7 +150,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             <div className={styles.expertTag}>Smart Assistant · RAG</div>
           </div>
         </div>
-        <div className={styles.headerBadge}>
+        <div className={styles.headerBadge} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setPublishModalOpen(true)}
+            style={{ gap: 6 }}
+          >
+            <span>🌐</span>
+            {expert.is_published ? "Published (Share)" : "Publish & Share"}
+          </button>
           <span className="badge badge-success">
             <span className="status-dot completed" />
             Online
@@ -211,6 +221,23 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           ↑
         </button>
       </div>
+
+      {expert && (
+        <PublishModal
+          isOpen={publishModalOpen}
+          onClose={() => setPublishModalOpen(false)}
+          type="expert"
+          id={expert.id}
+          initialTitle={expert.name}
+          initialDescription={expert.description || ""}
+          initialPublished={Boolean(expert.is_published)}
+          onPublishSuccess={(isPub, updatedData) => {
+            if (updatedData) {
+              setExpert(updatedData);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

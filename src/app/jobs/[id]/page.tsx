@@ -5,6 +5,7 @@ import { useState, useEffect, use, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
+import { PublishModal } from "@/components/PublishModal";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -16,6 +17,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
 
   const fetchJob = useCallback(async () => {
     try {
@@ -191,12 +193,22 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
           <div className={styles.headerActions}>
             {isCompleted && (
-              <Link 
-                href={`/playground/${job.id}`} 
-                className="btn btn-sm btn-primary"
-              >
-                ▷ Test in Playground
-              </Link>
+              <>
+                <button
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => setPublishModalOpen(true)}
+                  style={{ gap: 6 }}
+                >
+                  <span>🌐</span>
+                  {(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published) ? "Published (Share)" : "Publish & Share"}
+                </button>
+                <Link 
+                  href={`/playground/${job.id}`} 
+                  className="btn btn-sm btn-primary"
+                >
+                  ▷ Test in Playground
+                </Link>
+              </>
             )}
             {job.dataset_url && (
               <a href={job.dataset_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
@@ -324,6 +336,26 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
       </div>
+
+      {job && (
+        <PublishModal
+          isOpen={publishModalOpen}
+          onClose={() => setPublishModalOpen(false)}
+          type="job"
+          id={job.id}
+          initialTitle={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).public_title as string) || job.name}
+          initialDescription={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).public_description as string) || ""}
+          initialCategory={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).category as string) || "General"}
+          initialPublished={Boolean(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published)}
+          onPublishSuccess={(isPub, updatedData) => {
+            if (updatedData) {
+              setJob(updatedData as Job);
+            } else {
+              fetchJob();
+            }
+          }}
+        />
+      )}
     </>
   );
 }

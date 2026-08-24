@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { MODELS } from "@/lib/models";
+import { PublishModal } from "@/components/PublishModal";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 interface Message { role: "user" | "model"; content: string; ts: string; }
@@ -85,6 +86,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
   const [temperature, setTemperature] = useState(0.7);
   const [maxNewTokens, setMaxNewTokens] = useState(512);
   const [detectedFamily, setDetectedFamily] = useState<string | null>(null);
+  const [publishModalOpen, setPublishModalOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -195,10 +197,22 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
         <span className="topbar-title" style={{ flex: 1, textAlign: "center" }}>
           Playground — {job ? job.name : "Model Tester"}
         </span>
-        <span className={`badge ${isCompleted ? "badge-success" : "badge-warning"}`}>
-          <span className={`status-dot ${job?.status || "pending"}`} />
-          {job ? job.status.toUpperCase() : "LOADING"}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {isCompleted && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setPublishModalOpen(true)}
+              style={{ gap: 6 }}
+            >
+              <span>🌐</span>
+              {(typeof job?.config === "object" && job?.config !== null && (job.config as Record<string, unknown>).published) ? "Published" : "Publish & Share"}
+            </button>
+          )}
+          <span className={`badge ${isCompleted ? "badge-success" : "badge-warning"}`}>
+            <span className={`status-dot ${job?.status || "pending"}`} />
+            {job ? job.status.toUpperCase() : "LOADING"}
+          </span>
+        </div>
       </div>
 
       <div className={styles.playgroundLayout}>
@@ -449,6 +463,24 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
       </div>
+
+      {job && (
+        <PublishModal
+          isOpen={publishModalOpen}
+          onClose={() => setPublishModalOpen(false)}
+          type="job"
+          id={job.id}
+          initialTitle={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).public_title as string) || job.name}
+          initialDescription={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).public_description as string) || ""}
+          initialCategory={(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).category as string) || "General"}
+          initialPublished={Boolean(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published)}
+          onPublishSuccess={(isPub, updatedData) => {
+            if (updatedData) {
+              setJob(updatedData as Job);
+            }
+          }}
+        />
+      )}
     </>
   );
 }

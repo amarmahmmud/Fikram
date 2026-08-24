@@ -5,7 +5,6 @@ export async function POST(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { jobId, messages, systemPrompt, temperature, maxNewTokens } = await req.json();
     if (!jobId || !messages || !Array.isArray(messages)) {
@@ -16,10 +15,17 @@ export async function POST(req: Request) {
       .from("jobs")
       .select("*")
       .eq("id", jobId)
-      .eq("user_id", user.id)
       .single();
 
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    // Check access: must be owner OR job must be published
+    const isOwner = user && job.user_id === user.id;
+    const isPublished = (typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published === true);
+
+    if (!isOwner && !isPublished) {
+      return NextResponse.json({ error: "Unauthorized access to this model" }, { status: 401 });
+    }
     if (job.status?.toLowerCase() !== "completed") {
       return NextResponse.json({ error: "Model is still training!" }, { status: 400 });
     }
