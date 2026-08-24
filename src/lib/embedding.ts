@@ -29,9 +29,11 @@ export async function embedText(text: string): Promise<number[]> {
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.batchEmbedContents(
-    texts.map((text) => ({ content: { role: "user", parts: [{ text }] } }))
-  );
+  const result = await model.batchEmbedContents({
+    requests: texts.map((text) => ({
+      content: { role: "user" as const, parts: [{ text }] },
+    })),
+  });
   return result.embeddings.map((e) => e.values);
 }
 
