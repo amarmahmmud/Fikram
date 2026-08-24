@@ -60,7 +60,7 @@ export function FikraLogo({
             <stop offset="0%" stopColor="#3B82F6" />
             <stop offset="100%" stopColor="#0EA5E9" />
           </linearGradient>
-          <linearGradient id="spark-grad" x1="20" y1="7" x2="28" y2="15" gradientUnits="userSpaceOnUse">
+          <linearGradient id="node-grad" x1="21" y1="8" x2="27" y2="14" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#FFFFFF" />
             <stop offset="100%" stopColor="#67E8F9" />
           </linearGradient>
@@ -82,11 +82,8 @@ export function FikraLogo({
         {/* Stem 2 (Right leg of A) */}
         <rect x="22" y="17" width="4" height="12" rx="2" fill="url(#stem2-grad)" />
 
-        {/* AI Spark (Apex of A / Idea connection) */}
-        <path
-          d="M24 7C24 9.2 25.8 11 28 11C25.8 11 24 12.8 24 15C24 12.8 22.2 11 20 11C22.2 11 24 9.2 24 7Z"
-          fill="url(#spark-grad)"
-        />
+        {/* Idea Node (Apex of A) */}
+        <circle cx="24" cy="11" r="2.5" fill="url(#node-grad)" />
       </svg>
 
       {showText && (
@@ -100,7 +97,7 @@ export function FikraLogo({
               lineHeight: 1.15,
             }}
           >
-            Fikra
+            Fikram
           </span>
           {subtitle && (
             <span

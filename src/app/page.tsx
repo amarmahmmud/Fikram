@@ -124,7 +124,7 @@ export default function LandingPage() {
           </h1>
 
           <p className={styles.heroSubline}>
-            Fikra is the platform where experts create AI assistants powered by their
+            Fikram is the platform where experts create AI assistants powered by their
             own knowledge. Upload your content, get an intelligent assistant in seconds —
             or train a fully custom model.
           </p>
@@ -229,7 +229,7 @@ export default function LandingPage() {
             <h2>Everything you need to<br />build your expert AI</h2>
             <p>
               From document to deployed assistant in seconds —
-              Fikra handles the complexity so you can focus on your expertise.
+              Fikram handles the complexity so you can focus on your expertise.
             </p>
           </div>
 
@@ -335,7 +335,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className={styles.footerBottom}>
-            <span>© 2026 Fikra. All rights reserved.</span>
+            <span>© 2026 Fikram. All rights reserved.</span>
             <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
               Built for experts, by experts.
             </span>

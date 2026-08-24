@@ -51,7 +51,7 @@ function SignInForm() {
 
         <div className={styles.authHead}>
           <h1 className={styles.authTitle}>Welcome back</h1>
-          <p className={styles.authSub}>Sign in to your Fikra account</p>
+          <p className={styles.authSub}>Sign in to your Fikram account</p>
         </div>
 
         <button id="google-signin-btn" className={styles.oauthBtn} type="button" onClick={handleGoogle}>

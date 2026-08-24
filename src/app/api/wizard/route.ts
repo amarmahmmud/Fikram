@@ -4,7 +4,7 @@ import { getModelCatalogPrompt, MODELS } from "@/lib/models";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
-const SYSTEM_PROMPT = `You are an expert AI fine-tuning assistant for the Fikra platform.
+const SYSTEM_PROMPT = `You are an expert AI fine-tuning assistant for the Fikram platform.
 Your job is to help users configure a fine-tuning job for a large language model.
 
 When a user describes their goal, you must:

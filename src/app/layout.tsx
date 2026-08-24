@@ -2,20 +2,20 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fikra — Turn Your Expertise into AI",
+  title: "Fikram — Turn Your Expertise into AI",
   description:
     "The platform where experts create AI assistants powered by their own knowledge. Upload your content, get an intelligent assistant in seconds — or train a fully custom model.",
   keywords: ["AI assistant", "expert AI", "RAG", "fine-tuning", "knowledge base", "LLM", "content creators"],
-  authors: [{ name: "Fikra" }],
+  authors: [{ name: "Fikram" }],
   openGraph: {
-    title: "Fikra — Turn Your Expertise into AI",
+    title: "Fikram — Turn Your Expertise into AI",
     description: "Create AI assistants from your own knowledge. Ready in seconds, no code required.",
     type: "website",
-    siteName: "Fikra",
+    siteName: "Fikram",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Fikra — Turn Your Expertise into AI",
+    title: "Fikram — Turn Your Expertise into AI",
     description: "Create AI assistants from your own knowledge. Ready in seconds.",
   },
 };

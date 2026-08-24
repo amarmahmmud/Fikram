@@ -329,7 +329,7 @@ export default function NewJobPage() {
                 <div className={styles.aiAvatarWrap}>
                   <div className="chat-avatar ai">AI</div>
                   <div>
-                    <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Fikra AI</div>
+                    <div style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>Fikram</div>
                     <div style={{ fontSize: "0.75rem", color: "var(--success)" }}>● Online</div>
                   </div>
                 </div>
