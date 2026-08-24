@@ -28,6 +28,12 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const [userEmail, setUserEmail] = useState<string>("");
   const [credits, setCredits] = useState<number>(initialCredits ?? 100);
   const [initials, setInitials] = useState<string>("--");
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Close sidebar on route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     async function loadUserData() {
@@ -81,7 +87,26 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   }, [supabase, initialCredits]);
 
   return (
-    <aside className="sidebar">
+    <>
+      {/* Mobile toggle button */}
+      <button 
+        className="mobile-sidebar-toggle"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-label="Toggle Menu"
+      >
+        {isOpen ? (
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        ) : (
+           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+        )}
+      </button>
+
+      {/* Mobile overlay */}
+      {isOpen && (
+        <div className="mobile-sidebar-overlay" onClick={() => setIsOpen(false)} />
+      )}
+
+      <aside className={`sidebar ${isOpen ? "open" : ""}`}>
       {/* Logo */}
       <div className="sidebar-logo" style={{ padding: "0" }}>
         <FikraLogo size={32} showText subtitle="Expert AI Platform" />
@@ -155,6 +180,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
         </Link>
       </div>
     </aside>
+    </>
   );
 }
 
