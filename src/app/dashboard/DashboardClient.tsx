@@ -70,8 +70,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
       <div className="topbar">
         <span className="topbar-title">Dashboard</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Link href="/experts/new" className="btn btn-primary btn-sm">New Assistant</Link>
-          <Link href="/new-job"     className="btn btn-secondary btn-sm">New Fine-Tune</Link>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>Sign Out</button>
         </div>
       </div>
@@ -91,7 +89,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               {jobs.length === 0 ? " Create your first AI assistant to get started." : ""}
             </p>
           </div>
-          <Link href="/credits" className="btn btn-secondary btn-sm">View Credits</Link>
         </div>
 
         {/* ── Create Your AI ── */}
@@ -111,9 +108,8 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </p>
               <ul className={styles.tierFeatures}>
                 <li>✓ Ready in 10-30 seconds</li>
-                <li>✓ Answers grounded in your actual text</li>
-                <li>✓ Source citations on every answer</li>
-                <li>✓ No GPU cost — free to set up</li>
+                <li>✓ Answers grounded in your text with citations</li>
+                <li>✓ Free to set up (no GPU cost)</li>
               </ul>
               <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
                 Create Assistant →
@@ -130,7 +126,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </p>
               <ul className={styles.tierFeatures}>
                 <li>✓ Learns your tone and style</li>
-                <li>✓ Unique model with your voice</li>
                 <li>✓ 10-30 min training time</li>
                 <li>✓ Costs credits (GPU training)</li>
               </ul>

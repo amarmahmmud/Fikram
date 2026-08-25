@@ -120,10 +120,6 @@ export default function ModelsPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">Explore & Model Browser</span>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <Link href="/experts/new" className="btn btn-secondary btn-sm">+ New Assistant</Link>
-          <Link href="/new-job" className="btn btn-primary btn-sm">Fine-Tune a Model</Link>
-        </div>
       </div>
 
       <div className="page-content">

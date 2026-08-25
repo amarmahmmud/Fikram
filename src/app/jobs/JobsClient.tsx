@@ -72,7 +72,7 @@ export default function JobsClient({ jobs: initialJobs }: { jobs: Job[] }) {
           >
             {syncing ? "Syncing..." : "Sync Status"}
           </button>
-          <Link href="/new-job" className="btn btn-primary btn-sm">New Job</Link>
+          <Link href="/new-job" className="btn btn-secondary btn-sm">+ New Job</Link>
         </div>
       </div>
 
