@@ -5,6 +5,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import { PublishModal } from "@/components/PublishModal";
+import { apiClient } from "@/lib/apiClient";
+import { Globe } from "lucide-react";
 
 interface Message {
   role: "user" | "model";
@@ -59,19 +61,13 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     setSending(true);
 
     try {
-      const res = await fetch(`/api/experts/${resolvedParams.id}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMsg,
-          history: messages
-            .filter((m) => m.role === "user" || m.role === "model")
-            .slice(-10) // last 10 messages for context
-            .map((m) => ({ role: m.role, content: m.content })),
-        }),
+      const data = await apiClient.post<any>(`/api/experts/${resolvedParams.id}/chat`, {
+        message: userMsg,
+        history: messages
+          .filter((m) => m.role === "user" || m.role === "model")
+          .slice(-10) // last 10 messages for context
+          .map((m) => ({ role: m.role, content: m.content })),
       });
-
-      const data = await res.json();
 
       if (data.ok) {
         setMessages((prev) => [
@@ -156,7 +152,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             onClick={() => setPublishModalOpen(true)}
             style={{ gap: 6 }}
           >
-            <span>🌐</span>
+            <Globe size={16} />
             {expert.is_published ? "Published (Share)" : "Publish & Share"}
           </button>
           <span className="badge badge-success">

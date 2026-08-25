@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
+import { apiClient } from "@/lib/apiClient";
+import { Globe } from "lucide-react";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -21,8 +23,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
   const fetchJob = useCallback(async () => {
     try {
-      const res = await fetch(`/api/jobs/sync?id=${resolvedParams.id}`);
-      const data = await res.json();
+      const data = await apiClient.get<any>(`/api/jobs/sync?id=${resolvedParams.id}`);
       if (data.ok && data.job) {
         setJob(data.job);
       } else {
@@ -63,12 +64,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     if (!confirm("Are you sure you want to mark this job as failed?")) return;
     setActionLoading(true);
     try {
-      const res = await fetch("/api/jobs/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.id, action: "fail" }),
-      });
-      const data = await res.json();
+      const data = await apiClient.post<any>("/api/jobs/sync", { jobId: job.id, action: "fail" });
       if (data.ok && data.job) {
         setJob(data.job);
       }
@@ -199,7 +195,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   onClick={() => setPublishModalOpen(true)}
                   style={{ gap: 6 }}
                 >
-                  <span>🌐</span>
+                  <Globe size={16} />
                   {(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published) ? "Published (Share)" : "Publish & Share"}
                 </button>
                 <Link 

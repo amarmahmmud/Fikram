@@ -7,6 +7,8 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { MODELS } from "@/lib/models";
 import { PublishModal } from "@/components/PublishModal";
+import { apiClient } from "@/lib/apiClient";
+import { Globe, Hourglass } from "lucide-react";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 interface Message { role: "user" | "model"; content: string; ts: string; }
@@ -92,8 +94,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
 
   const fetchJob = useCallback(async () => {
     try {
-      const res = await fetch(`/api/jobs/sync?id=${resolvedParams.id}`);
-      const resData = await res.json();
+      const resData = await apiClient.get<any>(`/api/jobs/sync?id=${resolvedParams.id}`);
       const jobData = resData.ok && resData.job ? resData.job : null;
 
       const data = jobData || (await supabase
@@ -153,18 +154,13 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
     setLoadingStatus("Generating response with your fine-tuned model...");
 
     try {
-      const res = await fetch("/api/playground", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jobId: resolvedParams.id,
-          messages: newMessages,
-          systemPrompt: sysPrompt,
-          temperature,
-          maxNewTokens,
-        }),
+      const data = await apiClient.post<any>("/api/playground", {
+        jobId: resolvedParams.id,
+        messages: newMessages,
+        systemPrompt: sysPrompt,
+        temperature,
+        maxNewTokens,
       });
-      const data = await res.json();
       if (data.ok && data.reply) {
         setMessages((prev) => [...prev, { role: "model", content: data.reply, ts: new Date().toLocaleTimeString() }]);
         if (data.detected_family && !detectedFamily) {
@@ -204,7 +200,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               onClick={() => setPublishModalOpen(true)}
               style={{ gap: 6 }}
             >
-              <span>🌐</span>
+              <Globe size={16} />
               {(typeof job?.config === "object" && job?.config !== null && (job.config as Record<string, unknown>).published) ? "Published" : "Publish & Share"}
             </button>
           )}
@@ -341,7 +337,7 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               fontSize: "0.8125rem",
               color: "var(--warning)"
             }}>
-              <span>⏳ <strong>Model is still training:</strong> The chat will automatically unlock as soon as training finishes on Modal.</span>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Hourglass size={16} /> <strong>Model is still training:</strong> The chat will automatically unlock as soon as training finishes on Modal.</span>
               <button onClick={fetchJob} className="btn btn-ghost btn-sm" style={{ color: "var(--warning)" }}>Check Status ↺</button>
             </div>
           )}

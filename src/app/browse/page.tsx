@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
+import { apiClient } from "@/lib/apiClient";
+import { Globe, MessageCircle, Heart } from "lucide-react";
 
 const CATEGORIES = ["All", "Coding", "Finance", "Healthcare", "Writing", "Legal", "Education", "General"];
 type SortOption = "newest" | "popular";
@@ -15,8 +17,7 @@ export default function BrowseModelsPage() {
   const [sortBy, setSortBy] = useState<SortOption>("popular");
 
   useEffect(() => {
-    fetch("/api/community")
-      .then((res) => res.json())
+    apiClient.get<any>("/api/community")
       .then((data) => {
         if (data.ok && data.models) {
           setModels(data.models);
@@ -52,7 +53,7 @@ export default function BrowseModelsPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.title}>
-            <span>🌐</span> Browse Models
+            <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models
           </h1>
           <p className={styles.subtitle}>
             Discover and try specialized AI assistants and fine-tuned models created by the community.
@@ -124,10 +125,10 @@ export default function BrowseModelsPage() {
               <div className={styles.cardFooter}>
                 <div className={styles.stats}>
                   <div className={styles.statItem} title="Total Chats">
-                    💬 {item.chatsCount >= 1000 ? (item.chatsCount / 1000).toFixed(1) + "k" : item.chatsCount}
+                    <MessageCircle size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> {item.chatsCount >= 1000 ? (item.chatsCount / 1000).toFixed(1) + "k" : item.chatsCount}
                   </div>
                   <div className={styles.statItem} title="Likes">
-                    ❤️ {item.likesCount}
+                    <Heart size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> {item.likesCount}
                   </div>
                 </div>
                 <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ padding: "6px 16px", borderRadius: "8px" }}>

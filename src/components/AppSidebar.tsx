@@ -5,19 +5,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
+import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings } from "lucide-react";
 
 const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: "⊞" },
-  { href: "/browse",    label: "Browse Models", icon: "🌐" },
-  { href: "/experts/new", label: "New Assistant", icon: "◆", highlight: true },
-  { href: "/new-job",   label: "Fine-Tune", icon: "◈" },
-  { href: "/jobs",      label: "Jobs", icon: "◈" },
-  { href: "/models",    label: "Model Registry", icon: "◉" },
+  { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+  { href: "/browse",    label: "Browse Models", icon: <Globe size={18} /> },
+  { href: "/experts/new", label: "New Assistant", icon: <Sparkles size={18} />, highlight: true },
+  { href: "/new-job",   label: "Fine-Tune", icon: <Wrench size={18} /> },
+  { href: "/jobs",      label: "Jobs", icon: <List size={18} /> },
+  { href: "/models",    label: "Model Registry", icon: <Layers size={18} /> },
 ];
 
 const NAV_BOTTOM = [
-  { href: "/credits",  label: "Credits", icon: "◈" },
-  { href: "/settings", label: "Settings", icon: "⚙" },
+  { href: "/credits",  label: "Credits", icon: <Coins size={18} /> },
+  { href: "/settings", label: "Settings", icon: <Settings size={18} /> },
 ];
 
 export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
@@ -151,7 +152,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
                 color: "var(--text-primary)",
               } : {}}
             >
-              <span style={{ fontSize: "1rem" }}>{item.icon}</span>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
               <span>{item.label}</span>
               {item.highlight && (
                 <span className="badge badge-indigo" style={{ marginLeft: "auto", fontSize: "0.625rem", padding: "2px 6px" }}>
@@ -170,7 +171,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
               onClick={() => setIsOpen(false)}
               className={`nav-item ${pathname === item.href ? "active" : ""}`}
             >
-              <span style={{ fontSize: "1rem" }}>{item.icon}</span>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
               <span>{item.label}</span>
             </Link>
           ))}
@@ -200,7 +201,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
                 <div className="user-name">{userName}</div>
                 <div className="user-email">{userEmail || "View settings"}</div>
               </div>
-              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>⚙</span>
+              <Settings size={16} color="var(--text-muted)" />
             </div>
           </Link>
         </div>

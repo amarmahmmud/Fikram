@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import styles from "./page.module.css";
 import { MODELS, MODEL_CATEGORIES } from "@/lib/models";
 import type { ModelCategory } from "@/lib/models";
+import { apiClient } from "@/lib/apiClient";
+import { Star, Package, Smile, Globe, MessageCircle, Heart, Download } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -62,8 +64,7 @@ export default function ModelsPage() {
 
   // Fetch community models
   useEffect(() => {
-    fetch("/api/community")
-      .then((r) => r.json())
+    apiClient.get<any>("/api/community")
       .then((data) => {
         if (data.ok && data.models) {
           setCommunityModels(data.models);
@@ -75,8 +76,7 @@ export default function ModelsPage() {
 
   // Fetch community models from HuggingFace
   useEffect(() => {
-    fetch("/api/huggingface-models")
-      .then((r) => r.json())
+    apiClient.get<any>("/api/huggingface-models")
       .then((data) => {
         if (data.ok) setHfModels(data.models);
       })
@@ -129,7 +129,7 @@ export default function ModelsPage() {
             className={`${styles.tab} ${mainTab === "community" ? styles.active : ""}`}
             onClick={() => setMainTab("community")}
           >
-            <span>⭐</span> Community AIs & Models
+            <Star size={16} style={{ marginRight: 4 }} /> Community AIs & Models
             <span className="badge badge-indigo" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>
               {communityModels.length}
             </span>
@@ -139,14 +139,14 @@ export default function ModelsPage() {
             className={`${styles.tab} ${mainTab === "verified" ? styles.active : ""}`}
             onClick={() => setMainTab("verified")}
           >
-            <span>📦</span> Base Foundation Models
+            <Package size={16} style={{ marginRight: 4 }} /> Base Foundation Models
           </button>
 
           <button
             className={`${styles.tab} ${mainTab === "huggingface" ? styles.active : ""}`}
             onClick={() => setMainTab("huggingface")}
           >
-            <span>🤗</span> HuggingFace Hub (500+)
+            <Smile size={16} style={{ marginRight: 4 }} /> HuggingFace Hub (500+)
           </button>
         </div>
 
@@ -200,7 +200,7 @@ export default function ModelsPage() {
           <div>
             <div style={{ margin: "16px 0 20px" }}>
               <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🌐</span> Public Expert Showcase
+                <Globe size={18} /> Public Expert Showcase
                 <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Live & Ready to Chat</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
@@ -249,8 +249,8 @@ export default function ModelsPage() {
                     <div className={styles.communityCardBottom}>
                       <div className={styles.communityMeta}>
                         <span className={styles.communityBase}>{item.baseModel}</span>
-                        <span className={styles.communityStats}>
-                          💬 {item.chatsCount.toLocaleString()} chats · ❤️ {item.likesCount}
+                        <span className={styles.communityStats} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                          <MessageCircle size={14} /> {item.chatsCount.toLocaleString()} chats · <Heart size={14} /> {item.likesCount}
                         </span>
                       </div>
                       <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ gap: 4 }}>
@@ -269,7 +269,7 @@ export default function ModelsPage() {
           <div>
             <div style={{ margin: "16px 0 20px" }}>
               <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>◆</span> Verified Base LLMs
+                <Package size={18} /> Verified Base LLMs
                 <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Ready for GPU Fine-Tuning</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
@@ -323,7 +323,7 @@ export default function ModelsPage() {
           <div>
             <div style={{ margin: "16px 0 20px" }}>
               <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                <span>🤗</span> HuggingFace Model Hub
+                <Smile size={18} /> HuggingFace Model Hub
                 <span className="badge badge-default" style={{ fontSize: "0.65rem" }}>Live Registry</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
@@ -349,12 +349,12 @@ export default function ModelsPage() {
                       {m.id}
                     </div>
 
-                    <div className={styles.modelTags}>
-                      <span className="badge badge-default" style={{ fontSize: "0.6875rem" }}>
-                        ⬇ {formatDownloads(m.downloads)}
+                    <div className={styles.modelTags} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span className="badge badge-default" style={{ fontSize: "0.6875rem", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Download size={12} /> {formatDownloads(m.downloads)}
                       </span>
-                      <span className="badge badge-default" style={{ fontSize: "0.6875rem" }}>
-                        ❤️ {m.likes}
+                      <span className="badge badge-default" style={{ fontSize: "0.6875rem", display: "flex", alignItems: "center", gap: 4 }}>
+                        <Heart size={12} /> {m.likes}
                       </span>
                     </div>
 

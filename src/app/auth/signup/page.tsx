@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
 import styles from "../auth.module.css";
+import { CheckCircle, Gift, AlertTriangle } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -48,7 +49,7 @@ export default function SignUpPage() {
       <div className={styles.authPage}>
         <div className={styles.authGlow} />
         <div className={styles.authCard} style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "3rem", marginBottom: 16 }}>✅</div>
+          <CheckCircle size={48} color="var(--success)" style={{ marginBottom: 16, display: 'inline-block' }} />
           <h2 style={{ marginBottom: 8 }}>Account Created!</h2>
           <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
             You&apos;ve received <strong style={{ color: "var(--success)" }}>100 free credits</strong>.
@@ -77,7 +78,7 @@ export default function SignUpPage() {
         </div>
 
         <div className={styles.promoBadge}>
-          <span className={styles.promoBadgeIcon}>🎁</span>
+          <span className={styles.promoBadgeIcon}><Gift size={20} /></span>
           <div>
             <div className={styles.promoBadgeTitle}>100 Free Credits on Signup</div>
             <div className={styles.promoBadgeSub}>Enough to fine-tune 2–3 real AI models</div>
@@ -100,7 +101,7 @@ export default function SignUpPage() {
           <div className={styles.dividerLine} />
         </div>
 
-        {error && <div className={styles.errorBox}><span>⚠</span> {error}</div>}
+        {error && <div className={styles.errorBox} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={16} /> {error}</div>}
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className="input-group">

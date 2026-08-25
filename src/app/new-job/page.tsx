@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
 import { MODELS } from "@/lib/models";
-
+import { apiClient } from "@/lib/apiClient";
 
 /* ── Types ── */
 type Step = 1 | 2 | 3 | 4;
@@ -83,16 +83,11 @@ export default function NewJobPage() {
     setChatMessages((prev) => [...prev, { role: "user", content: userMsg }]);
     setGoalText("");
     try {
-      const res = await fetch("/api/wizard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "user", content: userMsg },
-          ],
-        }),
+      const json = await apiClient.post<any>("/api/wizard", {
+        messages: [
+          { role: "user", content: userMsg },
+        ],
       });
-      const json = await res.json();
       if (json.ok && json.data?.type === "question") {
         setCurrentQuestion(json.data);
         setChatMessages((prev) => [...prev, { role: "ai", content: json.data.text }]);
@@ -120,14 +115,9 @@ export default function NewJobPage() {
     setCustomInput("");
     setAiLoading(true);
     try {
-      const res = await fetch("/api/wizard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role === "ai" ? "model" : "user", content: m.content })),
-        }),
+      const json = await apiClient.post<any>("/api/wizard", {
+        messages: newMessages.map((m) => ({ role: m.role === "ai" ? "model" : "user", content: m.content })),
       });
-      const json = await res.json();
       if (json.ok) {
         if (json.data?.type === "question") {
           setCurrentQuestion(json.data);
@@ -178,8 +168,7 @@ export default function NewJobPage() {
           if (file.name.toLowerCase().endsWith(".pdf")) {
             const formData = new FormData();
             formData.append("file", file);
-            const parseRes = await fetch("/api/parse-pdf", { method: "POST", body: formData });
-            const parseData = await parseRes.json();
+            const parseData = await apiClient.post<any>("/api/parse-pdf", formData);
             if (!parseData.text) throw new Error("Failed to parse PDF");
             rawText = parseData.text;
           } else {
@@ -187,12 +176,10 @@ export default function NewJobPage() {
           }
 
           setGenerationStatus("Synthesizing dataset with AI pipeline (this may take 30-60s for large documents)...");
-          const genRes = await fetch("/api/generate-dataset", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: rawText, goal: chatMessages[1]?.content || "" })
+          const genData = await apiClient.post<any>("/api/generate-dataset", {
+            text: rawText,
+            goal: chatMessages[1]?.content || ""
           });
-          const genData = await genRes.json();
           if (!genData.ok) throw new Error(genData.error || "Dataset generation failed");
 
           const blob = new Blob([genData.jsonl], { type: "application/jsonl" });
@@ -201,42 +188,31 @@ export default function NewJobPage() {
 
         setGenerationStatus("Uploading dataset...");
         // 1. Get presigned upload URL from our API
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: fileToUpload.name, contentType: fileToUpload.type }),
+        const uploadData = await apiClient.post<any>("/api/upload", {
+          filename: fileToUpload.name,
+          contentType: fileToUpload.type
         });
-        const uploadData = await uploadRes.json();
         
         if (!uploadData.ok) throw new Error(uploadData.error || "Failed to get upload URL");
 
         // 2. Upload directly to Cloudflare R2 securely from the browser
-        const putRes = await fetch(uploadData.uploadUrl, {
-          method: "PUT",
-          headers: { "Content-Type": fileToUpload.type || "application/octet-stream" },
-          body: fileToUpload,
+        await apiClient.put<any>(uploadData.uploadUrl, fileToUpload, {
+          headers: { "Content-Type": fileToUpload.type || "application/octet-stream" }
         });
-
-        if (!putRes.ok) throw new Error("Failed to upload file to storage");
 
         // 3. Save the secure GET URL for Replicate to download
         finalDatasetUrl = uploadData.downloadUrl;
       }
 
       setGenerationStatus("Queueing training job...");
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name:             jobName || "Untitled Job",
-          baseModel:        selectedModel,
-          method:           "lora",
-          config:           { epochs: config.epochs, learningRate: config.learningRate, batchSize: config.batchSize },
-          datasetUrl:       finalDatasetUrl,
-          estimatedCredits: config.estimatedCredits,
-        }),
+      const json = await apiClient.post<any>("/api/jobs", {
+        name:             jobName || "Untitled Job",
+        baseModel:        selectedModel,
+        method:           "lora",
+        config:           { epochs: config.epochs, learningRate: config.learningRate, batchSize: config.batchSize },
+        datasetUrl:       finalDatasetUrl,
+        estimatedCredits: config.estimatedCredits,
       });
-      const json = await res.json();
       if (json.ok) {
         setLaunchedJobId(json.jobId);
         setStep(4);

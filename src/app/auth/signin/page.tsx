@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
 import styles from "../auth.module.css";
+import { AlertTriangle } from "lucide-react";
 
 function SignInForm() {
   const router = useRouter();
@@ -70,7 +71,7 @@ function SignInForm() {
           <div className={styles.dividerLine} />
         </div>
 
-        {error && <div className={styles.errorBox}><span>⚠</span> {error}</div>}
+        {error && <div className={styles.errorBox} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><AlertTriangle size={16} /> {error}</div>}
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className="input-group">

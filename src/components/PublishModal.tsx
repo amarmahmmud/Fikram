@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import styles from "./PublishModal.module.css";
+import { apiClient } from "@/lib/apiClient";
+import { Globe, Lock } from "lucide-react";
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -79,21 +81,16 @@ export function PublishModal({
     setError("");
 
     try {
-      const res = await fetch("/api/publish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type,
-          id,
-          published: isPublished,
-          title: title.trim() || initialTitle,
-          description: description.trim(),
-          category,
-        }),
+      const data = await apiClient.post<any>("/api/publish", {
+        type,
+        id,
+        published: isPublished,
+        title: title.trim() || initialTitle,
+        description: description.trim(),
+        category,
       });
 
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
+      if (!data.ok) {
         throw new Error(data.error || "Failed to update publication status");
       }
 
@@ -114,7 +111,7 @@ export function PublishModal({
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.titleGroup}>
-            <div className={styles.iconWrap}>🌐</div>
+            <div className={styles.iconWrap}><Globe size={24} /></div>
             <div>
               <div className={styles.title}>Publish & Share to Public</div>
               <div className={styles.subtitle}>
@@ -142,14 +139,14 @@ export function PublishModal({
               className={`${styles.visOption} ${!isPublished ? styles.active : ""}`}
               onClick={() => setIsPublished(false)}
             >
-              🔒 Private (Draft)
+              <Lock size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'text-bottom' }} /> Private (Draft)
             </button>
             <button
               type="button"
               className={`${styles.visOption} ${isPublished ? `${styles.active} ${styles.activePublic}` : ""}`}
               onClick={() => setIsPublished(true)}
             >
-              🌐 Public (Published)
+              <Globe size={14} style={{ marginRight: 6, display: 'inline-block', verticalAlign: 'text-bottom' }} /> Public (Published)
             </button>
           </div>
 
@@ -244,7 +241,7 @@ export function PublishModal({
             onClick={handleSave}
             disabled={saving}
           >
-            {saving ? "Saving..." : isPublished ? "Save & Publish 🌐" : "Save as Private 🔒"}
+            {saving ? "Saving..." : isPublished ? <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Save & Publish <Globe size={14} /></span> : <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Save as Private <Lock size={14} /></span>}
           </button>
         </div>
       </div>

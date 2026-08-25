@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { apiClient } from "@/lib/apiClient";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 
@@ -27,8 +28,7 @@ export default function JobsClient({ jobs: initialJobs }: { jobs: Job[] }) {
   async function syncAllJobs() {
     setSyncing(true);
     try {
-      const res = await fetch("/api/jobs/sync");
-      const json = await res.json();
+      const json = await apiClient.get<any>("/api/jobs/sync");
       if (json.ok) {
         // Fetch fresh list from Supabase
         const { data } = await supabase
