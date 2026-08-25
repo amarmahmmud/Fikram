@@ -25,7 +25,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
   const credits = profile?.credits_balance ?? 0;
   const name = profile?.full_name ?? profile?.email?.split("@")[0] ?? "there";
-  const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
@@ -59,52 +58,49 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
   const completedJobs = jobs.filter((j: Job) => j.status === "completed").length;
   const creditsUsed   = jobs.reduce((a: number, j: Job) => a + j.credits_used, 0);
 
+  const STATS = [
+    { label: "Total Jobs",   value: String(totalJobs),     sub: "all time",      color: "var(--text-primary)" },
+    { label: "Completed",    value: String(completedJobs), sub: "jobs finished", color: "var(--success)" },
+    { label: "Credits Used", value: String(creditsUsed),   sub: "of 100 free",   color: "var(--text-secondary)" },
+    { label: "Credits Left", value: String(credits),       sub: "remaining",     color: credits < 20 ? "var(--warning)" : "var(--text-primary)" },
+  ];
+
   return (
     <>
       <div className="topbar">
         <span className="topbar-title">Dashboard</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Link href="/experts/new" className="btn btn-primary btn-sm">New Assistant</Link>
-          <Link href="/new-job" className="btn btn-secondary btn-sm">New Fine-Tune</Link>
+          <Link href="/new-job"     className="btn btn-secondary btn-sm">New Fine-Tune</Link>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>Sign Out</button>
         </div>
       </div>
 
       <div className="page-content">
-        {/* Welcome */}
+
+        {/* ── Welcome ── */}
         <div className={styles.welcomeRow}>
           <div>
             <h2 className={styles.welcomeTitle}>{greeting}, {name.split(" ")[0]}</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              You have <strong style={{ color: credits < 20 ? "var(--warning)" : "var(--success)" }}>{credits} credits</strong> remaining.
+              You have{" "}
+              <strong style={{ color: credits < 20 ? "var(--warning)" : "var(--success)" }}>
+                {credits} credits
+              </strong>{" "}
+              remaining.
               {jobs.length === 0 ? " Create your first AI assistant to get started." : ""}
             </p>
           </div>
           <Link href="/credits" className="btn btn-secondary btn-sm">View Credits</Link>
         </div>
 
-        {/* Stats */}
-        <div className={styles.statsRow}>
-          {[
-            { label: "Total Jobs",      value: String(totalJobs),     change: "all time",         up: true },
-            { label: "Credits Used",    value: String(creditsUsed),   change: `of 100 free`,      up: false },
-            { label: "Completed",       value: String(completedJobs), change: "jobs finished",    up: true },
-            { label: "Credits Left",    value: String(credits),       change: `${credits}% remaining`, up: true },
-          ].map((s) => (
-            <div key={s.label} className={`stat-card ${styles.statCard}`}>
-              <div className="stat-label">{s.label}</div>
-              <div className="stat-value">{s.value}</div>
-              <div className={`stat-change ${s.up ? "up" : ""}`}>→ {s.change}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Quick start — two-tier options */}
+        {/* ── Create Your AI ── */}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>Create Your AI</h3>
           </div>
           <div className={styles.tiersGrid}>
+
             {/* Smart Assistant — RAG */}
             <div className={`${styles.tierCard} ${styles.tierRecommended}`}>
               <div className={styles.tierBadge}>Recommended</div>
@@ -145,7 +141,20 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           </div>
         </div>
 
-        {/* Recent jobs */}
+        {/* ── Compact Stats Strip ── */}
+        <div className={styles.statsStrip}>
+          {STATS.map((s) => (
+            <div key={s.label} className={styles.statChip}>
+              <span className={styles.statChipValue} style={{ color: s.color }}>{s.value}</span>
+              <div className={styles.statChipMeta}>
+                <span className={styles.statChipLabel}>{s.label}</span>
+                <span className={styles.statChipSub}>{s.sub}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* ── Recent Jobs ── */}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>Recent Jobs</h3>
@@ -193,7 +202,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           )}
         </div>
 
-        {/* Model teaser */}
+        {/* ── Popular Base Models ── */}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>Popular Base Models</h3>
@@ -201,10 +210,10 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           </div>
           <div className={styles.modelsGrid}>
             {[
-              { name: "Llama 3.1 8B", task: "Chat / Instruction", size: "8B", credits: "20–40" },
-              { name: "Mistral 7B",   task: "General Purpose",    size: "7B", credits: "15–35" },
+              { name: "Llama 3.1 8B", task: "Chat / Instruction", size: "8B",   credits: "20–40" },
+              { name: "Mistral 7B",   task: "General Purpose",    size: "7B",   credits: "15–35" },
               { name: "Phi-3 Mini",   task: "Reasoning",          size: "3.8B", credits: "8–18" },
-              { name: "Gemma 2 9B",   task: "Chat / Instruction", size: "9B", credits: "25–50" },
+              { name: "Gemma 2 9B",   task: "Chat / Instruction", size: "9B",   credits: "25–50" },
             ].map((m) => (
               <div key={m.name} className={`card card-hover ${styles.modelCard}`}>
                 <div className={styles.modelCardHeader}>
@@ -218,6 +227,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
             ))}
           </div>
         </div>
+
       </div>
     </>
   );

@@ -65,7 +65,7 @@ const STEPS = [
 
 const STATS = [
   { value: "500+", label: "Supported Models" },
-  { value: "100", label: "Free Credits at Signup" },
+  { value: "100",  label: "Free Credits at Signup" },
   { value: "< 2min", label: "Avg Setup Time" },
   { value: "99.9%", label: "Platform Uptime" },
 ];
@@ -78,18 +78,19 @@ export default function LandingPage() {
   const [modelIdx, setModelIdx] = useState(0);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", onScroll);
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setModelIdx((i) => (i + 1) % MODELS.length), 2000);
+    const t = setInterval(() => setModelIdx((i) => (i + 1) % MODELS.length), 2200);
     return () => clearInterval(t);
   }, []);
 
   return (
     <div className={styles.page}>
+
       {/* ── Navbar ── */}
       <nav className={`${styles.nav} ${scrolled || mobileNavOpen ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
@@ -97,15 +98,15 @@ export default function LandingPage() {
             <FikraLogo size={28} showText />
           </div>
           <div className={styles.navLinks}>
-            <a href="#features" className={styles.navLink}>Features</a>
+            <a href="#features"    className={styles.navLink}>Features</a>
             <a href="#how-it-works" className={styles.navLink}>How It Works</a>
-            <a href="#pricing" className={styles.navLink}>Pricing</a>
+            <a href="#pricing"     className={styles.navLink}>Pricing</a>
           </div>
           <div className={styles.navActions}>
             <Link href="/auth/signin" className="btn btn-ghost btn-sm">Sign In</Link>
             <Link href="/auth/signup" className="btn btn-primary btn-sm">Get Started Free</Link>
           </div>
-          <button 
+          <button
             className={styles.mobileNavToggle}
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
             aria-label="Toggle navigation menu"
@@ -118,16 +119,16 @@ export default function LandingPage() {
           </button>
         </div>
 
-        {/* Mobile Dropdown Menu */}
+        {/* Mobile dropdown */}
         {mobileNavOpen && (
           <div className={styles.mobileNavMenu}>
-            <a href="#features" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Features</a>
+            <a href="#features"    className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Features</a>
             <a href="#how-it-works" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>How It Works</a>
-            <a href="#pricing" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
+            <a href="#pricing"     className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
             <div className={styles.mobileNavDivider} />
             <div className={styles.mobileNavActions}>
-              <Link href="/auth/signin" className="btn btn-secondary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%" }}>Sign In</Link>
-              <Link href="/auth/signup" className="btn btn-primary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%" }}>Get Started Free</Link>
+              <Link href="/auth/signin" className="btn btn-secondary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%", justifyContent: "center" }}>Sign In</Link>
+              <Link href="/auth/signup" className="btn btn-primary btn-sm"   onClick={() => setMobileNavOpen(false)} style={{ width: "100%", justifyContent: "center" }}>Get Started Free</Link>
             </div>
           </div>
         )}
@@ -135,9 +136,13 @@ export default function LandingPage() {
 
       {/* ── Hero ── */}
       <section className={styles.hero}>
-        <div className={styles.heroGlow} />
+        {/* Ambient orbs */}
+        <div className={styles.heroOrb1} />
+        <div className={styles.heroOrb2} />
+        <div className={styles.heroOrb3} />
         <div className={styles.heroGrid} />
 
+        {/* Copy side */}
         <div className={styles.heroContent}>
           <div className={styles.heroBadge}>
             <span className={styles.heroBadgeDot} />
@@ -157,7 +162,7 @@ export default function LandingPage() {
 
           <div className={styles.heroModelTicker}>
             <span className={styles.heroTickerLabel}>Powering experts on:</span>
-            <span className={styles.heroTickerModel}>{MODELS[modelIdx]}</span>
+            <span key={modelIdx} className={styles.heroTickerModel}>{MODELS[modelIdx]}</span>
           </div>
 
           <div className={styles.heroCta}>
@@ -174,7 +179,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Hero visual: fake terminal card */}
+        {/* Visual card */}
         <div className={styles.heroVisual}>
           <div className={styles.heroCard}>
             <div className={styles.heroCardHeader}>
@@ -261,11 +266,11 @@ export default function LandingPage() {
 
           <div className={styles.featuresGrid}>
             {FEATURES.map((f) => (
-              <div key={f.title} className={`card card-hover card-gradient ${styles.featureCard}`}>
-                <div className={styles.featureIcon}>{f.icon}</div>
-                <span className="badge badge-indigo" style={{ marginBottom: 12 }}>{f.badge}</span>
-                <h4>{f.title}</h4>
-                <p style={{ fontSize: "0.875rem", marginTop: 8 }}>{f.desc}</p>
+              <div key={f.title} className={styles.featureCard}>
+                <div className={styles.featureIconWrap}>{f.icon}</div>
+                <span className="badge badge-gradient" style={{ marginBottom: 14 }}>{f.badge}</span>
+                <h4 style={{ marginBottom: 10 }}>{f.title}</h4>
+                <p style={{ fontSize: "0.875rem" }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -287,8 +292,8 @@ export default function LandingPage() {
               <div key={s.num} className={styles.stepCard}>
                 <div className={styles.stepNum}>{s.num}</div>
                 <div className={styles.stepConnector} style={{ display: i < STEPS.length - 1 ? "block" : "none" }} />
-                <h3 style={{ fontSize: "1.125rem", marginBottom: 12, marginTop: 16 }}>{s.title}</h3>
-                <p style={{ fontSize: "0.875rem" }}>{s.desc}</p>
+                <h3 style={{ fontSize: "1.125rem", marginBottom: 14, marginTop: 18, fontFamily: "var(--font-display)" }}>{s.title}</h3>
+                <p style={{ fontSize: "0.9rem" }}>{s.desc}</p>
               </div>
             ))}
           </div>
@@ -301,8 +306,8 @@ export default function LandingPage() {
           <div className={styles.pricingCard}>
             <div className={styles.pricingGlow} />
             <span className="section-label">Pricing</span>
-            <h2 style={{ marginTop: 16 }}>Start free.<br />Scale when you&apos;re ready.</h2>
-            <p style={{ marginTop: 16, fontSize: "1rem" }}>
+            <h2 style={{ marginTop: 18 }}>Start free.<br />Scale when you&apos;re ready.</h2>
+            <p style={{ marginTop: 18, fontSize: "1.0625rem" }}>
               Get 100 free credits when you sign up — enough to fine-tune 2–3 real models.
               No credit card. No commitment.
             </p>
@@ -323,11 +328,11 @@ export default function LandingPage() {
               ))}
             </div>
 
-            <Link href="/auth/signup" className="btn btn-primary btn-lg" style={{ marginTop: 32 }}>
+            <Link href="/auth/signup" className="btn btn-primary btn-lg" style={{ marginTop: 40 }}>
               Create Free Account
             </Link>
 
-            <p style={{ marginTop: 16, fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+            <p style={{ marginTop: 18, fontSize: "0.8rem", color: "var(--text-muted)" }}>
               Paid plans with more credits coming soon. Early users get priority access.
             </p>
           </div>
@@ -342,16 +347,16 @@ export default function LandingPage() {
               <div className={styles.footerLogo}>
                 <FikraLogo size={32} showText />
               </div>
-              <p style={{ fontSize: "0.875rem", maxWidth: 280 }}>
+              <p className={styles.footerTagline}>
                 The platform where experts build AI assistants powered by their own knowledge.
               </p>
             </div>
             <div className={styles.footerLinks}>
               <div className={styles.footerCol}>
                 <div className={styles.footerColTitle}>Product</div>
-                <a href="#features" className={styles.footerLink}>Features</a>
+                <a href="#features"    className={styles.footerLink}>Features</a>
                 <a href="#how-it-works" className={styles.footerLink}>How It Works</a>
-                <a href="#pricing" className={styles.footerLink}>Pricing</a>
+                <a href="#pricing"     className={styles.footerLink}>Pricing</a>
               </div>
               <div className={styles.footerCol}>
                 <div className={styles.footerColTitle}>Account</div>
@@ -362,7 +367,7 @@ export default function LandingPage() {
           </div>
           <div className={styles.footerBottom}>
             <span>© 2026 Fikram. All rights reserved.</span>
-            <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+            <span style={{ color: "var(--text-disabled)", fontSize: "0.8125rem" }}>
               Built for experts, by experts.
             </span>
           </div>

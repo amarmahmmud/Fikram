@@ -6,9 +6,10 @@
   margin-bottom: 28px;
 }
 .welcomeTitle {
+  font-family: var(--font-display);
   font-size: 1.5rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
   margin-bottom: 4px;
 }
 
@@ -20,20 +21,89 @@
 }
 .statCard { padding: 20px 24px; }
 
+/* ── Compact stats strip (sits below tier cards) ── */
+.statsStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 28px;
+}
+
+.statChip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-card);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 10px;
+  transition: all 0.18s ease;
+}
+.statChip:hover {
+  background: var(--bg-elevated);
+  border-color: rgba(91, 110, 245, 0.18);
+}
+
+.statChipValue {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.statChipMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.statChipLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statChipSub {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .quickStart {
   background: var(--bg-card);
-  border: 1px solid rgba(99,102,241,0.2);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
   padding: 28px;
   margin-bottom: 32px;
   position: relative;
   overflow: hidden;
 }
+/* Accent top line instead of full-color wash */
+.quickStart::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 10%, rgba(91,110,245,0.6) 40%, rgba(79,70,229,0.5) 70%, transparent 90%);
+  pointer-events: none;
+}
 .quickStartGlow {
   position: absolute;
-  top: -60px; right: -60px;
-  width: 250px; height: 250px;
-  background: radial-gradient(circle, rgba(99,102,241,0.12), transparent 70%);
+  top: -80px; right: -80px;
+  width: 280px; height: 280px;
+  background: radial-gradient(circle, rgba(91,110,245,0.07), transparent 70%);
   pointer-events: none;
 }
 .quickStartContent {
@@ -47,12 +117,13 @@
   font-size: 2.5rem;
   flex-shrink: 0;
   width: 56px; height: 56px;
-  background: rgba(99,102,241,0.1);
-  border: 1px solid rgba(99,102,241,0.2);
+  background: rgba(91,110,245,0.10);
+  border: 1px solid rgba(91,110,245,0.20);
   border-radius: 14px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: none;
 }
 .quickStartText { flex: 1; }
 .quickStartText h3 { font-size: 1rem; margin-bottom: 4px; }
@@ -74,8 +145,10 @@
 
 .jobsList {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
   overflow: hidden;
 }
 .jobRow {
@@ -83,13 +156,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
   transition: var(--transition-base);
   cursor: pointer;
   text-decoration: none;
 }
 .jobRow:last-child { border-bottom: none; }
-.jobRow:hover { background: var(--bg-hover); }
+.jobRow:hover { background: var(--bg-elevated); }
 .jobLeft  { display: flex; flex-direction: column; gap: 4px; }
 .jobRight { display: flex; align-items: center; gap: 12px; }
 .jobName  { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
@@ -104,22 +177,42 @@
 
 .tierCard {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.10);
   border-radius: 16px;
   padding: 28px;
   position: relative;
-  transition: transform 0.2s, border-color 0.2s;
+  transition: transform 0.22s, border-color 0.22s, box-shadow 0.22s;
+  overflow: hidden;
 }
-
+/* Subtle top line instead of colored wash */
+.tierCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  pointer-events: none;
+}
 .tierCard:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: rgba(91,110,245,0.22);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.30);
 }
 
+/* Recommended card: accent 1px border + slightly lighter surface — NO background color wash */
 .tierRecommended {
-  border-color: rgba(99, 102, 241, 0.4);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.04), transparent);
+  border-color: rgba(91,110,245,0.35);
+  background: var(--bg-elevated);
+}
+/* Override the generic top line with the accent color for recommended */
+.tierRecommended::before {
+  background: linear-gradient(90deg, transparent, rgba(91,110,245,0.55), transparent);
+  opacity: 1;
 }
 
+/* Standardized badge shape — same padding/radius for both, only color differs */
 .tierBadge {
   position: absolute;
   top: 14px;
@@ -127,10 +220,11 @@
   font-size: 0.7rem;
   font-weight: 700;
   padding: 3px 10px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.08));
-  color: var(--accent-indigo);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-full);
+  background: rgba(91,110,245,0.10);
+  color: #A5B4FC;
+  border: 1px solid rgba(91,110,245,0.22);
+  letter-spacing: 0.02em;
 }
 
 .tierBadgePremium {
@@ -140,10 +234,11 @@
   font-size: 0.7rem;
   font-weight: 700;
   padding: 3px 10px;
-  border-radius: 8px;
-  background: rgba(245, 158, 11, 0.1);
-  color: hsl(38, 92%, 50%);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-full);
+  background: rgba(245, 158, 11, 0.09);
+  color: #FCD34D;
+  border: 1px solid rgba(245, 158, 11, 0.20);
+  letter-spacing: 0.02em;
 }
 
 .tierIcon {
@@ -187,10 +282,11 @@
 
 .emptyJobs {
   text-align: center;
-  padding: 40px 20px;
+  padding: 48px 20px;
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 14px;
   color: var(--text-muted);
 }
 
@@ -212,28 +308,35 @@
 
 .modelIcon {
   width: 36px; height: 36px;
-  background: var(--bg-elevated, var(--surface-2));
-  border: 1px solid var(--border);
+  background: rgba(91,110,245,0.10);
+  border: 1px solid rgba(91,110,245,0.18);
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
-  color: var(--text-muted);
+  color: #A5B4FC;
 }
 
 .modelName    { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
 .modelTask    { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
-.modelCredits { font-size: 0.75rem; color: var(--accent-indigo); font-weight: 600; font-family: var(--font-mono); }
+.modelCredits { font-size: 0.75rem; color: #A5B4FC; font-weight: 600; font-family: var(--font-mono); }
 
 @media (max-width: 1024px) {
   .statsRow    { grid-template-columns: repeat(2, 1fr); }
+  .statsStrip  { grid-template-columns: repeat(2, 1fr); }
   .modelsGrid  { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 640px) {
-  .statsRow   { grid-template-columns: 1fr; }
-  .modelsGrid { grid-template-columns: 1fr; }
-  .tiersGrid  { grid-template-columns: 1fr; }
-  .welcomeRow { flex-direction: column; }
+  .statsRow    { grid-template-columns: 1fr; }
+  .statsStrip  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .modelsGrid  { grid-template-columns: 1fr; }
+  .tiersGrid   { grid-template-columns: 1fr; }
+  .welcomeRow  { flex-direction: column; }
+  .statChip    { padding: 10px 12px; }
+  .statChipValue { font-size: 1.1rem; }
+}
+@media (max-width: 400px) {
+  .statsStrip  { grid-template-columns: 1fr 1fr; gap: 6px; }
 }
 

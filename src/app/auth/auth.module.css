@@ -1,13 +1,45 @@
-/* ── Auth page shared styles ── */
+/* ═══════════════════════════════════════
+   FIKRAM AUTH PAGES — v2
+   Warm Navy Glass aesthetic
+   ═══════════════════════════════════════ */
+
 .authPage {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-base);
-  padding: 24px;
+  padding: 28px 16px;
   position: relative;
   overflow: hidden;
+}
+
+/* Ambient orb 1 */
+.authPage::before {
+  content: '';
+  position: fixed;
+  top: -220px;
+  left: -10%;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.16) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+  animation: orb-float-1 20s ease-in-out infinite;
+}
+
+/* Ambient orb 2 */
+.authPage::after {
+  content: '';
+  position: fixed;
+  bottom: -200px;
+  right: -10%;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.1) 0%, transparent 65%);
+  pointer-events: none;
+  z-index: 0;
+  animation: orb-float-3 16s ease-in-out infinite;
 }
 
 .authGlow {
@@ -16,63 +48,91 @@
   left: 50%;
   transform: translateX(-50%);
   width: 700px; height: 500px;
-  background: radial-gradient(ellipse at center, rgba(99,102,241,0.12), transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(91,110,245,0.14), rgba(91,110,245,0.12) 50%, transparent 70%);
   pointer-events: none;
+  z-index: 0;
 }
 
 .authGrid {
   position: fixed;
   inset: 0;
   background-image:
-    linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
-  background-size: 64px 64px;
+    linear-gradient(rgba(91,110,245,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91,110,245,0.03) 1px, transparent 1px);
+  background-size: 72px 72px;
   pointer-events: none;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 30%, black 30%, transparent 100%);
+  z-index: 0;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 30%, black 20%, transparent 100%);
 }
 
+/* ── Auth Card ── */
 .authCard {
   width: 100%;
-  max-width: 420px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 40px;
+  max-width: 428px;
+  background: rgba(20, 23, 40, 0.78);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 44px 40px;
   position: relative;
   z-index: 1;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 24px 64px rgba(0,0,0,0.8);
-  animation: slide-up 0.3s ease;
+  box-shadow:
+    0 0 0 1px rgba(91,110,245,0.1),
+    0 28px 72px rgba(0,0,0,0.75),
+    0 0 60px rgba(91,110,245,0.1);
+  animation: slide-up 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: hidden;
 }
 
+/* Luminous top border */
+.authCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(91,110,245,0.65) 25%, rgba(91,110,245,0.12) 55%, rgba(91,110,245,0.10) 80%, transparent);
+  pointer-events: none;
+}
+
+/* ── Logo ── */
 .authLogo {
   display: flex;
   align-items: center;
   gap: 10px;
   text-decoration: none;
-  margin-bottom: 32px;
+  margin-bottom: 36px;
 }
 
-
+/* ── Heading ── */
 .authHead { margin-bottom: 28px; }
-.authTitle {
-  font-size: 1.5rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  margin-bottom: 6px;
-}
-.authSub { font-size: 0.875rem; color: var(--text-secondary); }
-.authSub strong { color: var(--success); }
 
-/* Google OAuth button */
+.authTitle {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.authSub {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+.authSub strong { color: #6EE7B7; }
+
+/* ── Google OAuth Button ── */
 .oauthBtn {
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 10px 16px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  padding: 11px 18px;
+  background: rgba(28, 32, 56, 0.7);
+  border: 1px solid rgba(255,255,255,0.09);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 0.875rem;
@@ -80,43 +140,58 @@
   font-family: var(--font-sans);
   cursor: pointer;
   transition: var(--transition-base);
-  margin-bottom: 20px;
+  margin-bottom: 22px;
+  backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+.oauthBtn::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+  transition: left 0.5s ease;
 }
 .oauthBtn:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-focus);
+  background: var(--bg-elevated);
+  border-color: rgba(91,110,245,0.3);
   transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
+.oauthBtn:hover::before { left: 150%; }
 
-/* Divider */
+/* ── Divider ── */
 .dividerRow {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
-.dividerLine { flex: 1; height: 1px; background: var(--border); }
+.dividerLine { flex: 1; height: 1px; background: rgba(255,255,255,0.06); }
 .dividerText  { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
 
-/* Error box */
+/* ── Error Box ── */
 .errorBox {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: var(--error-bg);
-  border: 1px solid rgba(239,68,68,0.2);
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.22);
   border-radius: var(--radius-md);
   font-size: 0.8125rem;
-  color: var(--error);
-  margin-bottom: 16px;
+  color: #FCA5A5;
+  margin-bottom: 18px;
+  line-height: 1.5;
 }
 
-/* Form */
+/* ── Form ── */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
 .forgotLink {
@@ -125,42 +200,53 @@
   text-decoration: none;
   transition: color 0.2s;
 }
-.forgotLink:hover { color: var(--text-primary); }
+.forgotLink:hover { color: #C4B5FD; }
 
-/* Promo badge (signup only) */
+/* ── Promo Badge (signup only) ── */
 .promoBadge {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(16,185,129,0.07);
-  border: 1px solid rgba(16,185,129,0.2);
+  gap: 14px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(16,185,129,0.07), rgba(91,110,245,0.10));
+  border: 1px solid rgba(16,185,129,0.22);
   border-radius: var(--radius-md);
-  margin-bottom: 24px;
+  margin-bottom: 26px;
 }
-.promoBadgeIcon    { font-size: 1.5rem; flex-shrink: 0; }
-.promoBadgeTitle   { font-size: 0.875rem; font-weight: 700; color: var(--success); }
-.promoBadgeSub     { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+.promoBadgeIcon  { font-size: 1.5rem; flex-shrink: 0; }
+.promoBadgeTitle { font-size: 0.875rem; font-weight: 700; color: #6EE7B7; }
+.promoBadgeSub   { font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
 
-/* Bottom links */
+/* ── Auth Switch / Bottom Links ── */
 .authSwitch {
-  margin-top: 20px;
+  margin-top: 24px;
   text-align: center;
   font-size: 0.8125rem;
   color: var(--text-muted);
 }
 .authSwitchLink {
-  color: var(--accent-indigo);
+  color: #C4B5FD;
   font-weight: 600;
   text-decoration: none;
   transition: color 0.2s;
 }
-.authSwitchLink:hover { color: var(--accent-blue); }
+.authSwitchLink:hover { color: #A78BFA; }
 
 .authTerms {
-  margin-top: 16px;
+  margin-top: 18px;
   text-align: center;
   font-size: 0.75rem;
   color: var(--text-muted);
-  line-height: 1.6;
+  line-height: 1.65;
 }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .authCard {
+    padding: 32px 24px;
+    border-radius: var(--radius-xl);
+    max-width: 100%;
+  }
+  .authTitle { font-size: 1.35rem; }
+}
+
