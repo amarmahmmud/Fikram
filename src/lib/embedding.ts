@@ -5,12 +5,14 @@
 // and Supabase pgvector for storage + similarity search.
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = "gemini-embedding-2";
 const EMBEDDING_DIMENSIONS = 768;
 
 /**
@@ -19,7 +21,10 @@ const EMBEDDING_DIMENSIONS = 768;
  */
 export async function embedText(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.embedContent(text);
+  const result = await model.embedContent({
+    content: { role: "user" as const, parts: [{ text }] },
+    outputDimensionality: EMBEDDING_DIMENSIONS,
+  });
   return result.embedding.values;
 }
 
@@ -32,6 +37,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const result = await model.batchEmbedContents({
     requests: texts.map((text) => ({
       content: { role: "user" as const, parts: [{ text }] },
+      outputDimensionality: EMBEDDING_DIMENSIONS,
     })),
   });
   return result.embeddings.map((e) => e.values);
@@ -224,42 +230,31 @@ IMPORTANT RULES:
 Sources:
 ${sourcesText}`;
 
-  // 3. Build message history for Gemini
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction: groundedSystemPrompt,
-  });
+  // 3. Build message history for Groq
+  const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: groundedSystemPrompt }
+  ];
 
-  const geminiHistory = chatHistory
-    .filter((m) => m.role === "user" || m.role === "model")
-    .map((m) => ({
-      role: (m.role === "user" ? "user" : "model") as "user" | "model",
-      parts: [{ text: m.content }],
-    }));
-
-  // Ensure alternating roles and starts with user
-  const cleanHistory: typeof geminiHistory = [];
-  for (const msg of geminiHistory) {
-    if (cleanHistory.length === 0 && msg.role !== "user") continue;
-    if (cleanHistory.length > 0 && cleanHistory[cleanHistory.length - 1].role === msg.role) {
-      cleanHistory[cleanHistory.length - 1].parts[0].text += "\n" + msg.parts[0].text;
-    } else {
-      cleanHistory.push(msg);
+  for (const msg of chatHistory) {
+    if (msg.role === "user" || msg.role === "model") {
+      groqHistory.push({
+        role: msg.role === "user" ? "user" : "assistant",
+        content: msg.content
+      });
     }
   }
 
   // Add the current query
-  cleanHistory.push({ role: "user", parts: [{ text: query }] });
+  groqHistory.push({ role: "user", content: query });
 
-  const result = await model.generateContent({
-    contents: cleanHistory,
-    generationConfig: {
-      temperature: 0.3,
-      maxOutputTokens: 2048,
-    },
+  const completion = await groq.chat.completions.create({
+    messages: groqHistory,
+    model: "openai/gpt-oss-120b",
+    temperature: 0.3,
+    max_completion_tokens: 2048,
   });
 
-  const reply = result.response.text()?.trim() ?? "I couldn't generate a response.";
+  const reply = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
 
   return {
     reply,
