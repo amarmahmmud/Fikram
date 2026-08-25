@@ -457,8 +457,8 @@ export default function ModelsPage() {
 
       {/* ── Edit Modal ── */}
       {editItem && (
-        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
-          <div className="modal-content" style={{ backgroundColor: "var(--card-bg)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 400, border: "1px solid var(--border)" }}>
+        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(6px)" }}>
+          <div className="modal-content" style={{ backgroundColor: "var(--bg)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 400, border: "1px solid var(--border)", boxShadow: "0 20px 40px rgba(0,0,0,0.6)" }}>
             <h3 style={{ marginBottom: 16 }}>Edit Model Details</h3>
             <div className="form-group">
               <label className="label" style={{ display: "block", marginBottom: 6, fontSize: "0.875rem" }}>Public Name</label>

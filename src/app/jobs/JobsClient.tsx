@@ -18,11 +18,14 @@ const STATUS_MAP: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-export default function JobsClient({ jobs: initialJobs }: { jobs: Job[] }) {
+type Expert = Database["public"]["Tables"]["experts"]["Row"];
+
+export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[], experts: Expert[] }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [syncing, setSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<"jobs" | "experts">("jobs");
 
   // Background sync for all running/pending jobs
   async function syncAllJobs() {
@@ -93,53 +96,113 @@ export default function JobsClient({ jobs: initialJobs }: { jobs: Job[] }) {
           ))}
         </div>
 
-        {jobs.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "80px 24px" }}>
-            <h3 style={{ marginBottom: 8 }}>No jobs yet</h3>
-            <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first fine-tuning job to get started.</p>
-            <Link href="/new-job" className="btn btn-primary">New Fine-Tune</Link>
-          </div>
+        <div className={styles.tabs} style={{ display: "flex", gap: 16, marginBottom: 24, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+          <button
+            className={`tab-btn ${activeTab === "jobs" ? "active" : ""}`}
+            style={{ padding: "8px 16px", background: "none", border: "none", borderBottom: activeTab === "jobs" ? "2px solid var(--primary)" : "2px solid transparent", color: activeTab === "jobs" ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer", fontWeight: activeTab === "jobs" ? 600 : 400 }}
+            onClick={() => setActiveTab("jobs")}
+          >
+            Fine-Tuning Jobs
+          </button>
+          <button
+            className={`tab-btn ${activeTab === "experts" ? "active" : ""}`}
+            style={{ padding: "8px 16px", background: "none", border: "none", borderBottom: activeTab === "experts" ? "2px solid var(--primary)" : "2px solid transparent", color: activeTab === "experts" ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer", fontWeight: activeTab === "experts" ? 600 : 400 }}
+            onClick={() => setActiveTab("experts")}
+          >
+            Smart Assistants (RAG)
+          </button>
+        </div>
+
+        {activeTab === "jobs" ? (
+          jobs.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "80px 24px" }}>
+              <h3 style={{ marginBottom: 8 }}>No jobs yet</h3>
+              <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first fine-tuning job to get started.</p>
+              <Link href="/new-job" className="btn btn-primary">New Fine-Tune</Link>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job Name</th>
+                    <th>Model</th>
+                    <th>Method</th>
+                    <th>Credits</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jobs.map((job) => {
+                    const s = STATUS_MAP[job.status] ?? STATUS_MAP.pending;
+                    return (
+                      <tr key={job.id}>
+                        <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{job.name}</td>
+                        <td><span className="font-mono" style={{ fontSize: "0.8125rem" }}>{job.base_model.split("/").pop()}</span></td>
+                        <td><span className="badge badge-indigo">{job.method.toUpperCase()}</span></td>
+                        <td className="font-mono">{job.credits_used > 0 ? `${job.credits_used}` : "—"}</td>
+                        <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                          {new Date(job.created_at).toLocaleDateString()}
+                        </td>
+                        <td>
+                          <span className={`badge ${s.cls}`}>
+                            <span className={`status-dot ${job.status}`} />
+                            {s.label}
+                          </span>
+                        </td>
+                        <td>
+                          <Link href={`/jobs/${job.id}`} className="btn btn-ghost btn-sm">View →</Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Job Name</th>
-                  <th>Model</th>
-                  <th>Method</th>
-                  <th>Credits</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job) => {
-                  const s = STATUS_MAP[job.status] ?? STATUS_MAP.pending;
-                  return (
-                    <tr key={job.id}>
-                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{job.name}</td>
-                      <td><span className="font-mono" style={{ fontSize: "0.8125rem" }}>{job.base_model.split("/").pop()}</span></td>
-                      <td><span className="badge badge-indigo">{job.method.toUpperCase()}</span></td>
-                      <td className="font-mono">{job.credits_used > 0 ? `${job.credits_used}` : "—"}</td>
-                      <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                        {new Date(job.created_at).toLocaleDateString()}
-                      </td>
+          experts.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "80px 24px" }}>
+              <h3 style={{ marginBottom: 8 }}>No Smart Assistants yet</h3>
+              <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first RAG Smart Assistant to get started.</p>
+              <Link href="/experts/new" className="btn btn-primary">New Assistant</Link>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Assistant Name</th>
+                    <th>Description</th>
+                    <th>Type</th>
+                    <th>Date Created</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {experts.map((exp) => (
+                    <tr key={exp.id}>
+                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{exp.name}</td>
                       <td>
-                        <span className={`badge ${s.cls}`}>
-                          <span className={`status-dot ${job.status}`} />
-                          {s.label}
+                        <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", display: "inline-block", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {exp.description || "Grounded smart assistant with verified knowledge base."}
                         </span>
                       </td>
+                      <td><span className="badge badge-indigo">RAG (Grounded)</span></td>
+                      <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                        {new Date(exp.created_at).toLocaleDateString()}
+                      </td>
                       <td>
-                        <Link href={`/jobs/${job.id}`} className="btn btn-ghost btn-sm">View →</Link>
+                        <Link href={`/experts/${exp.id}/chat`} className="btn btn-ghost btn-sm">Chat →</Link>
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
     </>

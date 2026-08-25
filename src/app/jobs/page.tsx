@@ -14,5 +14,11 @@ export default async function JobsPage() {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  return <JobsClient jobs={jobs ?? []} />;
+  const { data: experts } = await supabase
+    .from("experts")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+
+  return <JobsClient jobs={jobs ?? []} experts={experts ?? []} />;
 }
