@@ -10,7 +10,6 @@ export async function POST(
     const { id: expertId } = await params;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
     const { message, history } = body;
@@ -31,7 +30,7 @@ export async function POST(
     }
 
     // Access check: owner or published
-    if (expert.user_id !== user.id && !expert.is_published) {
+    if ((!user || expert.user_id !== user.id) && !expert.is_published) {
       return NextResponse.json({ error: "Expert not found" }, { status: 404 });
     }
 

@@ -87,7 +87,7 @@ function splitIntoSections(text: string): {
   // Headers that mark the start of a "secondary" (catch-all / minor) block,
   // even though they aren't numbered like the primary sections.
   const SECONDARY_HEADER_RE =
-    /^(additional notable advances|other science highlights|notes for|disclaimer)/i;
+    /^(?:\d+\.\s+)?(additional notable advances|other science highlights|notes for|disclaimer)/i;
   const PRIMARY_HEADER_RE = /^\d+\.\s+\S/;
 
   const sections: { title: string; tier: "primary" | "secondary"; body: string }[] = [];
@@ -106,17 +106,17 @@ function splitIntoSections(text: string): {
   for (const line of lines) {
     const trimmed = line.trim();
 
-    if (PRIMARY_HEADER_RE.test(trimmed)) {
-      flush();
-      currentTitle = trimmed;
-      currentTier = "primary";
-      continue;
-    }
-
     if (SECONDARY_HEADER_RE.test(trimmed)) {
       flush();
       currentTitle = trimmed;
       currentTier = "secondary";
+      continue;
+    }
+
+    if (PRIMARY_HEADER_RE.test(trimmed)) {
+      flush();
+      currentTitle = trimmed;
+      currentTier = "primary";
       continue;
     }
 
@@ -324,7 +324,29 @@ export async function retrieveChunks(
     throw new Error(`Retrieval failed: ${error.message}`);
   }
 
-  return (data || []).map((row: any) => ({
+  let rows = data || [];
+
+  if (rows.length > 0 && rows[0].section_tier === undefined) {
+    // The RPC might not return the new columns. Fallback to fetching them by ID.
+    const ids = rows.map((r: any) => r.id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: chunksData } = await supabase
+        .from("expert_chunks")
+        .select("id, section_title, section_tier")
+        .in("id", ids);
+
+      if (chunksData) {
+        const chunksMap = new Map(chunksData.map((c) => [c.id, c]));
+        rows = rows.map((r: any) => ({
+          ...r,
+          section_title: chunksMap.get(r.id)?.section_title,
+          section_tier: chunksMap.get(r.id)?.section_tier,
+        }));
+      }
+    }
+  }
+
+  return rows.map((row: any) => ({
     content: row.content,
     source_filename: row.source_filename,
     chunk_index: row.chunk_index,
