@@ -93,8 +93,11 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
         {/* ── Create Your AI ── */}
         <div className={styles.section}>
-          <div className={styles.sectionHeader}>
+          <div className={styles.sectionHeader} style={{ marginBottom: 20 }}>
             <h3 className={styles.sectionTitle}>Create Your AI</h3>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginTop: 4 }}>
+              Start free with a Smart Assistant — upgrade to a Custom AI Model once you&apos;ve built up your content library.
+            </p>
           </div>
           <div className={styles.tiersGrid}>
 
@@ -125,13 +128,21 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 Train a model that captures your unique voice and expertise. Best for established experts with lots of content.
               </p>
               <ul className={styles.tierFeatures}>
-                <li>✓ Learns your tone and style</li>
-                <li>✓ 10-30 min training time</li>
-                <li>✓ Costs credits (GPU training)</li>
+                <li>✓ Learns your unique tone and style</li>
+                <li>✓ Sounds authentically like you in every response</li>
+                <li>✓ Best for creators with an established content library</li>
               </ul>
-              <Link href="/new-job" className={`btn btn-secondary ${styles.tierBtn}`}>
+              <Link 
+                href="/new-job" 
+                className={`btn btn-secondary ${styles.tierBtn}`}
+                style={{ opacity: 0.85 }}
+                title="Available once your assistant has handled 50+ conversations or has 100+ pages of content"
+              >
                 Start Fine-Tuning →
               </Link>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 12, textAlign: "center" }}>
+                Takes 10-30 min · Uses credits
+              </p>
             </div>
           </div>
         </div>
