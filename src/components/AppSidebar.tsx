@@ -8,10 +8,11 @@ import { FikraLogo } from "@/components/FikraLogo";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: "⊞" },
+  { href: "/browse",    label: "Browse Models", icon: "🌐" },
   { href: "/experts/new", label: "New Assistant", icon: "◆", highlight: true },
   { href: "/new-job",   label: "Fine-Tune", icon: "◈" },
   { href: "/jobs",      label: "Jobs", icon: "◈" },
-  { href: "/models",    label: "Model Browser", icon: "◉" },
+  { href: "/models",    label: "Model Registry", icon: "◉" },
 ];
 
 const NAV_BOTTOM = [
