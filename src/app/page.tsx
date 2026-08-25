@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import styles from "./landing.module.css";
-import { MODELS as MODEL_REGISTRY } from "@/lib/models";
 import { FikraLogo } from "@/components/FikraLogo";
 
 const FEATURES = [
@@ -70,22 +69,14 @@ const STATS = [
   { value: "99.9%", label: "Platform Uptime" },
 ];
 
-const MODELS = MODEL_REGISTRY.filter((m) => m.popular || m.recommended).map((m) => m.name);
-
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [modelIdx, setModelIdx] = useState(0);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    const t = setInterval(() => setModelIdx((i) => (i + 1) % MODELS.length), 2200);
-    return () => clearInterval(t);
   }, []);
 
   return (
@@ -136,13 +127,10 @@ export default function LandingPage() {
 
       {/* ── Hero ── */}
       <section className={styles.hero}>
-        {/* Ambient orbs */}
+        {/* Subtle ambient glow */}
         <div className={styles.heroOrb1} />
-        <div className={styles.heroOrb2} />
-        <div className={styles.heroOrb3} />
-        <div className={styles.heroGrid} />
 
-        {/* Copy side */}
+        {/* Centered copy */}
         <div className={styles.heroContent}>
           <div className={styles.heroBadge}>
             <span className={styles.heroBadgeDot} />
@@ -160,11 +148,6 @@ export default function LandingPage() {
             or train a fully custom model.
           </p>
 
-          <div className={styles.heroModelTicker}>
-            <span className={styles.heroTickerLabel}>Powering experts on:</span>
-            <span key={modelIdx} className={styles.heroTickerModel}>{MODELS[modelIdx]}</span>
-          </div>
-
           <div className={styles.heroCta}>
             <Link href="/auth/signup" className="btn btn-primary btn-lg">
               Get Started Free
@@ -179,7 +162,7 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Visual card */}
+        {/* Full-width visual card below */}
         <div className={styles.heroVisual}>
           <div className={styles.heroCard}>
             <div className={styles.heroCardHeader}>
@@ -279,7 +262,6 @@ export default function LandingPage() {
 
       {/* ── How It Works ── */}
       <section id="how-it-works" className={`section ${styles.howSection}`}>
-        <div className={styles.howGlow} />
         <div className="container">
           <div className={styles.sectionHead}>
             <span className="section-label">How It Works</span>
@@ -288,12 +270,11 @@ export default function LandingPage() {
           </div>
 
           <div className={styles.stepsGrid}>
-            {STEPS.map((s, i) => (
+            {STEPS.map((s) => (
               <div key={s.num} className={styles.stepCard}>
                 <div className={styles.stepNum}>{s.num}</div>
-                <div className={styles.stepConnector} style={{ display: i < STEPS.length - 1 ? "block" : "none" }} />
-                <h3 style={{ fontSize: "1.125rem", marginBottom: 14, marginTop: 18, fontFamily: "var(--font-display)" }}>{s.title}</h3>
-                <p style={{ fontSize: "0.9rem" }}>{s.desc}</p>
+                <h3 style={{ fontSize: "1.25rem", marginBottom: 14, marginTop: 18, fontFamily: "var(--font-display)" }}>{s.title}</h3>
+                <p style={{ fontSize: "0.9375rem" }}>{s.desc}</p>
               </div>
             ))}
           </div>
