@@ -230,7 +230,7 @@ export async function ingestDocument(
 
   console.log(
     `[RAG] Chunked "${filename}" into ${chunks.length} section-aware pieces ` +
-    `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
+      `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
   );
 
   const embeddings = await embedTexts(chunks.map((c) => c.content));
@@ -282,7 +282,18 @@ export interface RetrievedChunk {
 function adaptiveTopK(query: string): number {
   const BROAD_QUERY_RE =
     /\b(summariz|summary|all|every|each|list|overview|entire|complete|full report)\b/i;
-  return BROAD_QUERY_RE.test(query) ? 12 : 5;
+
+  // Questions that assert a specific count ("two", "3", "the five", "how many")
+  // need MORE chunks, not fewer — the model can only catch a mismatched count
+  // if it actually sees every matching item, not just enough to fill the
+  // asserted number.
+  const COUNT_ASSERTION_RE =
+    /\b(how many|which (two|three|four|five|\d+)|name (two|three|four|five|\d+)|the (two|three|four|five|\d+))\b/i;
+
+  if (BROAD_QUERY_RE.test(query) || COUNT_ASSERTION_RE.test(query)) {
+    return 12;
+  }
+  return 5;
 }
 
 /**
@@ -359,16 +370,16 @@ export async function generateRAGResponse(
   const sourcesText =
     chunks.length > 0
       ? chunks
-        .map((c, i) => {
-          const tierLabel = c.section_tier
-            ? ` | tier: ${c.section_tier}`
-            : "";
-          const sectionLabel = c.section_title
-            ? ` | section: "${c.section_title}"`
-            : "";
-          return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
-        })
-        .join("\n\n")
+          .map((c, i) => {
+            const tierLabel = c.section_tier
+              ? ` | tier: ${c.section_tier}`
+              : "";
+            const sectionLabel = c.section_title
+              ? ` | section: "${c.section_title}"`
+              : "";
+            return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
+          })
+          .join("\n\n")
       : "No relevant sources found in the knowledge base.";
 
   const groundedSystemPrompt = `${systemPrompt}
@@ -380,11 +391,16 @@ IMPORTANT RULES:
 - Each source is labeled with its section title and tier ("primary" = a numbered
   major section of the report, "secondary" = an additional/minor mention, e.g.
   under a catch-all "Additional Notable Advances" heading). When asked to
-  identify "major" breakthroughs, prefer "primary" tier sources; don't
-  substitute "secondary" tier items unless explicitly asked for all items.
-- If the user's question assumes a count (e.g. "name two X") that doesn't
-  match what the sources actually show, answer using the source's true count
-  and note the discrepancy.
+  identify "major" breakthroughs, answer using ONLY "primary" tier sources.
+  If there are fewer or more primary-tier items than the question or a
+  requested count implies, say so explicitly (e.g. "the report names N
+  major breakthroughs, not five") rather than quietly filling the gap with
+  secondary-tier items.
+- If the user's question assumes a count (e.g. "name two X", "which two Y")
+  that doesn't match what the sources actually show, answer using the
+  source's true count and explicitly note the discrepancy before or after
+  the answer — do not silently truncate or pad your answer to match the
+  question's assumed number.
 - When possible, mention which source your answer comes from.
 - Be concise and direct.
 
