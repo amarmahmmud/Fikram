@@ -3,9 +3,22 @@
 // ─────────────────────────────────────────────
 // Uses Gemini text-embedding-004 (free, 768 dimensions) for embeddings
 // and Supabase pgvector for storage + similarity search.
+//
+// CHANGELOG (this version):
+// - Section-aware chunking: splits on the document's own numbered/heading
+//   structure BEFORE falling back to char-based splitting, so a chunk never
+//   silently straddles two different sections.
+// - Section metadata stored per chunk (section_title, section_tier) so the
+//   retriever/generator can tell a numbered "major" section apart from a
+//   bulleted "additional/minor" one, instead of relying on embedding
+//   similarity alone.
+// - Adaptive topK: broad/summarization-style queries ("summarize", "all",
+//   "list", "each", "every") pull more chunks than narrow factual queries.
+// - match_threshold left configurable per call.
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
+import { createClient } from "@/lib/supabase/server";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -17,7 +30,6 @@ const EMBEDDING_DIMENSIONS = 768;
 
 /**
  * Generate an embedding vector for a single text string.
- * Uses Gemini text-embedding-004 (768 dimensions, free tier).
  */
 export async function embedText(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
@@ -30,7 +42,6 @@ export async function embedText(text: string): Promise<number[]> {
 
 /**
  * Generate embeddings for multiple texts in batch.
- * Gemini supports batch embedding for efficiency.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
@@ -43,41 +54,109 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   return result.embeddings.map((e) => e.values);
 }
 
-// ── Chunking ─────────────────────────────────────────────────────────────────
+// ── Section-aware chunking ────────────────────────────────────────────────────
 
-const CHUNK_SIZE = 800;     // chars per chunk — smaller than fine-tuning chunks for precise retrieval
-const CHUNK_OVERLAP = 100;  // overlap between chunks for context continuity
+const CHUNK_SIZE = 800;     // char soft-cap within a section
+const CHUNK_OVERLAP = 100;  // overlap between sub-chunks of the same section
+
+export interface SectionChunk {
+  content: string;
+  sectionTitle: string;   // e.g. "3. Enzyme-Converted 'Universal' Kidney"
+  sectionTier: "primary" | "secondary"; // primary = numbered major section, secondary = catch-all/bulleted
+  sectionIndex: number;   // order of the section in the doc
+  chunkIndexInSection: number;
+}
 
 /**
- * Split text into overlapping chunks optimized for retrieval.
- * Smaller chunks than the fine-tuning pipeline (800 vs 4000 chars)
- * because retrieval needs precision — a 4000-char chunk dilutes the
- * signal for similarity search.
+ * Detects section boundaries in the document BEFORE any char-based splitting.
+ * Recognizes:
+ *   - Numbered major sections: lines starting with "1. ", "2. ", etc.
+ *   - A catch-all "secondary" section (e.g. "Additional Notable Advances",
+ *     "Other Science Highlights", "Notes for ...") whose own bullet points
+ *     are treated as lower-tier than the numbered sections above it.
+ * Falls back to treating the whole doc as one primary section if no
+ * numbered headers are found, so this still works on unstructured text.
  */
-export function chunkForRetrieval(text: string): string[] {
-  const chunks: string[] = [];
+function splitIntoSections(text: string): {
+  title: string;
+  tier: "primary" | "secondary";
+  body: string;
+}[] {
+  const lines = text.split("\n");
 
-  // Clean up the text
-  const cleaned = text
-    .replace(/\n{3,}/g, "\n\n")     // collapse excessive newlines
-    .replace(/[ \t]{2,}/g, " ")      // collapse excessive spaces
+  // Headers that mark the start of a "secondary" (catch-all / minor) block,
+  // even though they aren't numbered like the primary sections.
+  const SECONDARY_HEADER_RE =
+    /^(additional notable advances|other science highlights|notes for|disclaimer)/i;
+  const PRIMARY_HEADER_RE = /^\d+\.\s+\S/;
+
+  const sections: { title: string; tier: "primary" | "secondary"; body: string }[] = [];
+  let currentTitle = "Preamble";
+  let currentTier: "primary" | "secondary" = "primary";
+  let buffer: string[] = [];
+
+  const flush = () => {
+    const body = buffer.join("\n").trim();
+    if (body.length > 0) {
+      sections.push({ title: currentTitle, tier: currentTier, body });
+    }
+    buffer = [];
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (PRIMARY_HEADER_RE.test(trimmed)) {
+      flush();
+      currentTitle = trimmed;
+      currentTier = "primary";
+      continue;
+    }
+
+    if (SECONDARY_HEADER_RE.test(trimmed)) {
+      flush();
+      currentTitle = trimmed;
+      currentTier = "secondary";
+      continue;
+    }
+
+    buffer.push(line);
+  }
+  flush();
+
+  // If nothing matched (no numbered headers at all), treat the whole
+  // document as one primary section rather than losing content.
+  if (sections.length === 0) {
+    return [{ title: "Document", tier: "primary", body: text.trim() }];
+  }
+
+  return sections;
+}
+
+/**
+ * Char-based sub-splitting WITHIN a single section, same logic as before
+ * but scoped so a chunk can never cross a section boundary.
+ */
+function splitSectionBody(body: string): string[] {
+  const cleaned = body
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
     .trim();
 
   if (cleaned.length <= CHUNK_SIZE) {
-    return [cleaned];
+    return cleaned.length > 0 ? [cleaned] : [];
   }
 
+  const chunks: string[] = [];
   let start = 0;
   while (start < cleaned.length) {
     let end = start + CHUNK_SIZE;
 
     if (end < cleaned.length) {
-      // Try to break at a paragraph boundary
       const paragraphBreak = cleaned.lastIndexOf("\n\n", end);
       if (paragraphBreak > start + CHUNK_SIZE * 0.4) {
         end = paragraphBreak;
       } else {
-        // Fall back to sentence boundary
         const sentenceBreak = cleaned.lastIndexOf(". ", end);
         if (sentenceBreak > start + CHUNK_SIZE * 0.4) {
           end = sentenceBreak + 1;
@@ -88,11 +167,10 @@ export function chunkForRetrieval(text: string): string[] {
     }
 
     const chunk = cleaned.substring(start, end).trim();
-    if (chunk.length > 50) {  // drop tiny chunks
+    if (chunk.length > 50) {
       chunks.push(chunk);
     }
 
-    // Move forward with overlap
     start = end - CHUNK_OVERLAP;
     if (start < 0) start = 0;
     if (end >= cleaned.length) break;
@@ -101,13 +179,46 @@ export function chunkForRetrieval(text: string): string[] {
   return chunks;
 }
 
+/**
+ * Split text into section-aware, overlapping chunks optimized for retrieval.
+ * Each chunk carries section metadata (title + tier) so retrieval/generation
+ * can distinguish numbered "major" sections from catch-all "minor" ones,
+ * instead of relying on embedding similarity alone.
+ */
+export function chunkForRetrieval(text: string): SectionChunk[] {
+  const sections = splitIntoSections(text);
+  const result: SectionChunk[] = [];
+
+  sections.forEach((section, sectionIndex) => {
+    const subChunks = splitSectionBody(section.body);
+    subChunks.forEach((content, chunkIndexInSection) => {
+      result.push({
+        content,
+        sectionTitle: section.title,
+        sectionTier: section.tier,
+        sectionIndex,
+        chunkIndexInSection,
+      });
+    });
+  });
+
+  return result;
+}
+
 // ── Ingest (chunk + embed + store) ───────────────────────────────────────────
 
-import { createClient } from "@/lib/supabase/server";
-
 /**
- * Chunk a document, embed each chunk, and store in Supabase.
- * Returns the number of chunks stored.
+ * Chunk a document, embed each chunk, and store in Supabase — now with
+ * section_title / section_tier / section_index columns so retrieval and
+ * generation can reason about document structure, not just raw similarity.
+ *
+ * NOTE: requires the `expert_chunks` table to have `section_title` (text),
+ * `section_tier` (text), and `section_index` (int) columns. Existing rows
+ * without these columns will still work; add the columns via migration:
+ *   ALTER TABLE expert_chunks
+ *     ADD COLUMN section_title text,
+ *     ADD COLUMN section_tier text,
+ *     ADD COLUMN section_index int;
  */
 export async function ingestDocument(
   expertId: string,
@@ -117,23 +228,26 @@ export async function ingestDocument(
   const supabase = await createClient();
   const chunks = chunkForRetrieval(text);
 
-  console.log(`[RAG] Chunked "${filename}" into ${chunks.length} pieces`);
+  console.log(
+    `[RAG] Chunked "${filename}" into ${chunks.length} section-aware pieces ` +
+    `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
+  );
 
-  // Batch embed all chunks
-  const embeddings = await embedTexts(chunks);
+  const embeddings = await embedTexts(chunks.map((c) => c.content));
 
   console.log(`[RAG] Embedded ${embeddings.length} chunks`);
 
-  // Store in Supabase — batch insert
-  const rows = chunks.map((content, i) => ({
+  const rows = chunks.map((chunk, i) => ({
     expert_id: expertId,
-    content,
-    embedding: `[${embeddings[i].join(",")}]`,  // pgvector expects string format
+    content: chunk.content,
+    embedding: `[${embeddings[i].join(",")}]`,
     source_filename: filename,
     chunk_index: i,
+    section_title: chunk.sectionTitle,
+    section_tier: chunk.sectionTier,
+    section_index: chunk.sectionIndex,
   }));
 
-  // Insert in batches of 50 to avoid payload limits
   const BATCH_SIZE = 50;
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE);
@@ -155,28 +269,43 @@ export interface RetrievedChunk {
   source_filename: string;
   chunk_index: number;
   similarity: number;
+  section_title?: string;
+  section_tier?: "primary" | "secondary";
 }
 
 /**
- * Retrieve the top-K most relevant chunks for a query from an expert's knowledge base.
- * Uses pgvector cosine similarity search via an RPC function.
+ * Heuristic: broad/summarization-style queries need more chunks to reach
+ * full coverage across sections than narrow factual lookups do.
+ * Keeps the fix simple (no extra LLM call) while fixing the top-5-starves-
+ * coverage problem that caused the "summarize the five breakthroughs" miss.
+ */
+function adaptiveTopK(query: string): number {
+  const BROAD_QUERY_RE =
+    /\b(summariz|summary|all|every|each|list|overview|entire|complete|full report)\b/i;
+  return BROAD_QUERY_RE.test(query) ? 12 : 5;
+}
+
+/**
+ * Retrieve the top-K most relevant chunks for a query from an expert's
+ * knowledge base. topK now adapts to query breadth by default, but can
+ * still be overridden explicitly.
  */
 export async function retrieveChunks(
   query: string,
   expertId: string,
-  topK: number = 5,
+  topK?: number,
+  matchThreshold: number = 0.3,
 ): Promise<RetrievedChunk[]> {
   const supabase = await createClient();
+  const resolvedTopK = topK ?? adaptiveTopK(query);
 
-  // Embed the query
   const queryEmbedding = await embedText(query);
 
-  // Call the Supabase RPC function for vector similarity search
   const { data, error } = await supabase.rpc("match_expert_chunks", {
     query_embedding: `[${queryEmbedding.join(",")}]`,
     target_expert_id: expertId,
-    match_count: topK,
-    match_threshold: 0.3,  // minimum similarity score
+    match_count: resolvedTopK,
+    match_threshold: matchThreshold,
   });
 
   if (error) {
@@ -189,6 +318,8 @@ export async function retrieveChunks(
     source_filename: row.source_filename,
     chunk_index: row.chunk_index,
     similarity: row.similarity,
+    section_title: row.section_title,
+    section_tier: row.section_tier,
   }));
 }
 
@@ -196,11 +327,22 @@ export async function retrieveChunks(
 
 export interface RAGResponse {
   reply: string;
-  sources: { filename: string; chunkIndex: number; similarity: number }[];
+  sources: {
+    filename: string;
+    chunkIndex: number;
+    similarity: number;
+    sectionTitle?: string;
+    sectionTier?: string;
+  }[];
 }
 
 /**
  * Full RAG pipeline: embed query → retrieve chunks → build grounded prompt → generate answer.
+ * The grounded prompt now surfaces each source's section title/tier, so the
+ * model can honor structural distinctions (e.g. "major numbered section" vs.
+ * "additional/minor mention") instead of treating every chunk as equally
+ * central, and can flag when a question's premise doesn't match the source
+ * (e.g. asking for "two" items when the source lists four).
  */
 export async function generateRAGResponse(
   query: string,
@@ -208,15 +350,26 @@ export async function generateRAGResponse(
   systemPrompt: string,
   chatHistory: { role: string; content: string }[] = [],
 ): Promise<RAGResponse> {
-  // 1. Retrieve relevant chunks
-  const chunks = await retrieveChunks(query, expertId, 5);
+  const chunks = await retrieveChunks(query, expertId);
 
-  console.log(`[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"})`);
+  console.log(
+    `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"})`,
+  );
 
-  // 2. Build grounded prompt
-  const sourcesText = chunks.length > 0
-    ? chunks.map((c, i) => `[Source ${i + 1} — ${c.source_filename}]:\n${c.content}`).join("\n\n")
-    : "No relevant sources found in the knowledge base.";
+  const sourcesText =
+    chunks.length > 0
+      ? chunks
+        .map((c, i) => {
+          const tierLabel = c.section_tier
+            ? ` | tier: ${c.section_tier}`
+            : "";
+          const sectionLabel = c.section_title
+            ? ` | section: "${c.section_title}"`
+            : "";
+          return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
+        })
+        .join("\n\n")
+      : "No relevant sources found in the knowledge base.";
 
   const groundedSystemPrompt = `${systemPrompt}
 
@@ -224,27 +377,33 @@ IMPORTANT RULES:
 - Answer the user's question using ONLY the information from the Sources below.
 - If the answer is NOT in the sources, say "I don't have information about that in my knowledge base."
 - Do NOT make up facts, names, numbers, or details that aren't in the sources.
+- Each source is labeled with its section title and tier ("primary" = a numbered
+  major section of the report, "secondary" = an additional/minor mention, e.g.
+  under a catch-all "Additional Notable Advances" heading). When asked to
+  identify "major" breakthroughs, prefer "primary" tier sources; don't
+  substitute "secondary" tier items unless explicitly asked for all items.
+- If the user's question assumes a count (e.g. "name two X") that doesn't
+  match what the sources actually show, answer using the source's true count
+  and note the discrepancy.
 - When possible, mention which source your answer comes from.
 - Be concise and direct.
 
 Sources:
 ${sourcesText}`;
 
-  // 3. Build message history for Groq
   const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: groundedSystemPrompt }
+    { role: "system", content: groundedSystemPrompt },
   ];
 
   for (const msg of chatHistory) {
     if (msg.role === "user" || msg.role === "model") {
       groqHistory.push({
         role: msg.role === "user" ? "user" : "assistant",
-        content: msg.content
+        content: msg.content,
       });
     }
   }
 
-  // Add the current query
   groqHistory.push({ role: "user", content: query });
 
   const completion = await groq.chat.completions.create({
@@ -262,6 +421,8 @@ ${sourcesText}`;
       filename: c.source_filename,
       chunkIndex: c.chunk_index,
       similarity: c.similarity,
+      sectionTitle: c.section_title,
+      sectionTier: c.section_tier,
     })),
   };
 }
