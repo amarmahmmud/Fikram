@@ -6,7 +6,8 @@ import styles from "./page.module.css";
 import { MODELS, MODEL_CATEGORIES } from "@/lib/models";
 import type { ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
-import { Star, Package, Smile, Globe, MessageCircle, Heart, Download } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -35,6 +36,7 @@ interface CommunityModel {
   chatUrl: string;
   tags: string[];
   isVerified?: boolean;
+  ownerId?: string;
 }
 
 const COMMUNITY_CATEGORIES = [
@@ -61,6 +63,52 @@ export default function ModelsPage() {
   // HuggingFace state
   const [hfModels, setHfModels] = useState<HFModel[]>([]);
   const [hfLoading, setHfLoading] = useState(true);
+
+  // User state
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Edit Modal state
+  const [editItem, setEditItem] = useState<CommunityModel | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      setCurrentUser(data.user);
+    });
+  }, []);
+
+  const handleSaveEdit = async () => {
+    if (!editItem) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch("/api/community", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editItem.id,
+          type: editItem.type,
+          title: editTitle,
+          description: editDesc,
+        }),
+      });
+      if (res.ok) {
+        setCommunityModels((prev) =>
+          prev.map((m) =>
+            m.id === editItem.id ? { ...m, title: editTitle, description: editDesc } : m
+          )
+        );
+        setEditItem(null);
+      } else {
+        console.error("Failed to update model");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Fetch community models
   useEffect(() => {
@@ -234,6 +282,30 @@ export default function ModelsPage() {
                         </span>
                       </div>
 
+                      {/* Owner Actions */}
+                      {currentUser && currentUser.id === item.ownerId && (
+                        <div style={{ display: "flex", gap: 8, marginTop: 12, marginBottom: 4 }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            style={{ flex: 1, gap: 4 }}
+                            onClick={() => {
+                              setEditItem(item);
+                              setEditTitle(item.title);
+                              setEditDesc(item.description);
+                            }}
+                          >
+                            <Edit2 size={14} /> Edit Details
+                          </button>
+                          <Link 
+                            href={item.type === "smart_assistant" ? "/experts/new" : `/new-job?model=${encodeURIComponent(item.baseModel || "")}`}
+                            className="btn btn-primary btn-sm"
+                            style={{ flex: 1, gap: 4 }}
+                          >
+                            <Zap size={14} /> {item.type === "smart_assistant" ? "Improve" : "Retrain"}
+                          </Link>
+                        </div>
+                      )}
+
                       <h4 className={styles.communityTitle}>{item.title}</h4>
                       <p className={styles.communityDesc}>{item.description}</p>
 
@@ -382,6 +454,52 @@ export default function ModelsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Edit Modal ── */}
+      {editItem && (
+        <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div className="modal-content" style={{ backgroundColor: "var(--card-bg)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 400, border: "1px solid var(--border)" }}>
+            <h3 style={{ marginBottom: 16 }}>Edit Model Details</h3>
+            <div className="form-group">
+              <label className="label" style={{ display: "block", marginBottom: 6, fontSize: "0.875rem" }}>Public Name</label>
+              <input
+                className="input"
+                style={{ width: "100%" }}
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                placeholder="Model Name"
+              />
+            </div>
+            <div className="form-group" style={{ marginTop: 16 }}>
+              <label className="label" style={{ display: "block", marginBottom: 6, fontSize: "0.875rem" }}>Description</label>
+              <textarea
+                className="input"
+                style={{ width: "100%", resize: "vertical" }}
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+                placeholder="What is this model best for?"
+              />
+            </div>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", marginTop: 24 }}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setEditItem(null)}
+                disabled={isSaving}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveEdit}
+                disabled={isSaving || !editTitle.trim()}
+              >
+                {isSaving ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

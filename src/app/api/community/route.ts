@@ -18,6 +18,7 @@ export interface CommunityItem {
   chatUrl: string;
   tags: string[];
   isVerified?: boolean;
+  ownerId?: string;
 }
 
 const FEATURED_COMMUNITY_MODELS: CommunityItem[] = [
@@ -118,6 +119,7 @@ export async function GET() {
           chatUrl: `/experts/${exp.id}/chat`,
           tags: ["Knowledge Base", "Q&A"],
           isVerified: false,
+          ownerId: exp.user_id,
         });
       }
     }
@@ -142,6 +144,7 @@ export async function GET() {
             chatUrl: `/playground/${job.id}`,
             tags: (config.tags as string[]) || ["Fine-Tuned", job.base_model],
             isVerified: false,
+            ownerId: job.user_id,
           });
         }
       }
@@ -154,5 +157,57 @@ export async function GET() {
   } catch (err: unknown) {
     console.error("[Community API Error]:", err);
     return NextResponse.json({ ok: true, models: FEATURED_COMMUNITY_MODELS });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { id, type, title, description } = body;
+
+    if (!id || !type) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    if (type === "smart_assistant") {
+      const { error } = await supabase
+        .from("experts")
+        .update({ name: title, description })
+        .eq("id", id)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    } else if (type === "fine_tuned") {
+      const { data: jobData, error: jobError } = await supabase
+        .from("jobs")
+        .select("config")
+        .eq("id", id)
+        .eq("user_id", user.id)
+        .single();
+      
+      if (jobError || !jobData) throw jobError || new Error("Job not found");
+      
+      const config = (typeof jobData.config === "object" && jobData.config !== null && !Array.isArray(jobData.config)) 
+        ? (jobData.config as Record<string, unknown>) 
+        : {};
+      
+      config.public_title = title;
+      config.public_description = description;
+
+      const { error: updateError } = await supabase
+        .from("jobs")
+        .update({ config })
+        .eq("id", id)
+        .eq("user_id", user.id);
+      if (updateError) throw updateError;
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err: unknown) {
+    console.error("[Community API Patch Error]:", err);
+    return NextResponse.json({ error: "Failed to update" }, { status: 500 });
   }
 }
