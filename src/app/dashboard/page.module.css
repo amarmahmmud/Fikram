@@ -96,14 +96,14 @@
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent 10%, rgba(91,110,245,0.6) 40%, rgba(79,70,229,0.5) 70%, transparent 90%);
+  background: linear-gradient(90deg, transparent 10%, rgba(99,102,241,0.6) 40%, rgba(79,70,229,0.5) 70%, transparent 90%);
   pointer-events: none;
 }
 .quickStartGlow {
   position: absolute;
   top: -80px; right: -80px;
   width: 280px; height: 280px;
-  background: radial-gradient(circle, rgba(91,110,245,0.07), transparent 70%);
+  background: radial-gradient(circle, rgba(99,102,241,0.07), transparent 70%);
   pointer-events: none;
 }
 .quickStartContent {
@@ -117,8 +117,8 @@
   font-size: 2.5rem;
   flex-shrink: 0;
   width: 56px; height: 56px;
-  background: rgba(91,110,245,0.10);
-  border: 1px solid rgba(91,110,245,0.20);
+  background: rgba(99,102,241,0.10);
+  border: 1px solid rgba(99,102,241,0.20);
   border-radius: 14px;
   display: flex;
   align-items: center;
@@ -197,18 +197,18 @@
 }
 .tierCard:hover {
   transform: translateY(-3px);
-  border-color: rgba(91,110,245,0.22);
+  border-color: rgba(99,102,241,0.22);
   box-shadow: 0 12px 40px rgba(0,0,0,0.30);
 }
 
 /* Recommended card: accent 1px border + slightly lighter surface — NO background color wash */
 .tierRecommended {
-  border-color: rgba(91,110,245,0.35);
+  border-color: rgba(99,102,241,0.35);
   background: var(--bg-elevated);
 }
 /* Override the generic top line with the accent color for recommended */
 .tierRecommended::before {
-  background: linear-gradient(90deg, transparent, rgba(91,110,245,0.55), transparent);
+  background: linear-gradient(90deg, transparent, rgba(99,102,241,0.55), transparent);
   opacity: 1;
 }
 
@@ -221,9 +221,9 @@
   font-weight: 700;
   padding: 3px 10px;
   border-radius: var(--radius-full);
-  background: rgba(91,110,245,0.10);
+  background: rgba(99,102,241,0.10);
   color: #A5B4FC;
-  border: 1px solid rgba(91,110,245,0.22);
+  border: 1px solid rgba(99,102,241,0.22);
   letter-spacing: 0.02em;
 }
 
@@ -308,8 +308,8 @@
 
 .modelIcon {
   width: 36px; height: 36px;
-  background: rgba(91,110,245,0.10);
-  border: 1px solid rgba(91,110,245,0.18);
+  background: rgba(99,102,241,0.10);
+  border: 1px solid rgba(99,102,241,0.18);
   border-radius: 8px;
   display: flex;
   align-items: center;
