@@ -13,17 +13,19 @@ export function FikraLogo({
   subtitle,
   className = "",
 }: FikraLogoProps) {
+  // Generate unique IDs to avoid SVG gradient collisions when multiple logos are on the page
+  const uid = React.useId().replace(/:/g, "");
+
   return (
     <div
       className={`fikra-logo-container ${className}`}
       style={{
         display: "inline-flex",
         alignItems: "center",
-        gap: size > 28 ? 10 : 8,
+        gap: size > 28 ? 12 : 8,
         textDecoration: "none",
       }}
     >
-      {/* Mathematical F+A Minimalist Monogram */}
       <svg
         width={size}
         height={size}
@@ -33,68 +35,77 @@ export function FikraLogo({
         style={{ flexShrink: 0 }}
       >
         <defs>
-          {/* Base Gradients */}
-          <linearGradient id="fikra-bg-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#12121A" />
-            <stop offset="100%" stopColor="#050508" />
+          {/* Background */}
+          <linearGradient id={`${uid}-bg`} x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#0a0a0c" />
+            <stop offset="100%" stopColor="#000000" />
           </linearGradient>
-          <linearGradient id="fikra-border-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="rgba(255, 255, 255, 0.12)" />
-            <stop offset="100%" stopColor="rgba(99, 102, 241, 0.25)" />
+          <linearGradient id={`${uid}-border`} x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.15)" />
+            <stop offset="100%" stopColor="rgba(0,229,200,0.3)" />
           </linearGradient>
 
-          {/* FA Monogram Gradients */}
-          <linearGradient id="stem1-grad" x1="8" y1="9" x2="12" y2="29" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#818CF8" />
-            <stop offset="100%" stopColor="#4F46E5" />
+          {/* Monogram gradients — cyan-teal to violet-magenta */}
+          <linearGradient id={`${uid}-stem1`} x1="8" y1="9" x2="12" y2="29" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#00E5C8" />
+            <stop offset="100%" stopColor="#00B39C" />
           </linearGradient>
-          <linearGradient id="topbar-grad" x1="14" y1="9" x2="20" y2="13" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#818CF8" />
-            <stop offset="100%" stopColor="#22D3EE" />
+          <linearGradient id={`${uid}-topbar`} x1="14" y1="9" x2="20" y2="13" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#00E5C8" />
+            <stop offset="100%" stopColor="#5EE8D0" />
           </linearGradient>
-          <linearGradient id="crossbar-grad" x1="14" y1="17" x2="20" y2="21" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#6366F1" />
-            <stop offset="100%" stopColor="#3B82F6" />
+          <linearGradient id={`${uid}-crossbar`} x1="14" y1="17" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#00D4B8" />
+            <stop offset="100%" stopColor="#C77DFF" />
           </linearGradient>
-          <linearGradient id="stem2-grad" x1="22" y1="17" x2="26" y2="29" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#3B82F6" />
-            <stop offset="100%" stopColor="#0EA5E9" />
+          <linearGradient id={`${uid}-stem2`} x1="22" y1="17" x2="26" y2="29" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#C77DFF" />
+            <stop offset="100%" stopColor="#A855F7" />
           </linearGradient>
-          <linearGradient id="node-grad" x1="21" y1="8" x2="27" y2="14" gradientUnits="userSpaceOnUse">
+          <linearGradient id={`${uid}-node`} x1="21" y1="8" x2="27" y2="14" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#FFFFFF" />
-            <stop offset="100%" stopColor="#67E8F9" />
+            <stop offset="100%" stopColor="#00E5C8" />
           </linearGradient>
+
+          {/* Subtle glow filter */}
+          <filter id={`${uid}-glow`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
         </defs>
 
-        {/* Clean Squircle Base */}
-        <rect width="36" height="36" rx="10" fill="url(#fikra-bg-grad)" />
-        <rect width="35" height="35" x="0.5" y="0.5" rx="9.5" stroke="url(#fikra-border-grad)" strokeWidth="1" />
+        {/* Squircle base */}
+        <rect width="36" height="36" rx="10" fill={`url(#${uid}-bg)`} />
+        <rect width="35" height="35" x="0.5" y="0.5" rx="9.5" stroke={`url(#${uid}-border)`} strokeWidth="1" />
 
-        {/* Stem 1 (Left leg of F/A) */}
-        <rect x="8" y="9" width="4" height="20" rx="2" fill="url(#stem1-grad)" />
-
-        {/* Top bar of F */}
-        <rect x="14" y="9" width="6" height="4" rx="2" fill="url(#topbar-grad)" />
-
-        {/* Crossbar (Mid F / Mid A) */}
-        <rect x="14" y="17" width="6" height="4" rx="2" fill="url(#crossbar-grad)" />
-
-        {/* Stem 2 (Right leg of A) */}
-        <rect x="22" y="17" width="4" height="12" rx="2" fill="url(#stem2-grad)" />
-
-        {/* Idea Node (Apex of A) */}
-        <circle cx="24" cy="11" r="2.5" fill="url(#node-grad)" />
+        {/* F+A Monogram with glow */}
+        <g filter={`url(#${uid}-glow)`}>
+          {/* Left stem (F) */}
+          <rect x="8" y="9" width="4" height="20" rx="2" fill={`url(#${uid}-stem1)`} />
+          {/* Top bar (F) */}
+          <rect x="14" y="9" width="6" height="4" rx="2" fill={`url(#${uid}-topbar)`} />
+          {/* Crossbar (F/A junction) */}
+          <rect x="14" y="17" width="6" height="4" rx="2" fill={`url(#${uid}-crossbar)`} />
+          {/* Right stem (A) */}
+          <rect x="22" y="17" width="4" height="12" rx="2" fill={`url(#${uid}-stem2)`} />
+          {/* Apex node (A) */}
+          <circle cx="24" cy="11" r="2.5" fill={`url(#${uid}-node)`} />
+        </g>
       </svg>
 
       {showText && (
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span
             style={{
-              fontSize: size > 28 ? "1.05rem" : "0.9375rem",
+              fontSize: size > 28 ? "1.1rem" : "0.9375rem",
               fontWeight: 800,
-              letterSpacing: "-0.03em",
+              letterSpacing: "-0.04em",
               color: "var(--text-primary)",
               lineHeight: 1.15,
+              fontFamily: "var(--font-display)",
             }}
           >
             Fikram

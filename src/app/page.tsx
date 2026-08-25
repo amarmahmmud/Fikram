@@ -1,9 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import styles from "./landing.module.css";
 import { FikraLogo } from "@/components/FikraLogo";
+
+const HERO_MODELS = [
+  "Llama 3.1 8B",
+  "Mistral 7B",
+  "Gemma 2 9B",
+  "Phi-3 Mini",
+  "Qwen2 7B",
+  "DeepSeek-R1",
+  "CodeLlama 13B",
+  "Falcon 7B",
+];
 
 const FEATURES = [
   {
@@ -69,14 +80,67 @@ const STATS = [
   { value: "99.9%", label: "Platform Uptime" },
 ];
 
+const LOG_LINES = [
+  { text: "✓ Dataset validated (1,240 rows)", type: "success" },
+  { text: "→ LoRA adapters initialized", type: "info" },
+  { text: "  Epoch 1/3 — loss: 1.42", type: "dim" },
+  { text: "  Epoch 2/3 — loss: 0.87", type: "dim" },
+  { text: "  Epoch 3/3 — loss: 0.61", type: "dim" },
+  { text: "✓ Model saved to storage", type: "success" },
+  { text: "✓ Ready to deploy or download", type: "success" },
+];
+
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [modelIdx, setModelIdx] = useState(0);
+  const [visibleLogs, setVisibleLogs] = useState(0);
+  const [progressWidth, setProgressWidth] = useState(0);
+  const heroCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Cycle through model names
+  useEffect(() => {
+    const t = setInterval(() => setModelIdx((i) => (i + 1) % HERO_MODELS.length), 2400);
+    return () => clearInterval(t);
+  }, []);
+
+  // Animate log lines appearing one by one
+  useEffect(() => {
+    if (visibleLogs < LOG_LINES.length) {
+      const t = setTimeout(() => setVisibleLogs((v) => v + 1), 600);
+      return () => clearTimeout(t);
+    }
+  }, [visibleLogs]);
+
+  // Animate progress bar
+  useEffect(() => {
+    const t = setTimeout(() => setProgressWidth(100), 400);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Intersection observer for scroll-reveal
+  const observeReveal = useCallback((node: HTMLElement | null) => {
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add(styles.revealed);
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15 }
+    );
+    // Observe all children with [data-reveal]
+    node.querySelectorAll("[data-reveal]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -148,6 +212,15 @@ export default function LandingPage() {
             or train a fully custom model.
           </p>
 
+          {/* Animated model ticker */}
+          <div className={styles.modelTicker}>
+            <span className={styles.modelTickerLabel}>Supports</span>
+            <span key={modelIdx} className={styles.modelTickerName}>
+              {HERO_MODELS[modelIdx]}
+            </span>
+            <span className={styles.modelTickerSuffix}>and 500+ more</span>
+          </div>
+
           <div className={styles.heroCta}>
             <Link href="/auth/signup" className="btn btn-primary btn-lg">
               Get Started Free
@@ -163,7 +236,7 @@ export default function LandingPage() {
         </div>
 
         {/* Full-width visual card below */}
-        <div className={styles.heroVisual}>
+        <div className={styles.heroVisual} ref={heroCardRef}>
           <div className={styles.heroCard}>
             <div className={styles.heroCardHeader}>
               <div className="terminal-dot red" />
@@ -178,7 +251,9 @@ export default function LandingPage() {
             <div className={styles.heroCardBody}>
               <div className={styles.heroCardRow}>
                 <span className={styles.heroCardLabel}>Base Model</span>
-                <span className={styles.heroCardValue}>Llama 3.1 8B</span>
+                <span className={styles.heroCardValue}>
+                  <span key={modelIdx} className={styles.valueSwap}>{HERO_MODELS[modelIdx]}</span>
+                </span>
               </div>
               <div className={styles.heroCardRow}>
                 <span className={styles.heroCardLabel}>Method</span>
@@ -200,21 +275,36 @@ export default function LandingPage() {
               <div className={styles.heroProgressSection}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                   <span className={styles.heroCardLabel}>Training Progress</span>
-                  <span className={styles.heroCardValue}>100%</span>
+                  <span className={styles.heroCardValue}>{progressWidth}%</span>
                 </div>
                 <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: "100%" }} />
+                  <div
+                    className="progress-fill"
+                    style={{
+                      width: `${progressWidth}%`,
+                      transition: "width 2.5s cubic-bezier(0.4, 0, 0.2, 1)",
+                    }}
+                  />
                 </div>
               </div>
 
               <div className={styles.heroLogs}>
-                <span className="terminal-line success">✓ Dataset validated (1,240 rows)</span>
-                <span className="terminal-line info">→ LoRA adapters initialized</span>
-                <span className="terminal-line dim">  Epoch 1/3 — loss: 1.42</span>
-                <span className="terminal-line dim">  Epoch 2/3 — loss: 0.87</span>
-                <span className="terminal-line dim">  Epoch 3/3 — loss: 0.61</span>
-                <span className="terminal-line success">✓ Model saved to storage</span>
-                <span className="terminal-line success">✓ Ready to deploy or download</span>
+                {LOG_LINES.map((line, i) => (
+                  <span
+                    key={i}
+                    className={`terminal-line ${line.type} ${styles.logLine}`}
+                    style={{
+                      opacity: i < visibleLogs ? 1 : 0,
+                      transform: i < visibleLogs ? "translateY(0)" : "translateY(8px)",
+                      transition: `opacity 0.4s ease ${i * 0.05}s, transform 0.4s ease ${i * 0.05}s`,
+                    }}
+                  >
+                    {line.text}
+                  </span>
+                ))}
+                {visibleLogs < LOG_LINES.length && (
+                  <span className={styles.cursor}>▋</span>
+                )}
               </div>
             </div>
           </div>
@@ -236,9 +326,9 @@ export default function LandingPage() {
       </section>
 
       {/* ── Features ── */}
-      <section id="features" className="section">
+      <section id="features" className="section" ref={observeReveal}>
         <div className="container">
-          <div className={styles.sectionHead}>
+          <div className={styles.sectionHead} data-reveal>
             <span className="section-label">Features</span>
             <h2>Everything you need to<br />build your expert AI</h2>
             <p>
@@ -248,12 +338,12 @@ export default function LandingPage() {
           </div>
 
           <div className={styles.featuresGrid}>
-            {FEATURES.map((f) => (
-              <div key={f.title} className={styles.featureCard}>
+            {FEATURES.map((f, i) => (
+              <div key={f.title} className={`${styles.featureCard} ${styles.revealItem}`} data-reveal style={{ transitionDelay: `${i * 0.08}s` }}>
                 <div className={styles.featureIconWrap}>{f.icon}</div>
                 <span className="badge badge-gradient" style={{ marginBottom: 14 }}>{f.badge}</span>
                 <h4 style={{ marginBottom: 10 }}>{f.title}</h4>
-                <p style={{ fontSize: "0.875rem" }}>{f.desc}</p>
+                <p style={{ fontSize: "0.9375rem" }}>{f.desc}</p>
               </div>
             ))}
           </div>
@@ -261,17 +351,17 @@ export default function LandingPage() {
       </section>
 
       {/* ── How It Works ── */}
-      <section id="how-it-works" className={`section ${styles.howSection}`}>
+      <section id="how-it-works" className={`section ${styles.howSection}`} ref={observeReveal}>
         <div className="container">
-          <div className={styles.sectionHead}>
+          <div className={styles.sectionHead} data-reveal>
             <span className="section-label">How It Works</span>
             <h2>Three steps to your<br />custom AI model</h2>
             <p>No ML expertise. No infrastructure headaches. Just describe your goal and let our AI do the heavy lifting.</p>
           </div>
 
           <div className={styles.stepsGrid}>
-            {STEPS.map((s) => (
-              <div key={s.num} className={styles.stepCard}>
+            {STEPS.map((s, i) => (
+              <div key={s.num} className={`${styles.stepCard} ${styles.revealItem}`} data-reveal style={{ transitionDelay: `${i * 0.12}s` }}>
                 <div className={styles.stepNum}>{s.num}</div>
                 <h3 style={{ fontSize: "1.25rem", marginBottom: 14, marginTop: 18, fontFamily: "var(--font-display)" }}>{s.title}</h3>
                 <p style={{ fontSize: "0.9375rem" }}>{s.desc}</p>

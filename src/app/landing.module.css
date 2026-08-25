@@ -585,6 +585,123 @@
   color: var(--text-muted);
 }
 
+/* ═══ MODEL TICKER ═══ */
+.modelTicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(0, 229, 200, 0.04);
+  border: 1px solid rgba(0, 229, 200, 0.15);
+  border-radius: 9999px;
+  margin-bottom: 36px;
+  font-size: 0.875rem;
+  backdrop-filter: blur(8px);
+}
+
+.modelTickerLabel {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.8125rem;
+}
+
+.modelTickerName {
+  color: #00E5C8;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  min-width: 120px;
+  text-align: center;
+  animation: tickerFlip 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modelTickerSuffix {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+/* Value swap in the hero card */
+.valueSwap {
+  display: inline-block;
+  animation: tickerFlip 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes tickerFlip {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* ═══ CURSOR BLINK ═══ */
+.cursor {
+  color: #00E5C8;
+  font-size: 0.8rem;
+  animation: cursorBlink 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* ═══ LOG LINE ═══ */
+.logLine {
+  display: block;
+}
+
+/* ═══ SCROLL REVEAL ═══ */
+.revealItem {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.revealed.revealItem {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Section head reveal */
+.sectionHead {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.revealed.sectionHead {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ═══ HERO ENTRANCE ═══ */
+.heroContent {
+  animation: heroFadeUp 1s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.heroVisual {
+  animation: heroFadeUp 1s cubic-bezier(0.4, 0, 0.2, 1) 0.3s both;
+}
+
+@keyframes heroFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 1024px) {
   .hero {
@@ -610,6 +727,7 @@
   .heroHeadline { font-size: clamp(2rem, 8vw, 3rem); }
   .heroSubline  { font-size: 1rem; }
   .heroVisual   { max-width: 100%; }
+  .modelTicker  { flex-wrap: wrap; justify-content: center; }
 
   .featuresGrid  { grid-template-columns: 1fr; gap: 16px; }
   .stepsGrid     { grid-template-columns: 1fr; gap: 20px; }
@@ -630,6 +748,8 @@
   .hero { padding: 90px 16px 48px; }
   .heroCard { border-radius: 12px; }
   .heroBadge { font-size: 0.75rem; padding: 5px 14px; }
+  .modelTicker { font-size: 0.8rem; padding: 8px 14px; }
+  .modelTickerName { min-width: 90px; }
   .pricingCard { padding: 36px 16px; }
   .navInner { padding: 0 16px; }
 }
