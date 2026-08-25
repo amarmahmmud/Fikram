@@ -80,6 +80,33 @@ const STATS = [
   { value: "99.9%", label: "Platform Uptime" },
 ];
 
+const TOP_PROVIDERS = [
+  {
+    name: "Meta Llama",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`
+  },
+  {
+    name: "Mistral AI",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20L12 4 2 20h20z"/><path d="M12 12l4 8H8l4-8z"/></svg>`
+  },
+  {
+    name: "Google Gemma",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`
+  },
+  {
+    name: "Microsoft Phi",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`
+  },
+  {
+    name: "DeepSeek",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/></svg>`
+  },
+  {
+    name: "Cohere",
+    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`
+  }
+];
+
 const LOG_LINES = [
   { text: "✓ Dataset validated (1,240 rows)", type: "success" },
   { text: "→ LoRA adapters initialized", type: "info" },
@@ -308,6 +335,20 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* ── Providers Marquee ── */}
+      <section className={styles.marqueeSection}>
+        <div className={styles.marqueeLabel}>Supported Ecosystems</div>
+        <div className={styles.marqueeContainer}>
+          {/* We duplicate the array to create a seamless infinite loop */}
+          {[...TOP_PROVIDERS, ...TOP_PROVIDERS, ...TOP_PROVIDERS].map((p, i) => (
+            <div key={`${p.name}-${i}`} className={styles.marqueeItem}>
+              <div className={styles.marqueeIcon} dangerouslySetInnerHTML={{ __html: p.svg }} />
+              <span>{p.name}</span>
+            </div>
+          ))}
         </div>
       </section>
 

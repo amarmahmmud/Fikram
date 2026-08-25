@@ -702,6 +702,87 @@
   }
 }
 
+/* ═══ MARQUEE ═══ */
+.marqueeSection {
+  padding: 40px 0;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: rgba(0, 229, 200, 0.01);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.marqueeLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  font-weight: 600;
+}
+
+.marqueeContainer {
+  display: flex;
+  width: max-content;
+  animation: scrollLeft 40s linear infinite;
+}
+
+/* Gradient masks for smooth fade on edges */
+.marqueeSection::before,
+.marqueeSection::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 150px;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+.marqueeSection::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-base) 0%, transparent 100%);
+}
+.marqueeSection::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-base) 0%, transparent 100%);
+}
+
+.marqueeItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 40px;
+  opacity: 0.6;
+  filter: grayscale(100%);
+  transition: all 0.3s ease;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #fff;
+}
+
+.marqueeItem:hover {
+  opacity: 1;
+  filter: grayscale(0%);
+  transform: scale(1.05);
+}
+
+.marqueeIcon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes scrollLeft {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 1024px) {
   .hero {
