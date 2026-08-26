@@ -87,8 +87,8 @@ export default function CreditsPage() {
                 />
                 <defs>
                   <linearGradient id="creditGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#3b82f6" />
-                    <stop offset="100%" stopColor="#6366f1" />
+                    <stop offset="0%" stopColor="#00E5C8" />
+                    <stop offset="100%" stopColor="#C77DFF" />
                   </linearGradient>
                 </defs>
                 <text x="60" y="55" textAnchor="middle" fill="white" fontSize="18" fontWeight="800" fontFamily="Inter,sans-serif">{pct}%</text>

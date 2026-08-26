@@ -375,7 +375,7 @@ export default function NewJobPage() {
             {/* Current question or loading */}
             {aiLoading ? (
               <div style={{ textAlign: "center", padding: "32px", color: "var(--text-muted)" }}>
-                <span className="animate-spin" style={{ width: 24, height: 24, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent-indigo)", borderRadius: "50%", display: "inline-block" }} />
+                <span className="animate-spin" style={{ width: 24, height: 24, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent-primary)", borderRadius: "50%", display: "inline-block" }} />
                 <p style={{ marginTop: 12, fontSize: "0.875rem" }}>AI is thinking...</p>
               </div>
             ) : currentQuestion ? (

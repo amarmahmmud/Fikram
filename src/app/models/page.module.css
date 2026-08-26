@@ -28,9 +28,9 @@
 }
 .tab.active {
   background: var(--gradient-primary);
-  color: #fff;
+  color: #000;
   border-color: transparent;
-  box-shadow: 0 0 16px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 0 16px rgba(0, 229, 200, 0.35);
 }
 
 .filterRow {
@@ -72,7 +72,7 @@
 .communityCard:hover {
   border-color: var(--border-focus);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 200, 0.10);
 }
 
 .communityCardTop {
@@ -150,7 +150,7 @@
 
 .communityBase {
   font-size: 0.6875rem;
-  color: var(--accent-indigo);
+  color: #00E5C8;
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -213,7 +213,7 @@
 
 .modelCredits { display: flex; flex-direction: column; gap: 2px; }
 .creditsLabel { font-size: 0.6875rem; color: var(--text-muted); font-weight: 500; }
-.creditsValue { font-size: 0.875rem; font-weight: 700; color: var(--accent-indigo); font-family: var(--font-mono); }
+.creditsValue { font-size: 0.875rem; font-weight: 700; color: #00E5C8; font-family: var(--font-mono); }
 
 .modelSize {
   font-size: 0.75rem;

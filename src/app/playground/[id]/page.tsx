@@ -54,7 +54,7 @@ function renderMarkdown(text: string) {
     if (numberedMatch) {
       elements.push(
         <div key={lineIdx} style={{ display: "flex", gap: "8px", marginLeft: "4px", marginTop: "4px" }}>
-          <span style={{ color: "var(--accent-indigo)", fontWeight: 600, minWidth: "20px" }}>{numberedMatch[1]}.</span>
+          <span style={{ color: "var(--accent-primary)", fontWeight: 600, minWidth: "20px" }}>{numberedMatch[1]}.</span>
           <span>{processInline(numberedMatch[2])}</span>
         </div>
       );
@@ -231,15 +231,15 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     LoRA fine-tuned · #{resolvedParams.id.substring(0, 8)}
                     {detectedFamily && (
-                      <span style={{
-                        marginLeft: 6,
-                        padding: "1px 6px",
-                        borderRadius: 4,
-                        background: "rgba(139, 92, 246, 0.15)",
-                        color: "var(--accent-indigo, #8b5cf6)",
-                        fontSize: "0.6875rem",
-                        fontWeight: 600,
-                      }}>
+                        <span style={{
+                          marginLeft: 6,
+                          padding: "1px 6px",
+                          borderRadius: 4,
+                          background: "rgba(0, 229, 200, 0.10)",
+                          color: "#00E5C8",
+                          fontSize: "0.6875rem",
+                          fontWeight: 600,
+                        }}>
                         {detectedFamily}
                       </span>
                     )}

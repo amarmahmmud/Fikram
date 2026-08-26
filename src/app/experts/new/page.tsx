@@ -277,7 +277,7 @@ export default function NewExpertPage() {
         {/* Step 3: Done */}
         {step === 3 && (
           <div className={styles.card} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", marginBottom: 16, color: "var(--accent-indigo)" }}>◆</div>
+            <div style={{ fontSize: "2rem", marginBottom: 16, color: "var(--accent-primary)" }}>◆</div>
             <h2 className={styles.cardTitle}>Your Smart Assistant is Ready</h2>
             <p className={styles.cardDesc}>
               <strong>{name}</strong> has been created with <strong>{totalChunks} knowledge chunks</strong> from your content. Start chatting now.
