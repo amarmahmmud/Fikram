@@ -18,41 +18,52 @@ const HERO_MODELS = [
 
 const FEATURES = [
   {
-    icon: "◆",
-    title: "Smart Assistants",
-    desc: "Upload your content and get an AI assistant that answers questions with source citations — ready in seconds, no training needed.",
-    badge: "Recommended",
+    badge: "Fine-Tuning",
+    title: "1-Click Model Customization",
+    desc: "Train on your proprietary data using state-of-the-art LoRA/QLoRA techniques without writing any boilerplate code.",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m12 14 9-5-9-5-9 5 9 5z" />
+        <path d="m12 14 9-5-9-5-9 5 9 5z" />
+        <path d="m5 10 7 4 7-4" />
+        <path d="m5 14 7 4 7-4" />
+      </svg>
+    )
   },
   {
-    icon: "◈",
-    title: "Custom Model Training",
-    desc: "Fine-tune open-source LLMs on your data to create models that capture your unique voice, style, and expertise.",
-    badge: "Premium",
+    badge: "Deployment",
+    title: "Instant Global Inference",
+    desc: "Push your fine-tuned or base models to edge-optimized inference endpoints with autoscaling and zero cold starts.",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v20" />
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+      </svg>
+    )
   },
   {
-    icon: "▣",
-    title: "500+ Base Models",
-    desc: "Choose from Llama, Mistral, Gemma, Phi, and hundreds more open-source models as your foundation.",
-    badge: "Open Source",
+    badge: "Observability",
+    title: "Real-time Metrics & Logging",
+    desc: "Monitor training loss, evaluation metrics, and API endpoint health in an intuitive, beautifully designed dashboard.",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="18" x="3" y="3" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M9 21V9" />
+      </svg>
+    )
   },
   {
-    icon: "◎",
-    title: "Source Citations",
-    desc: "Every answer from Smart Assistants includes citations showing exactly which part of your content the answer came from.",
-    badge: "Grounded",
-  },
-  {
-    icon: "▧",
-    title: "Private & Secure",
-    desc: "Your data and models are encrypted at rest. Training jobs run in isolated containers. Your content stays yours.",
-    badge: "Enterprise Ready",
-  },
-  {
-    icon: "◇",
-    title: "Credit-Based Pricing",
-    desc: "Smart Assistants are free to create. Fine-tuning uses credits — start with 100 free, pay only for what you use.",
-    badge: "Free to Start",
-  },
+    badge: "Security",
+    title: "Enterprise-grade Isolation",
+    desc: "Your data and weights remain entirely yours. Deploy in isolated VPCs with end-to-end encryption and compliance.",
+    icon: (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
+    )
+  }
 ];
 
 const STEPS = [
@@ -73,42 +84,31 @@ const STEPS = [
   },
 ];
 
-const STATS = [
-  { value: "500+", label: "Supported Models" },
-  { value: "100",  label: "Free Credits at Signup" },
-  { value: "< 2min", label: "Avg Setup Time" },
-  { value: "99.9%", label: "Platform Uptime" },
+const FRONTIER_MODELS = [
+  { name: "Llama 3", icon: "/models/llama.svg" },
+  { name: "Mistral", icon: "/models/mistral.svg" },
+  { name: "Command R", icon: "/models/cohere.svg" },
+  { name: "DBRX", icon: "/models/dbrx.svg" },
+  { name: "DeepSeek", icon: "/models/deepseek.svg" },
+  { name: "Yi", icon: "/models/yi.svg" },
+  { name: "Zephyr", icon: "/models/huggingface.svg" },
 ];
 
-const MODEL_SHOWCASE = [
-  {
-    name: "Llama 3",
-    icon: "/models/llama.svg",
-  },
-  {
-    name: "Mistral",
-    icon: "/models/mistral.svg",
-  },
-  {
-    name: "Gemma 2",
-    icon: "/models/gemma.svg",
-  },
-  {
-    name: "Qwen 2",
-    icon: "/models/qwen.svg",
-  },
-  {
-    name: "DeepSeek",
-    icon: "/models/deepseek.svg",
-  },
-  {
-    name: "Phi-3",
-    icon: "/models/phi.svg",
-  },
-  {
-    name: "Zephyr",
-    icon: "/models/huggingface.svg",
-  },
+const LIGHTWEIGHT_MODELS = [
+  { name: "Phi-3", icon: "/models/phi.svg" },
+  { name: "Gemma 2", icon: "/models/gemma.svg" },
+  { name: "Qwen 2", icon: "/models/qwen.svg" },
+  { name: "Stable LM", icon: "/models/stability.svg" },
+  { name: "Solar", icon: "/models/upstage.svg" },
+  { name: "Baichuan", icon: "/models/baichuan.svg" },
+  { name: "Ollama", icon: "/models/ollama.svg" },
+];
+
+const STATS = [
+  { value: "500+", label: "Supported Models" },
+  { value: "100", label: "Free Credits at Signup" },
+  { value: "< 2min", label: "Avg Setup Time" },
+  { value: "99.9%", label: "Platform Uptime" }
 ];
 
 const LOG_LINES = [
@@ -121,15 +121,7 @@ const LOG_LINES = [
   { text: "✓ Ready to deploy or download", type: "success" },
 ];
 
-export default function LandingPage() {
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [modelIdx, setModelIdx] = useState(0);
-  const [visibleLogs, setVisibleLogs] = useState(0);
-  const [progressWidth, setProgressWidth] = useState(0);
-  const heroCardRef = useRef<HTMLDivElement>(null);
-  
-  // Marquee drag and scroll state
+function MarqueeRow({ items, direction = 1 }: { items: typeof MODEL_SHOWCASE_ROW_1, direction?: number }) {
   const marqueeRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -137,18 +129,100 @@ export default function LandingPage() {
   const [startScrollLeft, setStartScrollLeft] = useState(0);
 
   useEffect(() => {
+    if (direction === -1 && marqueeRef.current) {
+      marqueeRef.current.scrollLeft = marqueeRef.current.scrollWidth / 3;
+    }
+  }, [direction]);
+
+  useEffect(() => {
+    let animationId: number;
+    const animate = () => {
+      if (marqueeRef.current && !isDragging && !isHovered) {
+        marqueeRef.current.scrollLeft += 0.5 * direction; 
+        
+        const singleSetWidth = marqueeRef.current.scrollWidth / 3;
+        
+        if (direction === 1) {
+          if (marqueeRef.current.scrollLeft >= singleSetWidth) {
+            marqueeRef.current.scrollLeft -= singleSetWidth;
+          } else if (marqueeRef.current.scrollLeft <= 0) {
+            marqueeRef.current.scrollLeft += singleSetWidth;
+          }
+        } else {
+          if (marqueeRef.current.scrollLeft <= 0) {
+            marqueeRef.current.scrollLeft += singleSetWidth;
+          } else if (marqueeRef.current.scrollLeft >= singleSetWidth * 2) {
+            marqueeRef.current.scrollLeft -= singleSetWidth;
+          }
+        }
+      }
+      animationId = requestAnimationFrame(animate);
+    };
+    animationId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationId);
+  }, [isDragging, isHovered, direction]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!marqueeRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - marqueeRef.current.offsetLeft);
+    setStartScrollLeft(marqueeRef.current.scrollLeft);
+  };
+  const handleMouseLeave = () => { setIsDragging(false); setIsHovered(false); };
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !marqueeRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - marqueeRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5; 
+    marqueeRef.current.scrollLeft = startScrollLeft - walk;
+  };
+
+  return (
+    <div 
+      className={`${styles.marqueeContainer} ${isDragging ? styles.isDragging : ''}`}
+      ref={marqueeRef}
+      onMouseDown={handleMouseDown}
+      onMouseLeave={handleMouseLeave}
+      onMouseUp={handleMouseUp}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={() => setIsHovered(true)}
+      data-reveal
+    >
+      {[...items, ...items, ...items].map((m, i) => (
+        <div key={`${m.name}-${i}`} className={styles.showcaseCard}>
+          <div className={styles.showcaseCardInner}>
+            <div className={styles.showcaseIconRing}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={m.icon} alt={m.name} className={styles.showcaseIcon} loading="lazy" width={36} height={36} />
+            </div>
+            <span className={styles.showcaseName}>{m.name}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export default function LandingPage() {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [modelIdx, setModelIdx] = useState(0);
+  const [visibleLogs, setVisibleLogs] = useState(0);
+  const [progressWidth, setProgressWidth] = useState(0);
+  const heroCardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Cycle through model names
   useEffect(() => {
     const t = setInterval(() => setModelIdx((i) => (i + 1) % HERO_MODELS.length), 2400);
     return () => clearInterval(t);
   }, []);
 
-  // Animate log lines appearing one by one
   useEffect(() => {
     if (visibleLogs < LOG_LINES.length) {
       const t = setTimeout(() => setVisibleLogs((v) => v + 1), 600);
@@ -156,56 +230,11 @@ export default function LandingPage() {
     }
   }, [visibleLogs]);
 
-  // Animate progress bar
   useEffect(() => {
     const t = setTimeout(() => setProgressWidth(100), 400);
     return () => clearTimeout(t);
   }, []);
 
-  // Infinite Auto-Scroll Logic
-  useEffect(() => {
-    let animationId: number;
-    const animate = () => {
-      if (marqueeRef.current && !isDragging && !isHovered) {
-        marqueeRef.current.scrollLeft += 0.5; // Auto-scroll speed
-        
-        // Seamless loop checking (3 identical sets rendered)
-        // We reset when scroll reaches 1/3 of total scroll width
-        const singleSetWidth = marqueeRef.current.scrollWidth / 3;
-        if (marqueeRef.current.scrollLeft >= singleSetWidth) {
-          marqueeRef.current.scrollLeft -= singleSetWidth;
-        } else if (marqueeRef.current.scrollLeft <= 0) {
-          // In case they drag backwards past 0
-          marqueeRef.current.scrollLeft += singleSetWidth;
-        }
-      }
-      animationId = requestAnimationFrame(animate);
-    };
-    animationId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationId);
-  }, [isDragging, isHovered]);
-
-  // Drag handlers for marquee
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!marqueeRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - marqueeRef.current.offsetLeft);
-    setStartScrollLeft(marqueeRef.current.scrollLeft);
-  };
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-    setIsHovered(false);
-  };
-  const handleMouseUp = () => setIsDragging(false);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !marqueeRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - marqueeRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5; // Drag speed multiplier
-    marqueeRef.current.scrollLeft = startScrollLeft - walk;
-  };
-
-  // Intersection observer for scroll-reveal
   const observeReveal = useCallback((node: HTMLElement | null) => {
     if (!node) return;
     const observer = new IntersectionObserver(
@@ -219,24 +248,21 @@ export default function LandingPage() {
       },
       { threshold: 0.15 }
     );
-    // Observe all children with [data-reveal]
     node.querySelectorAll("[data-reveal]").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
 
   return (
     <div className={styles.page}>
-
-      {/* ── Navbar ── */}
       <nav className={`${styles.nav} ${scrolled || mobileNavOpen ? styles.navScrolled : ""}`}>
         <div className={styles.navInner}>
           <div className={styles.navLogo}>
             <FikraLogo size={28} showText />
           </div>
           <div className={styles.navLinks}>
-            <a href="#features"    className={styles.navLink}>Features</a>
+            <a href="#features" className={styles.navLink}>Features</a>
             <a href="#how-it-works" className={styles.navLink}>How It Works</a>
-            <a href="#pricing"     className={styles.navLink}>Pricing</a>
+            <a href="#pricing" className={styles.navLink}>Pricing</a>
           </div>
           <div className={styles.navActions}>
             <Link href="/auth/signin" className="btn btn-ghost btn-sm">Sign In</Link>
@@ -402,38 +428,15 @@ export default function LandingPage() {
             <p>Fine-tune or deploy from the leading model providers — all from one unified platform.</p>
           </div>
 
-          <div 
-            className={`${styles.marqueeContainer} ${isDragging ? styles.isDragging : ''}`}
-            ref={marqueeRef}
-            onMouseDown={handleMouseDown}
-            onMouseLeave={handleMouseLeave}
-            onMouseUp={handleMouseUp}
-            onMouseMove={handleMouseMove}
-            onMouseEnter={() => setIsHovered(true)}
-            data-reveal
-          >
-            {/* Duplicate for infinite seamless scrolling */}
-            {[...MODEL_SHOWCASE, ...MODEL_SHOWCASE, ...MODEL_SHOWCASE].map((m, i) => (
-              <div
-                key={`${m.name}-${i}`}
-                className={styles.showcaseCard}
-              >
-                <div className={styles.showcaseCardInner}>
-                  <div className={styles.showcaseIconRing}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={m.icon}
-                      alt={m.name}
-                      className={styles.showcaseIcon}
-                      loading="lazy"
-                      width={36}
-                      height={36}
-                    />
-                  </div>
-                  <span className={styles.showcaseName}>{m.name}</span>
-                </div>
-              </div>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
+            <div>
+              <div style={{ paddingLeft: '24px', marginBottom: '12px', opacity: 0.6, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Frontier Models</div>
+              <MarqueeRow items={FRONTIER_MODELS} direction={1} />
+            </div>
+            <div>
+              <div style={{ paddingLeft: '24px', marginBottom: '12px', opacity: 0.6, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Lightweight & Edge Models</div>
+              <MarqueeRow items={LIGHTWEIGHT_MODELS} direction={-1} />
+            </div>
           </div>
         </div>
       </section>
