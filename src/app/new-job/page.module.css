@@ -30,43 +30,47 @@
 
 /* ── Chat section ── */
 .chatSection {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   overflow: hidden;
 }
 
 .chatHeader {
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: var(--bg-elevated);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .aiAvatarWrap { display: flex; align-items: center; gap: 10px; }
 
 .aiPromptBox {
   padding: 20px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .goalTextarea {
   border: none !important;
-  border-top: 1px solid var(--border-subtle) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 0 !important;
-  background: var(--bg-card) !important;
+  background: rgba(255, 255, 255, 0.02) !important;
   padding: 20px !important;
   min-height: 120px;
   resize: vertical;
 }
-.goalTextarea:focus { box-shadow: none !important; border-color: var(--border-subtle) !important; }
+.goalTextarea:focus { box-shadow: none !important; border-color: rgba(0, 229, 200, 0.3) !important; }
 
 /* ── Chat history ── */
 .chatHistory {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.01);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 20px;
   max-height: 280px;
@@ -81,8 +85,10 @@
 
 /* ── Question card ── */
 .questionCard {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 24px;
 }
@@ -118,17 +124,22 @@
 
 .modelOption {
   padding: 14px 16px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
   cursor: pointer;
-  transition: var(--transition-base);
+  transition: all 0.3s ease;
 }
-.modelOption:hover { border-color: var(--border-focus); }
+.modelOption:hover {
+  border-color: rgba(0, 229, 200, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+}
 .modelOptionSelected {
-  border-color: var(--accent-primary) !important;
-  background: rgba(0,229,200,0.06) !important;
-  box-shadow: 0 0 0 1px rgba(0,229,200,0.15);
+  border-color: rgba(0, 229, 200, 0.4) !important;
+  background: rgba(0, 229, 200, 0.08) !important;
+  box-shadow: 0 0 0 1px rgba(0, 229, 200, 0.15);
 }
 .modelOptionName    { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
 .modelOptionCredits { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
@@ -141,16 +152,20 @@
 
 .configParam {
   padding: 14px 16px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
 }
 .configParamLabel { font-size: 0.75rem; color: var(--text-muted); font-weight: 500; margin-bottom: 4px; }
 .configParamValue { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); }
 
 .estimateCard {
-  background: rgba(0,229,200,0.04);
-  border: 1px solid rgba(0,229,200,0.15);
+  background: rgba(0, 229, 200, 0.04);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(0, 229, 200, 0.15);
   border-radius: 12px;
   padding: 20px;
   display: flex;

@@ -74,18 +74,23 @@ export default function BrowseModelsPage() {
 
   if (!loading && models.length === 0) {
     return (
-      <div className={styles.container}>
-        <div className={styles.emptyState}>
-          <h2 style={{ color: "#fff", marginBottom: 8 }}>Marketplace Coming Soon</h2>
-          <p>We are currently curating the best AI models. Check back later!</p>
+      <div className={styles.pageWrapper}>
+        <div className={styles.ambientGlow} />
+        <div className={styles.container}>
+          <div className={styles.emptyState}>
+            <h2 style={{ color: "var(--text-primary)", marginBottom: 8 }}>Marketplace Coming Soon</h2>
+            <p>We are currently curating the best AI models. Check back later!</p>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
+    <div className={styles.pageWrapper}>
+      <div className={styles.ambientGlow} />
+      <div className={styles.container}>
+        <div className={styles.header}>
         <div>
           <h1 className={styles.title}>
             <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models
@@ -198,6 +203,7 @@ export default function BrowseModelsPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

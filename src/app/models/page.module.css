@@ -61,18 +61,34 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  background: var(--bg-card);
-  transition: var(--transition-base);
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
 }
+.communityCard::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 200, 0.5) 30%, rgba(0, 229, 200, 0.1) 70%, transparent);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
 .communityCard:hover {
-  border-color: var(--border-focus);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 229, 200, 0.10);
+  border-color: rgba(0, 229, 200, 0.3);
+  transform: translateY(-4px);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 229, 200, 0.05);
+}
+.communityCard:hover::before {
+  opacity: 1;
 }
 
 .communityCardTop {
