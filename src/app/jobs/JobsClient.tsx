@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,7 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
+type Expert = Database["public"]["Tables"]["experts"]["Row"];
 
 const STATUS_MAP: Record<string, { cls: string; label: string }> = {
   completed: { cls: "badge-success", label: "Completed" },
@@ -18,14 +19,215 @@ const STATUS_MAP: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-type Expert = Database["public"]["Tables"]["experts"]["Row"];
+/* ─── SVG Icons (inline to avoid extra dependency) ─── */
+function TrashIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
+  );
+}
 
-export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[], experts: Expert[] }) {
+function EyeIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  );
+}
+
+function AlertCircleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <line x1="12" y1="8" x2="12" y2="12" />
+      <line x1="12" y1="16" x2="12.01" y2="16" />
+    </svg>
+  );
+}
+
+function XIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+function BriefcaseIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+      <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+    </svg>
+  );
+}
+
+function BotIcon({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="11" width="18" height="10" rx="2" />
+      <circle cx="12" cy="5" r="2" />
+      <path d="M12 7v4" />
+      <line x1="8" y1="16" x2="8" y2="16" />
+      <line x1="16" y1="16" x2="16" y2="16" />
+    </svg>
+  );
+}
+
+function ChatIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
+/* ─── Toast Component ─── */
+function Toast({ message, type, onDismiss }: { message: string; type: "success" | "error"; onDismiss: () => void }) {
+  const [exiting, setExiting] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const dismiss = useCallback(() => {
+    setExiting(true);
+    setTimeout(onDismiss, 250);
+  }, [onDismiss]);
+
+  useEffect(() => {
+    timerRef.current = setTimeout(dismiss, 5000);
+    return () => clearTimeout(timerRef.current);
+  }, [dismiss]);
+
+  const handleMouseEnter = () => clearTimeout(timerRef.current);
+  const handleMouseLeave = () => {
+    timerRef.current = setTimeout(dismiss, 3000);
+  };
+
+  return (
+    <div
+      className={`${styles.toast} ${type === "success" ? styles.toastSuccess : styles.toastError} ${exiting ? styles.toastExiting : ""}`}
+      role="status"
+      aria-live="polite"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <span className={styles.toastIcon}>
+        {type === "success" ? <CheckCircleIcon /> : <AlertCircleIcon />}
+      </span>
+      <span>{message}</span>
+      <button className={styles.toastDismiss} onClick={dismiss} aria-label="Dismiss notification">
+        <XIcon />
+      </button>
+    </div>
+  );
+}
+
+/* ─── Confirmation Modal Component ─── */
+function ConfirmModal({
+  itemName,
+  itemType,
+  loading,
+  onConfirm,
+  onCancel,
+}: {
+  itemName: string;
+  itemType: "job" | "expert";
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  // Focus the Cancel button by default (safe action)
+  useEffect(() => {
+    cancelRef.current?.focus();
+  }, []);
+
+  // Close on Escape key
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !loading) onCancel();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onCancel, loading]);
+
+  const typeLabel = itemType === "job" ? "fine-tuning job" : "smart assistant";
+
+  return (
+    <div className={styles.modalOverlay} onClick={loading ? undefined : onCancel} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalIcon}>
+          <TrashIcon size={22} />
+        </div>
+        <h3 className={styles.modalTitle} id="confirm-modal-title">
+          Remove <span className={styles.modalItemName}>{itemName}</span>?
+        </h3>
+        <p className={styles.modalBody}>
+          This will permanently remove this {typeLabel} and its associated data. This action cannot be undone.
+        </p>
+        <div className={styles.modalActions}>
+          <button
+            ref={cancelRef}
+            className={styles.modalCancelBtn}
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Cancel
+          </button>
+          <button
+            className={styles.modalDeleteBtn}
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? (
+              <>
+                <span className={styles.spinner} />
+                Removing...
+              </>
+            ) : (
+              <>
+                <TrashIcon size={14} />
+                Remove {itemType === "job" ? "Job" : "Assistant"}
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Component ─── */
+export default function JobsClient({ jobs: initialJobs, experts: initialExperts }: { jobs: Job[]; experts: Expert[] }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [experts, setExperts] = useState<Expert[]>(initialExperts);
   const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<"jobs" | "experts">("jobs");
+
+  // Delete state
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "job" | "expert"; id: string; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   // Background sync for all running/pending jobs
   async function syncAllJobs() {
@@ -33,7 +235,6 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
     try {
       const json = await apiClient.get<any>("/api/jobs/sync");
       if (json.ok) {
-        // Fetch fresh list from Supabase
         const { data } = await supabase
           .from("jobs")
           .select("*")
@@ -48,12 +249,52 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
   }
 
   useEffect(() => {
-    // Run sync on load if there are running or pending jobs
     const hasActive = initialJobs.some((j) => j.status === "running" || j.status === "pending");
     if (hasActive) {
       syncAllJobs();
     }
   }, []);
+
+  // Delete handler
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+
+    try {
+      const endpoint = deleteTarget.type === "job"
+        ? `/api/jobs/${deleteTarget.id}`
+        : `/api/experts/${deleteTarget.id}`;
+
+      await apiClient.delete<any>(endpoint);
+
+      // Trigger row fade-out animation
+      setRemovingId(deleteTarget.id);
+      setDeleteTarget(null);
+
+      // Wait for animation then remove from state
+      setTimeout(() => {
+        if (deleteTarget.type === "job") {
+          setJobs((prev) => prev.filter((j) => j.id !== deleteTarget.id));
+        } else {
+          setExperts((prev) => prev.filter((e) => e.id !== deleteTarget.id));
+        }
+        setRemovingId(null);
+        setToast({
+          message: deleteTarget.type === "job" ? "Job removed successfully" : "Assistant removed successfully",
+          type: "success",
+        });
+      }, 350);
+    } catch (err: any) {
+      console.error("Delete failed:", err);
+      setDeleteTarget(null);
+      setToast({
+        message: err?.data?.error || err?.message || "Failed to remove item. Please try again.",
+        type: "error",
+      });
+    } finally {
+      setDeleting(false);
+    }
+  }
 
   const counts = {
     total:     jobs.length,
@@ -62,16 +303,19 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
     failed:    jobs.filter((j) => j.status === "failed" || j.status === "cancelled").length,
   };
 
+  const isJobActive = (status: string) => status === "running" || status === "pending";
+
   return (
     <>
+      {/* ── Topbar ── */}
       <div className="topbar">
         <span className="topbar-title">Fine-Tuning Jobs</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <button 
-            className="btn btn-ghost btn-sm" 
-            onClick={syncAllJobs} 
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={syncAllJobs}
             disabled={syncing}
-            title="Refresh and sync job statuses with GPU and storage"
+            title="Refresh and sync job statuses"
           >
             {syncing ? "Syncing..." : "Sync Status"}
           </button>
@@ -80,6 +324,7 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
       </div>
 
       <div className="page-content">
+        {/* ── Stats Bar ── */}
         <div className={styles.statsBar}>
           {[
             { label: "Total",     value: counts.total,     cls: "" },
@@ -96,29 +341,40 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
           ))}
         </div>
 
-        <div className={styles.tabs} style={{ display: "flex", gap: 16, marginBottom: 24, borderBottom: "1px solid var(--border)", paddingBottom: 0 }}>
+        {/* ── Tabs ── */}
+        <div className={styles.tabBar}>
           <button
-            className={`tab-btn ${activeTab === "jobs" ? "active" : ""}`}
-            style={{ padding: "8px 16px", background: "none", border: "none", borderBottom: activeTab === "jobs" ? "2px solid var(--primary)" : "2px solid transparent", color: activeTab === "jobs" ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer", fontWeight: activeTab === "jobs" ? 600 : 400 }}
+            className={`${styles.tab} ${activeTab === "jobs" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("jobs")}
+            role="tab"
+            aria-selected={activeTab === "jobs"}
           >
             Fine-Tuning Jobs
+            <span className={styles.tabCount}>{jobs.length}</span>
           </button>
           <button
-            className={`tab-btn ${activeTab === "experts" ? "active" : ""}`}
-            style={{ padding: "8px 16px", background: "none", border: "none", borderBottom: activeTab === "experts" ? "2px solid var(--primary)" : "2px solid transparent", color: activeTab === "experts" ? "var(--text-primary)" : "var(--text-muted)", cursor: "pointer", fontWeight: activeTab === "experts" ? 600 : 400 }}
+            className={`${styles.tab} ${activeTab === "experts" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("experts")}
+            role="tab"
+            aria-selected={activeTab === "experts"}
           >
-            Smart Assistants (RAG)
+            Smart Assistants
+            <span className={styles.tabCount}>{experts.length}</span>
           </button>
         </div>
 
+        {/* ── Jobs Tab ── */}
         {activeTab === "jobs" ? (
           jobs.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "80px 24px" }}>
-              <h3 style={{ marginBottom: 8 }}>No jobs yet</h3>
-              <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first fine-tuning job to get started.</p>
-              <Link href="/new-job" className="btn btn-primary">New Fine-Tune</Link>
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>
+                <BriefcaseIcon />
+              </div>
+              <h3 className={styles.emptyTitle}>No fine-tuning jobs yet</h3>
+              <p className={styles.emptyDesc}>
+                Create your first fine-tuning job to start training a custom AI model on your data.
+              </p>
+              <Link href="/new-job" className="btn btn-primary">Create First Job</Link>
             </div>
           ) : (
             <div className="table-wrap">
@@ -131,17 +387,27 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
                     <th>Credits</th>
                     <th>Date</th>
                     <th>Status</th>
-                    <th></th>
+                    <th style={{ textAlign: "right", width: 100 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {jobs.map((job) => {
                     const s = STATUS_MAP[job.status] ?? STATUS_MAP.pending;
+                    const active = isJobActive(job.status);
                     return (
-                      <tr key={job.id}>
+                      <tr
+                        key={job.id}
+                        className={removingId === job.id ? styles.rowRemoving : ""}
+                      >
                         <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{job.name}</td>
-                        <td><span className="font-mono" style={{ fontSize: "0.8125rem" }}>{job.base_model.split("/").pop()}</span></td>
-                        <td><span className="badge badge-indigo">{job.method.toUpperCase()}</span></td>
+                        <td>
+                          <span className="font-mono" style={{ fontSize: "0.8125rem" }}>
+                            {job.base_model.split("/").pop()}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="badge badge-indigo">{job.method.toUpperCase()}</span>
+                        </td>
                         <td className="font-mono">{job.credits_used > 0 ? `${job.credits_used}` : "—"}</td>
                         <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                           {new Date(job.created_at).toLocaleDateString()}
@@ -153,7 +419,36 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
                           </span>
                         </td>
                         <td>
-                          <Link href={`/jobs/${job.id}`} className="btn btn-ghost btn-sm">View →</Link>
+                          <div className={styles.actionCell}>
+                            {/* View button */}
+                            <div className={styles.tooltipWrap}>
+                              <Link
+                                href={`/jobs/${job.id}`}
+                                className={`${styles.actionBtn} ${styles.actionBtnView}`}
+                                aria-label={`View job: ${job.name}`}
+                              >
+                                <EyeIcon />
+                              </Link>
+                              <span className={styles.tooltip}>View details</span>
+                            </div>
+
+                            <span className={styles.actionDivider} />
+
+                            {/* Delete button */}
+                            <div className={styles.tooltipWrap}>
+                              <button
+                                className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
+                                onClick={() => setDeleteTarget({ type: "job", id: job.id, name: job.name })}
+                                disabled={active}
+                                aria-label={active ? `Cannot remove active job: ${job.name}` : `Remove job: ${job.name}`}
+                              >
+                                <TrashIcon />
+                              </button>
+                              <span className={styles.tooltip}>
+                                {active ? "Cannot remove active jobs" : "Remove job"}
+                              </span>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -163,11 +458,17 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
             </div>
           )
         ) : (
+          /* ── Experts Tab ── */
           experts.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "80px 24px" }}>
-              <h3 style={{ marginBottom: 8 }}>No Smart Assistants yet</h3>
-              <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Create your first RAG Smart Assistant to get started.</p>
-              <Link href="/experts/new" className="btn btn-primary">New Assistant</Link>
+            <div className={styles.emptyState}>
+              <div className={styles.emptyIcon}>
+                <BotIcon />
+              </div>
+              <h3 className={styles.emptyTitle}>No smart assistants yet</h3>
+              <p className={styles.emptyDesc}>
+                Create your first RAG smart assistant — it answers questions using your uploaded documents as a verified knowledge base.
+              </p>
+              <Link href="/experts/new" className="btn btn-primary">Create First Assistant</Link>
             </div>
           ) : (
             <div className="table-wrap">
@@ -178,15 +479,26 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
                     <th>Description</th>
                     <th>Type</th>
                     <th>Date Created</th>
-                    <th></th>
+                    <th style={{ textAlign: "right", width: 100 }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {experts.map((exp) => (
-                    <tr key={exp.id}>
+                    <tr
+                      key={exp.id}
+                      className={removingId === exp.id ? styles.rowRemoving : ""}
+                    >
                       <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{exp.name}</td>
                       <td>
-                        <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)", display: "inline-block", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{
+                          fontSize: "0.8125rem",
+                          color: "var(--text-muted)",
+                          display: "inline-block",
+                          maxWidth: 300,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap"
+                        }}>
                           {exp.description || "Grounded smart assistant with verified knowledge base."}
                         </span>
                       </td>
@@ -195,7 +507,33 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
                         {new Date(exp.created_at).toLocaleDateString()}
                       </td>
                       <td>
-                        <Link href={`/experts/${exp.id}/chat`} className="btn btn-ghost btn-sm">Chat →</Link>
+                        <div className={styles.actionCell}>
+                          {/* Chat button */}
+                          <div className={styles.tooltipWrap}>
+                            <Link
+                              href={`/experts/${exp.id}/chat`}
+                              className={`${styles.actionBtn} ${styles.actionBtnView}`}
+                              aria-label={`Chat with: ${exp.name}`}
+                            >
+                              <ChatIcon />
+                            </Link>
+                            <span className={styles.tooltip}>Open chat</span>
+                          </div>
+
+                          <span className={styles.actionDivider} />
+
+                          {/* Delete button */}
+                          <div className={styles.tooltipWrap}>
+                            <button
+                              className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
+                              onClick={() => setDeleteTarget({ type: "expert", id: exp.id, name: exp.name })}
+                              aria-label={`Remove assistant: ${exp.name}`}
+                            >
+                              <TrashIcon />
+                            </button>
+                            <span className={styles.tooltip}>Remove assistant</span>
+                          </div>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -205,6 +543,26 @@ export default function JobsClient({ jobs: initialJobs, experts }: { jobs: Job[]
           )
         )}
       </div>
+
+      {/* ── Confirmation Modal ── */}
+      {deleteTarget && (
+        <ConfirmModal
+          itemName={deleteTarget.name}
+          itemType={deleteTarget.type}
+          loading={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => !deleting && setDeleteTarget(null)}
+        />
+      )}
+
+      {/* ── Toast Notification ── */}
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onDismiss={() => setToast(null)}
+        />
+      )}
     </>
   );
 }
