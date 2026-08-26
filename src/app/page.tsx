@@ -121,46 +121,46 @@ const LOG_LINES = [
   { text: "✓ Ready to deploy or download", type: "success" },
 ];
 
-function MarqueeRow({ items, direction = 1 }: { items: typeof MODEL_SHOWCASE_ROW_1, direction?: number }) {
+function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
   const marqueeRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
   const [startX, setStartX] = useState(0);
   const [startScrollLeft, setStartScrollLeft] = useState(0);
+  const animationRef = useRef<number>(0);
+  const scrollRef = useRef(0);
 
   useEffect(() => {
-    if (direction === -1 && marqueeRef.current) {
-      marqueeRef.current.scrollLeft = marqueeRef.current.scrollWidth / 3;
+    const el = marqueeRef.current;
+    if (!el) return;
+
+    // For reverse direction, start in the middle third so there's room to scroll left
+    if (direction === -1) {
+      el.scrollLeft = el.scrollWidth / 3;
     }
-  }, [direction]);
+    scrollRef.current = el.scrollLeft;
 
-  useEffect(() => {
-    let animationId: number;
     const animate = () => {
-      if (marqueeRef.current && !isDragging && !isHovered) {
-        marqueeRef.current.scrollLeft += 0.5 * direction; 
-        
-        const singleSetWidth = marqueeRef.current.scrollWidth / 3;
-        
+      if (!isDragging) {
+        scrollRef.current += 0.6 * direction;
+        const singleSetWidth = el.scrollWidth / 3;
+
         if (direction === 1) {
-          if (marqueeRef.current.scrollLeft >= singleSetWidth) {
-            marqueeRef.current.scrollLeft -= singleSetWidth;
-          } else if (marqueeRef.current.scrollLeft <= 0) {
-            marqueeRef.current.scrollLeft += singleSetWidth;
-          }
+          if (scrollRef.current >= singleSetWidth * 2) scrollRef.current -= singleSetWidth;
+          else if (scrollRef.current < 0) scrollRef.current += singleSetWidth;
         } else {
-          if (marqueeRef.current.scrollLeft <= 0) {
-            marqueeRef.current.scrollLeft += singleSetWidth;
-          } else if (marqueeRef.current.scrollLeft >= singleSetWidth * 2) {
-            marqueeRef.current.scrollLeft -= singleSetWidth;
-          }
+          if (scrollRef.current <= 0) scrollRef.current += singleSetWidth;
+          else if (scrollRef.current >= singleSetWidth * 2) scrollRef.current -= singleSetWidth;
         }
+
+        el.scrollLeft = scrollRef.current;
       }
-      animationId = requestAnimationFrame(animate);
+      animationRef.current = requestAnimationFrame(animate);
     };
-    animationId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationId);
-  }, [isDragging, isHovered, direction]);
+
+    animationRef.current = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [direction, isDragging]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     if (!marqueeRef.current) return;
@@ -168,25 +168,26 @@ function MarqueeRow({ items, direction = 1 }: { items: typeof MODEL_SHOWCASE_ROW
     setStartX(e.pageX - marqueeRef.current.offsetLeft);
     setStartScrollLeft(marqueeRef.current.scrollLeft);
   };
-  const handleMouseLeave = () => { setIsDragging(false); setIsHovered(false); };
+  const handleMouseLeave = () => setIsDragging(false);
   const handleMouseUp = () => setIsDragging(false);
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging || !marqueeRef.current) return;
     e.preventDefault();
     const x = e.pageX - marqueeRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5; 
-    marqueeRef.current.scrollLeft = startScrollLeft - walk;
+    const walk = (x - startX) * 1.5;
+    const newScroll = startScrollLeft - walk;
+    marqueeRef.current.scrollLeft = newScroll;
+    scrollRef.current = newScroll;
   };
 
   return (
-    <div 
+    <div
       className={`${styles.marqueeContainer} ${isDragging ? styles.isDragging : ''}`}
       ref={marqueeRef}
       onMouseDown={handleMouseDown}
       onMouseLeave={handleMouseLeave}
       onMouseUp={handleMouseUp}
       onMouseMove={handleMouseMove}
-      onMouseEnter={() => setIsHovered(true)}
       data-reveal
     >
       {[...items, ...items, ...items].map((m, i) => (
