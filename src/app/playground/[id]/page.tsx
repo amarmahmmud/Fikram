@@ -113,6 +113,10 @@ export default function PlaygroundPage({ params }: { params: Promise<{ id: strin
               ts: new Date().toLocaleTimeString(),
             }
           ]);
+          
+          // Trigger chat count increment
+          apiClient.post("/api/community/chat-count", { targetId: resolvedParams.id, targetType: "job" })
+            .catch(console.error);
         }
       }
     } catch (e) {

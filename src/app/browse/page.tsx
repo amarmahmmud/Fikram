@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, MessageCircle, Heart } from "lucide-react";
+import { Globe, MessageCircle, Heart, Search } from "lucide-react";
 
 const CATEGORIES = ["All", "Coding", "Finance", "Healthcare", "Writing", "Legal", "Education", "General"];
 type SortOption = "newest" | "popular";
@@ -15,6 +15,9 @@ export default function BrowseModelsPage() {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState("All");
   const [sortBy, setSortBy] = useState<SortOption>("popular");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [localStats, setLocalStats] = useState<Record<string, { likes: number; chats: number }>>({});
 
   useEffect(() => {
     apiClient.get<any>("/api/community")
@@ -27,8 +30,40 @@ export default function BrowseModelsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleLike = async (id: string, type: string) => {
+    if (likedIds.has(id)) return; // Already liked this session
+
+    // Optimistically update UI
+    setLikedIds((prev) => new Set(prev).add(id));
+    setLocalStats((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        likes: (prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0) + 1,
+      }
+    }));
+
+    try {
+      const res = await apiClient.post<any>("/api/community/like", { targetId: id, targetType: type });
+      if (res.ok && res.likes_count !== undefined) {
+        setLocalStats((prev) => ({
+          ...prev,
+          [id]: { ...prev[id], likes: res.likes_count }
+        }));
+      }
+    } catch (err) {
+      console.error("Failed to like:", err);
+      // Revert on error could go here
+    }
+  };
+
   const filteredModels = models
-    .filter((m) => activeCategory === "All" || m.category.toLowerCase() === activeCategory.toLowerCase())
+    .filter((m) => {
+      const matchesCategory = activeCategory === "All" || m.category.toLowerCase() === activeCategory.toLowerCase();
+      const matchesSearch = m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            m.description.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    })
     .sort((a, b) => {
       if (sortBy === "popular") {
         return b.chatsCount - a.chatsCount;
@@ -74,8 +109,20 @@ export default function BrowseModelsPage() {
           ))}
         </div>
 
+        <div className={styles.searchBar}>
+          <Search size={16} color="var(--text-muted)" />
+          <input 
+            type="text" 
+            placeholder="Search models..." 
+            className={styles.searchInput}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
         <select
           className={styles.sortSelect}
+          style={{ marginLeft: "auto" }}
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortOption)}
           aria-label="Sort models"
@@ -125,10 +172,22 @@ export default function BrowseModelsPage() {
               <div className={styles.cardFooter}>
                 <div className={styles.stats}>
                   <div className={styles.statItem} title="Total Chats">
-                    <MessageCircle size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> {item.chatsCount >= 1000 ? (item.chatsCount / 1000).toFixed(1) + "k" : item.chatsCount}
+                    <MessageCircle size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> 
+                    {localStats[item.id]?.chats ?? item.chatsCount >= 1000 ? ((localStats[item.id]?.chats ?? item.chatsCount) / 1000).toFixed(1) + "k" : (localStats[item.id]?.chats ?? item.chatsCount)}
                   </div>
-                  <div className={styles.statItem} title="Likes">
-                    <Heart size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> {item.likesCount}
+                  <div 
+                    className={styles.statItem} 
+                    title="Likes"
+                    style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+                    onClick={() => handleLike(item.id, item.type)}
+                  >
+                    <Heart 
+                      size={14} 
+                      fill={likedIds.has(item.id) ? "#C77DFF" : "none"}
+                      color={likedIds.has(item.id) ? "#C77DFF" : "currentColor"}
+                      style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} 
+                    /> 
+                    {localStats[item.id]?.likes ?? item.likesCount}
                   </div>
                 </div>
                 <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ padding: "6px 16px", borderRadius: "8px" }}>

@@ -113,8 +113,8 @@ export async function GET() {
           category: "General",
           author: { name: "Creator" },
           baseModel: "Smart Assistant (RAG)",
-          likesCount: 12,
-          chatsCount: 48,
+          likesCount: exp.likes_count || 0,
+          chatsCount: exp.chats_count || 0,
           publishedAt: exp.created_at,
           chatUrl: `/experts/${exp.id}/chat`,
           tags: ["Knowledge Base", "Q&A"],
@@ -138,8 +138,8 @@ export async function GET() {
             category: (config.category as string) || "General",
             author: { name: "Creator" },
             baseModel: `${job.base_model} (${job.method.toUpperCase()})`,
-            likesCount: 8,
-            chatsCount: 32,
+            likesCount: job.likes_count || 0,
+            chatsCount: job.chats_count || 0,
             publishedAt: (config.published_at as string) || job.created_at,
             chatUrl: `/playground/${job.id}`,
             tags: (config.tags as string[]) || ["Fine-Tuned", job.base_model],
@@ -150,13 +150,13 @@ export async function GET() {
       }
     }
 
-    // Combine verified featured models with dynamic creator models
-    const allItems = [...dynamicItems, ...FEATURED_COMMUNITY_MODELS];
+    // Only return real dynamic creator models
+    const allItems = [...dynamicItems];
 
     return NextResponse.json({ ok: true, models: allItems });
   } catch (err: unknown) {
     console.error("[Community API Error]:", err);
-    return NextResponse.json({ ok: true, models: FEATURED_COMMUNITY_MODELS });
+    return NextResponse.json({ ok: true, models: [] });
   }
 }
 

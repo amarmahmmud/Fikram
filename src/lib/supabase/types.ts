@@ -51,6 +51,8 @@ export interface Database {
           started_at: string | null;
           completed_at: string | null;
           finished_at: string | null;
+          likes_count: number;
+          chats_count: number;
           created_at: string;
         };
         Insert: {
@@ -70,6 +72,8 @@ export interface Database {
           started_at?: string | null;
           completed_at?: string | null;
           finished_at?: string | null;
+          likes_count?: number;
+          chats_count?: number;
           created_at?: string;
         };
         Update: {
@@ -89,6 +93,8 @@ export interface Database {
           started_at?: string | null;
           completed_at?: string | null;
           finished_at?: string | null;
+          likes_count?: number;
+          chats_count?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -199,6 +205,8 @@ export interface Database {
           system_prompt: string | null;
           avatar_url: string | null;
           is_published: boolean;
+          likes_count: number;
+          chats_count: number;
           created_at: string;
           updated_at: string;
         };
@@ -211,6 +219,8 @@ export interface Database {
           system_prompt?: string | null;
           avatar_url?: string | null;
           is_published?: boolean;
+          likes_count?: number;
+          chats_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -223,6 +233,8 @@ export interface Database {
           system_prompt?: string | null;
           avatar_url?: string | null;
           is_published?: boolean;
+          likes_count?: number;
+          chats_count?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -254,6 +266,30 @@ export interface Database {
           embedding?: string | null;
           source_filename?: string | null;
           chunk_index?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_likes: {
+        Row: {
+          id: string;
+          user_id: string;
+          target_id: string;
+          target_type: "expert" | "job";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          target_id: string;
+          target_type: "expert" | "job";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          target_id?: string;
+          target_type?: "expert" | "job";
           created_at?: string;
         };
         Relationships: [];

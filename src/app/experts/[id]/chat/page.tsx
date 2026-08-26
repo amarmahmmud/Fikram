@@ -41,6 +41,10 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           role: "model",
           content: `Hello! I'm **${data.name}**${data.description ? ` — ${data.description}` : ""}. Ask me anything about my expertise.`,
         }]);
+
+        // Trigger chat count increment
+        apiClient.post("/api/community/chat-count", { targetId: resolvedParams.id, targetType: "expert" })
+          .catch(console.error);
       }
       setLoading(false);
     }
