@@ -735,6 +735,10 @@
   gap: 20px;
   padding: 20px 0;
   cursor: grab;
+  /* Force GPU compositing for buttery-smooth scroll */
+  will-change: scroll-position;
+  transform: translateZ(0);
+  -webkit-overflow-scrolling: touch;
 }
 
 .marqueeContainer::-webkit-scrollbar {
@@ -781,11 +785,13 @@
     0 0 60px -20px rgba(199, 125, 255, 0.15);
   overflow: hidden;
   cursor: pointer;
-  transform: translateY(-4px) scale(1.02);
+  transform: translateY(-4px) scale(1.02) translateZ(0);
+  will-change: transform;
   transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               border-color 0.4s ease,
               box-shadow 0.4s ease;
   min-width: 220px;
+  flex-shrink: 0;
 }
 
 .showcaseCard:hover {

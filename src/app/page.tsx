@@ -122,72 +122,79 @@ const LOG_LINES = [
 ];
 
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
-  const marqueeRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [startScrollLeft, setStartScrollLeft] = useState(0);
-  const animationRef = useRef<number>(0);
-  const scrollRef = useRef(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollPos    = useRef(0);
+  const isDragging   = useRef(false);
+  const dragStartX   = useRef(0);
+  const dragStartScroll = useRef(0);
 
   useEffect(() => {
-    const el = marqueeRef.current;
+    const el = containerRef.current;
     if (!el) return;
 
-    // For reverse direction, start in the middle third so there's room to scroll left
+    // Seed starting position
     if (direction === -1) {
       el.scrollLeft = el.scrollWidth / 3;
     }
-    scrollRef.current = el.scrollLeft;
+    scrollPos.current = el.scrollLeft;
 
-    const animate = () => {
-      if (!isDragging) {
-        scrollRef.current += 0.6 * direction;
-        const singleSetWidth = el.scrollWidth / 3;
+    let rafId: number;
+    const tick = () => {
+      if (!isDragging.current) {
+        scrollPos.current += 0.7 * direction;
+        const third = el.scrollWidth / 3;
 
         if (direction === 1) {
-          if (scrollRef.current >= singleSetWidth * 2) scrollRef.current -= singleSetWidth;
-          else if (scrollRef.current < 0) scrollRef.current += singleSetWidth;
+          if (scrollPos.current >= third * 2) scrollPos.current -= third;
+          else if (scrollPos.current < 0)    scrollPos.current += third;
         } else {
-          if (scrollRef.current <= 0) scrollRef.current += singleSetWidth;
-          else if (scrollRef.current >= singleSetWidth * 2) scrollRef.current -= singleSetWidth;
+          if (scrollPos.current <= 0)         scrollPos.current += third;
+          else if (scrollPos.current >= third * 2) scrollPos.current -= third;
         }
 
-        el.scrollLeft = scrollRef.current;
+        // Direct DOM write — no React re-render
+        el.scrollLeft = scrollPos.current;
       }
-      animationRef.current = requestAnimationFrame(animate);
+      rafId = requestAnimationFrame(tick);
     };
 
-    animationRef.current = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animationRef.current);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [direction, isDragging]);
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [direction]); // ← only direction, never restarts due to drag changes
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!marqueeRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - marqueeRef.current.offsetLeft);
-    setStartScrollLeft(marqueeRef.current.scrollLeft);
+  const onMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    dragStartX.current = e.pageX;
+    dragStartScroll.current = scrollPos.current;
+    containerRef.current?.classList.add(styles.isDragging);
   };
-  const handleMouseLeave = () => setIsDragging(false);
-  const handleMouseUp = () => setIsDragging(false);
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !marqueeRef.current) return;
+
+  const onMouseUp = () => {
+    isDragging.current = false;
+    containerRef.current?.classList.remove(styles.isDragging);
+  };
+
+  const onMouseLeave = () => {
+    isDragging.current = false;
+    containerRef.current?.classList.remove(styles.isDragging);
+  };
+
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current || !containerRef.current) return;
     e.preventDefault();
-    const x = e.pageX - marqueeRef.current.offsetLeft;
-    const walk = (x - startX) * 1.5;
-    const newScroll = startScrollLeft - walk;
-    marqueeRef.current.scrollLeft = newScroll;
-    scrollRef.current = newScroll;
+    const walk = (e.pageX - dragStartX.current) * 1.5;
+    scrollPos.current = dragStartScroll.current - walk;
+    containerRef.current.scrollLeft = scrollPos.current;
   };
 
   return (
     <div
-      className={`${styles.marqueeContainer} ${isDragging ? styles.isDragging : ''}`}
-      ref={marqueeRef}
-      onMouseDown={handleMouseDown}
-      onMouseLeave={handleMouseLeave}
-      onMouseUp={handleMouseUp}
-      onMouseMove={handleMouseMove}
+      className={styles.marqueeContainer}
+      ref={containerRef}
+      onMouseDown={onMouseDown}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseLeave}
+      onMouseMove={onMouseMove}
       data-reveal
     >
       {[...items, ...items, ...items].map((m, i) => (
