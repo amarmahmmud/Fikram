@@ -702,86 +702,177 @@
   }
 }
 
-/* ═══ MARQUEE ═══ */
-.marqueeSection {
-  padding: 40px 0;
-  border-top: 1px solid rgba(255,255,255,0.04);
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-  background: rgba(0, 229, 200, 0.01);
-  overflow: hidden;
+/* ═══ MODEL SHOWCASE (MARQUEE) ═══ */
+.showcaseSection {
+  padding: 80px 0;
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  overflow: hidden;
 }
 
-.marqueeLabel {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted);
-  margin-bottom: 24px;
-  font-weight: 600;
+.showcaseGlow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 1000px;
+  height: 400px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 229, 200, 0.04) 0%,
+    rgba(199, 125, 255, 0.02) 40%,
+    transparent 70%
+  );
+  pointer-events: none;
+  z-index: 0;
 }
 
 .marqueeContainer {
   display: flex;
-  width: max-content;
-  animation: scrollLeft 40s linear infinite;
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+  gap: 20px;
+  padding: 20px 0;
+  cursor: grab;
+}
+
+.marqueeContainer::-webkit-scrollbar {
+  display: none; /* Safari/Chrome */
+}
+
+.marqueeContainer.isDragging {
+  cursor: grabbing;
+  user-select: none;
 }
 
 /* Gradient masks for smooth fade on edges */
-.marqueeSection::before,
-.marqueeSection::after {
+.showcaseSection::before,
+.showcaseSection::after {
   content: "";
   position: absolute;
   top: 0;
-  width: 150px;
+  width: 200px;
   height: 100%;
   z-index: 2;
   pointer-events: none;
 }
-.marqueeSection::before {
+.showcaseSection::before {
   left: 0;
   background: linear-gradient(to right, var(--bg-base) 0%, transparent 100%);
 }
-.marqueeSection::after {
+.showcaseSection::after {
   right: 0;
   background: linear-gradient(to left, var(--bg-base) 0%, transparent 100%);
 }
 
-.marqueeItem {
+.showcaseCard {
+  position: relative;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(0, 229, 200, 0.3);
+  box-shadow:
+    0 0 0 1px rgba(0, 229, 200, 0.1),
+    0 8px 30px -12px rgba(0, 229, 200, 0.1),
+    0 0 60px -20px rgba(199, 125, 255, 0.08);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.4s ease,
+              box-shadow 0.4s ease;
+  min-width: 220px;
+}
+
+.showcaseCard:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: rgba(0, 229, 200, 0.5);
+  box-shadow:
+    0 0 0 1px rgba(0, 229, 200, 0.2),
+    0 8px 30px -12px rgba(0, 229, 200, 0.15),
+    0 0 60px -20px rgba(199, 125, 255, 0.15);
+}
+
+.showcaseCardInner {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 40px;
-  opacity: 0.6;
-  filter: grayscale(100%);
-  transition: all 0.3s ease;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 1.1rem;
-  color: #fff;
+  gap: 16px;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
 }
 
-.marqueeItem:hover {
-  opacity: 1;
-  filter: grayscale(0%);
-  transform: scale(1.05);
-}
-
-.marqueeIcon {
-  width: 28px;
-  height: 28px;
+/* Icon ring */
+.showcaseIconRing {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(0, 229, 200, 0.3);
+  box-shadow: 0 0 16px -4px rgba(0, 229, 200, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease, transform 0.4s ease;
+}
+
+.showcaseCard:hover .showcaseIconRing {
+  border-color: rgba(0, 229, 200, 0.6);
+  box-shadow: 0 0 16px -4px rgba(0, 229, 200, 0.4);
+  transform: scale(1.05);
+}
+
+.showcaseIcon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  transition: transform 0.4s ease, filter 0.4s ease;
+  filter: drop-shadow(0 2px 8px rgba(0, 229, 200, 0.2));
+}
+
+.showcaseCard:hover .showcaseIcon {
+  filter: drop-shadow(0 2px 8px rgba(0, 229, 200, 0.4));
+  transform: scale(1.08);
+}
+
+.showcaseName {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  letter-spacing: -0.01em;
+  transition: color 0.3s ease;
+}
+
+.showcaseCard:hover .showcaseName {
+  color: #fff;
+}
+
+/* Top edge glow line on hover */
+.showcaseCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0, 229, 200, 0.8), transparent);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.showcaseCard:hover::before {
+  opacity: 1;
 }
 
 @keyframes scrollLeft {
   0% { transform: translateX(0); }
   100% { transform: translateX(-50%); }
 }
+
 
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 1024px) {
@@ -811,6 +902,8 @@
   .modelTicker  { flex-wrap: wrap; justify-content: center; }
 
   .featuresGrid  { grid-template-columns: 1fr; gap: 16px; }
+  .showcaseGrid  { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .showcaseSection { padding: 80px 0; }
   .stepsGrid     { grid-template-columns: 1fr; gap: 20px; }
   .statsGrid     { grid-template-columns: repeat(2, 1fr); gap: 0; }
   .statItem      { border-right: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 20px 16px; }

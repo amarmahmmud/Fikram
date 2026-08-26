@@ -80,31 +80,35 @@ const STATS = [
   { value: "99.9%", label: "Platform Uptime" },
 ];
 
-const TOP_PROVIDERS = [
+const MODEL_SHOWCASE = [
   {
-    name: "Meta Llama",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>`
+    name: "Llama 3",
+    icon: "/models/llama.svg",
   },
   {
-    name: "Mistral AI",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 20L12 4 2 20h20z"/><path d="M12 12l4 8H8l4-8z"/></svg>`
+    name: "Mistral",
+    icon: "/models/mistral.svg",
   },
   {
-    name: "Google Gemma",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>`
+    name: "Gemma 2",
+    icon: "/models/gemma.svg",
   },
   {
-    name: "Microsoft Phi",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>`
+    name: "Qwen 2",
+    icon: "/models/qwen.svg",
   },
   {
     name: "DeepSeek",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="21.17" y1="8" x2="12" y2="8"/><line x1="3.95" y1="6.06" x2="8.54" y2="14"/></svg>`
+    icon: "/models/deepseek.svg",
   },
   {
-    name: "Cohere",
-    svg: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`
-  }
+    name: "Phi-3",
+    icon: "/models/phi.svg",
+  },
+  {
+    name: "Zephyr",
+    icon: "/models/huggingface.svg",
+  },
 ];
 
 const LOG_LINES = [
@@ -124,6 +128,13 @@ export default function LandingPage() {
   const [visibleLogs, setVisibleLogs] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
   const heroCardRef = useRef<HTMLDivElement>(null);
+  
+  // Marquee drag and scroll state
+  const marqueeRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [startScrollLeft, setStartScrollLeft] = useState(0);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -150,6 +161,49 @@ export default function LandingPage() {
     const t = setTimeout(() => setProgressWidth(100), 400);
     return () => clearTimeout(t);
   }, []);
+
+  // Infinite Auto-Scroll Logic
+  useEffect(() => {
+    let animationId: number;
+    const animate = () => {
+      if (marqueeRef.current && !isDragging && !isHovered) {
+        marqueeRef.current.scrollLeft += 0.5; // Auto-scroll speed
+        
+        // Seamless loop checking (3 identical sets rendered)
+        // We reset when scroll reaches 1/3 of total scroll width
+        const singleSetWidth = marqueeRef.current.scrollWidth / 3;
+        if (marqueeRef.current.scrollLeft >= singleSetWidth) {
+          marqueeRef.current.scrollLeft -= singleSetWidth;
+        } else if (marqueeRef.current.scrollLeft <= 0) {
+          // In case they drag backwards past 0
+          marqueeRef.current.scrollLeft += singleSetWidth;
+        }
+      }
+      animationId = requestAnimationFrame(animate);
+    };
+    animationId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationId);
+  }, [isDragging, isHovered]);
+
+  // Drag handlers for marquee
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!marqueeRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - marqueeRef.current.offsetLeft);
+    setStartScrollLeft(marqueeRef.current.scrollLeft);
+  };
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+    setIsHovered(false);
+  };
+  const handleMouseUp = () => setIsDragging(false);
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !marqueeRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - marqueeRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5; // Drag speed multiplier
+    marqueeRef.current.scrollLeft = startScrollLeft - walk;
+  };
 
   // Intersection observer for scroll-reveal
   const observeReveal = useCallback((node: HTMLElement | null) => {
@@ -338,17 +392,49 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Providers Marquee ── */}
-      <section className={styles.marqueeSection}>
-        <div className={styles.marqueeLabel}>Supported Ecosystems</div>
-        <div className={styles.marqueeContainer}>
-          {/* We duplicate the array to create a seamless infinite loop */}
-          {[...TOP_PROVIDERS, ...TOP_PROVIDERS, ...TOP_PROVIDERS].map((p, i) => (
-            <div key={`${p.name}-${i}`} className={styles.marqueeItem}>
-              <div className={styles.marqueeIcon} dangerouslySetInnerHTML={{ __html: p.svg }} />
-              <span>{p.name}</span>
-            </div>
-          ))}
+      {/* ── Model Ecosystem Showcase ── */}
+      <section className={styles.showcaseSection} ref={observeReveal}>
+        <div className={styles.showcaseGlow} />
+        <div className="container">
+          <div className={styles.sectionHead} data-reveal>
+            <span className="section-label">Ecosystem</span>
+            <h2>Built on the world&apos;s best<br />open-source models</h2>
+            <p>Fine-tune or deploy from the leading model providers — all from one unified platform.</p>
+          </div>
+
+          <div 
+            className={`${styles.marqueeContainer} ${isDragging ? styles.isDragging : ''}`}
+            ref={marqueeRef}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
+            onMouseEnter={() => setIsHovered(true)}
+            data-reveal
+          >
+            {/* Duplicate for infinite seamless scrolling */}
+            {[...MODEL_SHOWCASE, ...MODEL_SHOWCASE, ...MODEL_SHOWCASE].map((m, i) => (
+              <div
+                key={`${m.name}-${i}`}
+                className={styles.showcaseCard}
+              >
+                <div className={styles.showcaseCardInner}>
+                  <div className={styles.showcaseIconRing}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={m.icon}
+                      alt={m.name}
+                      className={styles.showcaseIcon}
+                      loading="lazy"
+                      width={36}
+                      height={36}
+                    />
+                  </div>
+                  <span className={styles.showcaseName}>{m.name}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
