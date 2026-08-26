@@ -126,9 +126,9 @@
 }
 .modelOption:hover { border-color: var(--border-focus); }
 .modelOptionSelected {
-  border-color: var(--accent-indigo) !important;
-  background: rgba(99,102,241,0.08) !important;
-  box-shadow: 0 0 0 1px rgba(99,102,241,0.15);
+  border-color: var(--accent-primary) !important;
+  background: rgba(0,229,200,0.06) !important;
+  box-shadow: 0 0 0 1px rgba(0,229,200,0.15);
 }
 .modelOptionName    { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); }
 .modelOptionCredits { font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 4px; }
@@ -149,8 +149,8 @@
 .configParamValue { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); }
 
 .estimateCard {
-  background: rgba(99,102,241,0.06);
-  border: 1px solid rgba(99,102,241,0.15);
+  background: rgba(0,229,200,0.04);
+  border: 1px solid rgba(0,229,200,0.15);
   border-radius: 12px;
   padding: 20px;
   display: flex;

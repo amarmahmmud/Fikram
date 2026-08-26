@@ -119,12 +119,13 @@
 
 .card:hover {
   transform: translateY(-4px);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  border-color: rgba(0,229,200,0.25);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0,229,200,0.08);
 }
 
 .card:hover::before {
   opacity: 1;
+  background: linear-gradient(90deg, transparent, rgba(0,229,200,0.5), transparent);
 }
 
 .cardHeader {
@@ -144,13 +145,13 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1, #a855f7);
+  background: linear-gradient(135deg, #00E5C8, #C77DFF);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.65rem;
   font-weight: bold;
-  color: #fff;
+  color: #000;
 }
 
 .authorName {
@@ -244,9 +245,9 @@
 
 /* Badge overrides specifically for the browse page */
 .badgeSmart {
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: rgba(0,229,200,0.10);
+  color: #00E5C8;
+  border: 1px solid rgba(0,229,200,0.25);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 0.65rem;

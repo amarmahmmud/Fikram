@@ -147,8 +147,8 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
               onClick={() => setIsOpen(false)}
               className={`nav-item ${pathname === item.href ? "active" : ""}`}
               style={item.highlight && pathname !== item.href ? {
-                background: "rgba(99,102,241,0.08)",
-                borderColor: "rgba(99,102,241,0.15)",
+                background: "rgba(0,229,200,0.06)",
+                borderColor: "rgba(0,229,200,0.18)",
                 color: "var(--text-primary)",
               } : {}}
             >

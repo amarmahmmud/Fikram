@@ -75,8 +75,9 @@
   align-items: center;
 }
 .toggleOn {
-  background: var(--accent-indigo);
-  border-color: var(--accent-indigo);
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(0,229,200,0.4);
 }
 
 .toggleThumb {
