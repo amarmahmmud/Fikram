@@ -25,19 +25,18 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
-// The SDK defaults to v1beta — embedding models live on v1 (stable).
-// Pass EMBED_REQUEST_OPTIONS to force the correct endpoint.
-const EMBEDDING_MODEL = "text-embedding-004";
+const EMBEDDING_MODEL = "gemini-embedding-2";
 const EMBEDDING_DIMENSIONS = 768;
-const EMBED_REQUEST_OPTIONS = { apiVersion: "v1" } as const;
 
 /**
  * Generate an embedding vector for a single text string.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL }, EMBED_REQUEST_OPTIONS);
-  // Plain string overload — avoids the Content.role requirement
-  const result = await model.embedContent(text);
+  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+  const result = await model.embedContent({
+    content: { role: "user" as const, parts: [{ text }] },
+    outputDimensionality: EMBEDDING_DIMENSIONS,
+  } as any);
   return result.embedding.values;
 }
 
@@ -45,11 +44,12 @@ export async function embedText(text: string): Promise<number[]> {
  * Generate embeddings for multiple texts in batch.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL }, EMBED_REQUEST_OPTIONS);
+  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
   const result = await model.batchEmbedContents({
     requests: texts.map((text) => ({
       content: { role: "user" as const, parts: [{ text }] },
-    })),
+      outputDimensionality: EMBEDDING_DIMENSIONS,
+    } as any)),
   });
   return result.embeddings.map((e) => e.values);
 }
@@ -446,7 +446,7 @@ ${sourcesText}`;
 
   const completion = await groq.chat.completions.create({
     messages: groqHistory,
-    model: "llama-3.3-70b-versatile",
+    model: "openai/gpt-oss-120b",
     temperature: 0.3,
     max_completion_tokens: 2048,
   });
