@@ -121,39 +121,64 @@ export async function DELETE(
     );
   }
 
-  // Check if model is published and actively used by >30% of platform users
+  // Check if model is published and used by >= 30% of active platform users (MAU)
   const jobConfig = (typeof job.config === "object" && job.config !== null && !Array.isArray(job.config))
     ? (job.config as Record<string, any>)
     : {};
   const isPublished = Boolean(jobConfig.published);
 
   if (isPublished) {
-    // 1. Get total registered platform users
-    const { count: totalPlatformUsers } = await supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true });
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const totalUsers = Math.max(totalPlatformUsers || 1, 1);
+    // 1. Calculate active platform users (users active in the last 30 days)
+    const [
+      { data: recentProfiles },
+      { data: recentJobs },
+      { data: recentLikes },
+      { data: recentTransactions },
+    ] = await Promise.all([
+      supabase.from("profiles").select("id").gte("created_at", thirtyDaysAgo),
+      supabase.from("jobs").select("user_id").gte("created_at", thirtyDaysAgo),
+      supabase.from("user_likes").select("user_id").gte("created_at", thirtyDaysAgo),
+      supabase.from("credit_transactions").select("user_id").gte("created_at", thirtyDaysAgo),
+    ]);
 
-    // 2. Count distinct users who interacted with or liked this model
-    const { count: uniqueLikedUsers } = await supabase
+    const activeUserSet = new Set<string>();
+    recentProfiles?.forEach((p: any) => p.id && activeUserSet.add(p.id));
+    recentJobs?.forEach((j: any) => j.user_id && activeUserSet.add(j.user_id));
+    recentLikes?.forEach((l: any) => l.user_id && activeUserSet.add(l.user_id));
+    recentTransactions?.forEach((t: any) => t.user_id && activeUserSet.add(t.user_id));
+
+    // If platform is new or active set is small, fallback to total profiles count
+    let activeUsersCount = activeUserSet.size;
+    if (activeUsersCount === 0) {
+      const { count: totalCount } = await supabase.from("profiles").select("id", { count: "exact", head: true });
+      activeUsersCount = Math.max(totalCount || 1, 1);
+    }
+
+    // 2. Count distinct active users who interacted with or liked this model
+    const { data: modelLikers } = await supabase
       .from("user_likes")
-      .select("user_id", { count: "exact", head: true })
+      .select("user_id")
       .eq("target_id", id)
       .eq("target_type", "job");
 
-    const chatsCount = job.chats_count || 0;
-    const userInteractions = Math.max(uniqueLikedUsers || 0, Math.min(chatsCount, totalUsers));
-    const usagePercentage = (userInteractions / totalUsers) * 100;
+    const modelUserSet = new Set<string>();
+    modelLikers?.forEach((l: any) => l.user_id && modelUserSet.add(l.user_id));
 
-    // If >= 30% of platform users are using it
-    if (usagePercentage >= 30 || (totalUsers >= 3 && chatsCount >= totalUsers * 0.3)) {
+    const chatsCount = job.chats_count || 0;
+    const modelActiveUsers = Math.max(modelUserSet.size, Math.min(chatsCount, activeUsersCount));
+    const activeUsagePercentage = (modelActiveUsers / activeUsersCount) * 100;
+
+    // Check threshold: 30% and over (>= 30%) of active platform users
+    if (activeUsagePercentage >= 30 || (activeUsersCount >= 2 && chatsCount >= activeUsersCount * 0.3)) {
       const updatedConfig = {
         ...jobConfig,
         deletion_review: {
           status: "under_review",
           requested_at: new Date().toISOString(),
-          usage_percentage: Math.round(usagePercentage),
+          active_usage_percentage: Math.round(activeUsagePercentage),
+          active_users_count: activeUsersCount,
         },
       };
 
@@ -165,8 +190,8 @@ export async function DELETE(
       return NextResponse.json(
         {
           underReview: true,
-          usagePercentage: Math.round(usagePercentage),
-          error: "Deletion application under review: This published model is actively used by over 30% of platform users. To prevent breaking active user workflows, your deletion request has been submitted for review and will be processed once verified.",
+          activeUsagePercentage: Math.round(activeUsagePercentage),
+          error: "Deletion application under review: This published model is actively used by 30% or more of active platform users. To maintain service continuity for active users, your deletion request is under administrative review and will be processed once verified.",
         },
         { status: 423 }
       );
