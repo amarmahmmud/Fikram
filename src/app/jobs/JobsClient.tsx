@@ -98,7 +98,7 @@ function ChatIcon({ size = 15 }: { size?: number }) {
 }
 
 /* ─── Toast Component ─── */
-function Toast({ message, type, onDismiss }: { message: string; type: "success" | "error"; onDismiss: () => void }) {
+function Toast({ message, type, onDismiss }: { message: string; type: "success" | "error" | "warning"; onDismiss: () => void }) {
   const [exiting, setExiting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -108,18 +108,25 @@ function Toast({ message, type, onDismiss }: { message: string; type: "success" 
   }, [onDismiss]);
 
   useEffect(() => {
-    timerRef.current = setTimeout(dismiss, 5000);
+    timerRef.current = setTimeout(dismiss, 7000);
     return () => clearTimeout(timerRef.current);
   }, [dismiss]);
 
   const handleMouseEnter = () => clearTimeout(timerRef.current);
   const handleMouseLeave = () => {
-    timerRef.current = setTimeout(dismiss, 3000);
+    timerRef.current = setTimeout(dismiss, 4000);
   };
+
+  const typeClass =
+    type === "success"
+      ? styles.toastSuccess
+      : type === "warning"
+      ? styles.toastWarning
+      : styles.toastError;
 
   return (
     <div
-      className={`${styles.toast} ${type === "success" ? styles.toastSuccess : styles.toastError} ${exiting ? styles.toastExiting : ""}`}
+      className={`${styles.toast} ${typeClass} ${exiting ? styles.toastExiting : ""}`}
       role="status"
       aria-live="polite"
       onMouseEnter={handleMouseEnter}
@@ -128,7 +135,7 @@ function Toast({ message, type, onDismiss }: { message: string; type: "success" 
       <span className={styles.toastIcon}>
         {type === "success" ? <CheckCircleIcon /> : <AlertCircleIcon />}
       </span>
-      <span>{message}</span>
+      <span style={{ maxWidth: 460, whiteSpace: "normal", lineHeight: 1.4 }}>{message}</span>
       <button className={styles.toastDismiss} onClick={dismiss} aria-label="Dismiss notification">
         <XIcon />
       </button>
@@ -227,7 +234,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
   const [removingId, setRemovingId] = useState<string | null>(null);
 
   // Toast state
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" | "warning" } | null>(null);
 
   // Background sync for all running/pending jobs
   async function syncAllJobs() {
@@ -287,9 +294,10 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
     } catch (err: any) {
       console.error("Delete failed:", err);
       setDeleteTarget(null);
+      const isUnderReview = err?.data?.underReview || err?.status === 423;
       setToast({
         message: err?.data?.error || err?.message || "Failed to remove item. Please try again.",
-        type: "error",
+        type: isUnderReview ? "warning" : "error",
       });
     } finally {
       setDeleting(false);
