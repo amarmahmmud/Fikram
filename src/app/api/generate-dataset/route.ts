@@ -1,15 +1,26 @@
 import { NextResponse } from "next/server";
 import { generateDataset } from "@/lib/dataset-pipeline";
+import { WizardContext } from "@/lib/wizard-types";
 
 export async function POST(req: Request) {
   try {
-    const { text, goal } = await req.json();
+    const body = await req.json();
+    const { text, goal, wizardContext } = body as {
+      text: string;
+      goal?: string;
+      wizardContext?: WizardContext;
+    };
 
     if (!text) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    const { jsonl, stats } = await generateDataset(text, goal);
+    const { jsonl, stats } = await generateDataset(
+      text,
+      goal || wizardContext?.goal || "",
+      undefined,
+      wizardContext
+    );
 
     if (stats.afterDedup === 0) {
       return NextResponse.json({

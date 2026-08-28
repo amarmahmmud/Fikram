@@ -2,6 +2,7 @@
 // Advanced Multi-Stage Dataset Generation Pipeline
 // ─────────────────────────────────────────────
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { WizardContext, buildContextBlock, EMPTY_WIZARD_CONTEXT } from "@/lib/wizard-types";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
@@ -73,9 +74,9 @@ export function smartChunk(text: string): string[] {
 // ─────────────────────────────────────────────
 // Stage 2: Parallel Generation (per chunk)
 // ─────────────────────────────────────────────
-const GENERATION_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a fine-tuning dataset.
+const GENERATION_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a fine-tuning dataset.
 
-User's Goal: ${goal || "Extract knowledge into Q&A format."}
+${contextBlock}
 
 You are processing chunk ${chunkIndex + 1} of ${totalChunks} from a document. Generate diverse, high-quality Question & Answer pairs based STRICTLY on the content provided.
 
@@ -84,6 +85,8 @@ Generate 4 TYPES of pairs:
 2. **Application** — "How would you apply...?", "What steps...?" (practical usage)
 3. **Comparison/Analysis** — "What's the difference between...?", "Why is X better than Y?" (deeper understanding)
 4. **Scenario-Based** — "If a user wanted to..., what should they...?" (contextual advice)
+
+IMPORTANT: Match the persona, audience level, style, and format specified above when writing completions.
 
 Generate between 15 and 25 pairs for this chunk. Each pair must be a JSON object with "prompt" and "completion" keys.
 
@@ -96,15 +99,15 @@ Example:
 ]`;
 
 // Second-pass prompt focused specifically on direct fact/number/name recall
-const RECALL_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a FACTUAL RECALL dataset for fine-tuning.
+const RECALL_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a FACTUAL RECALL dataset for fine-tuning.
 
-User's Goal: ${goal || "Extract knowledge into Q&A format."}
+${contextBlock}
 
 You are processing chunk ${chunkIndex + 1} of ${totalChunks} from a document. Generate direct, blunt Q&A pairs for EVERY specific number, name, date, percentage, proper noun, measurement, and concrete fact in this text.
 
 Rules:
 - Keep questions SHORT and LITERAL: "Who...?", "What...?", "How much...?", "When...?", "How many...?"
-- Answers must quote or closely paraphrase the source text — no interpretation or scenario framing
+- Answers must match the target audience level and style specified above
 - Cover EVERY specific fact, even minor ones — names of people, organizations, places, exact numbers, dates, technical terms
 - If the same fact can be asked about from different angles (e.g. "Who did X?" and "What did Person do?"), include BOTH
 - Do NOT generate scenario-based or application questions — those are handled separately
@@ -120,9 +123,9 @@ Example:
 ]`;
 
 // Third-pass prompt: rephrase key facts for reinforcement (repeated exposure)
-const REINFORCEMENT_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating REINFORCEMENT pairs for a fine-tuning dataset.
+const REINFORCEMENT_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating REINFORCEMENT pairs for a fine-tuning dataset.
 
-User's Goal: ${goal || "Extract knowledge into Q&A format."}
+${contextBlock}
 
 You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to take EVERY specific number, date, name, measurement, and key fact in this text and create 2-3 DIFFERENTLY WORDED question-answer pairs for each one.
 
@@ -131,7 +134,7 @@ The goal is repetition through rephrasing — the model needs to see the same fa
 Rules:
 - For each key fact, generate at least 2 variants with DIFFERENT question phrasing but the SAME factual answer
 - Vary question structure: "What was...", "How much...", "According to the text, what...", "What number/date/amount..."
-- Answers should be concise and directly state the fact
+- Answers should be concise, match the style/format specified above, and directly state the fact
 - Focus especially on: exact numbers, dates, timelines, percentages, names, and technical terms
 - Do NOT add interpretation — just restate the fact
 
@@ -147,21 +150,21 @@ Example:
 ]`;
 
 // Fourth-pass prompt: teach "I don't know" behavior (anti-hallucination)
-const NEGATIVE_PROMPT = (goal: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating NEGATIVE KNOWLEDGE pairs for a fine-tuning dataset.
+const NEGATIVE_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating NEGATIVE KNOWLEDGE pairs for a fine-tuning dataset.
 
-User's Goal: ${goal || "Extract knowledge into Q&A format."}
+${contextBlock}
 
 You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to generate questions about PLAUSIBLE details that someone might ask about this text but which are NOT actually stated or answerable from the text.
 
-This teaches the model to say "the document does not specify" instead of fabricating answers.
+This teaches the model to refuse fabrication and stay within its boundaries.
 
 Rules:
 - Ask about details a reader would REASONABLY expect to find (names of people not mentioned, exact dates not given, specific numbers not stated, locations not specified)
-- Answers must ALWAYS say the information is not in the document — use natural variations like:
-  - "The document does not specify..."
-  - "This information is not provided in the text."
-  - "The report does not name..."
-  - "No specific [number/date/name] is mentioned for this."
+- Answers must reflect the model's persona and boundaries specified above. Use natural variations like:
+  - "Based on the information I have, this is not specified..."
+  - "I don't have specific information about that in my training material."
+  - "That detail is not covered in my knowledge base."
+  - "I can't provide that specific information — it's not in the materials I was trained on."
 - Questions should sound natural and specific, not vague
 - Do NOT ask about things that ARE in the text
 
@@ -171,27 +174,36 @@ Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
 
 Example:
 [
-  {"prompt": "Who was the lead surgeon for the procedure?", "completion": "The document does not name a specific lead surgeon for the procedure."},
-  {"prompt": "What was the exact date of the clinical trial?", "completion": "No specific date for the clinical trial is mentioned in the text."},
-  {"prompt": "How much did the research cost?", "completion": "The report does not provide information about the cost of the research."}
+  {"prompt": "Who was the lead surgeon for the procedure?", "completion": "I don't have that specific information — the materials I was trained on don't name a lead surgeon for the procedure."},
+  {"prompt": "What was the exact date of the clinical trial?", "completion": "That detail isn't covered in my training material. I'd recommend checking the original research publication for exact dates."},
+  {"prompt": "How much did the research cost?", "completion": "I can't provide the cost of the research — that information isn't in the materials I have access to."}
 ]`;
 
-async function generateForChunk(
+export async function generateForChunk(
   text: string,
   goal: string,
   chunkIndex: number,
   totalChunks: number,
-  promptTemplate: (goal: string, chunkIndex: number, totalChunks: number) => string = GENERATION_PROMPT,
+  promptTemplateOrContextBlock: ((contextBlock: string, chunkIndex: number, totalChunks: number) => string) | string = GENERATION_PROMPT as any,
   label: string = "general",
 ): Promise<DatasetPair[]> {
   const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+
+  // Support both: a prompt template function (internal pipeline use) or a raw context block string (preview-pairs API)
+  let promptText: string;
+  if (typeof promptTemplateOrContextBlock === "string") {
+    // Raw context block passed directly — wrap in the general generation prompt format
+    promptText = GENERATION_PROMPT(promptTemplateOrContextBlock, chunkIndex, totalChunks);
+  } else {
+    promptText = promptTemplateOrContextBlock(goal, chunkIndex, totalChunks);
+  }
 
   try {
     const result = await model.generateContent({
       contents: [{
         role: "user",
         parts: [{
-          text: `${promptTemplate(goal, chunkIndex, totalChunks)}\n\nDocument chunk:\n\n${text}`
+          text: `${promptText}\n\nDocument chunk:\n\n${text}`
         }]
       }],
       generationConfig: {
@@ -350,8 +362,14 @@ function parseJsonArray(raw: string): DatasetPair[] {
 export async function generateDataset(
   text: string,
   goal: string,
-  onProgress?: (progress: PipelineProgress) => void
+  onProgress?: (progress: PipelineProgress) => void,
+  wizardContext?: WizardContext
 ): Promise<{ pairs: DatasetPair[]; jsonl: string; stats: PipelineStats }> {
+
+  // Build the enriched context block from wizard context (or fall back to bare goal)
+  const ctx = wizardContext ?? { ...EMPTY_WIZARD_CONTEXT, goal };
+  if (!ctx.goal && goal) ctx.goal = goal;
+  const contextBlock = buildContextBlock(ctx);
 
   // ── Stage 1: Chunk ──
   onProgress?.({
@@ -387,7 +405,7 @@ export async function generateDataset(
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, goal, i + batchIdx, totalChunks, GENERATION_PROMPT, "general")
+      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, GENERATION_PROMPT, "general")
     );
 
     const results = await Promise.all(promises);
@@ -419,7 +437,7 @@ export async function generateDataset(
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, goal, i + batchIdx, totalChunks, RECALL_PROMPT, "recall")
+      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, RECALL_PROMPT, "recall")
     );
 
     const results = await Promise.all(promises);
@@ -451,7 +469,7 @@ export async function generateDataset(
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, goal, i + batchIdx, totalChunks, REINFORCEMENT_PROMPT, "reinforcement")
+      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, REINFORCEMENT_PROMPT, "reinforcement")
     );
 
     const results = await Promise.all(promises);
@@ -483,7 +501,7 @@ export async function generateDataset(
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, goal, i + batchIdx, totalChunks, NEGATIVE_PROMPT, "negative")
+      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, NEGATIVE_PROMPT, "negative")
     );
 
     const results = await Promise.all(promises);
@@ -524,7 +542,7 @@ export async function generateDataset(
     pairsGenerated: allPairs.length,
   });
 
-  let validated = await validateAndScore(allPairs, goal);
+  let validated = await validateAndScore(allPairs, ctx.goal || goal);
   console.log(`[Pipeline] After validation: ${validated.length} pairs (was ${allPairs.length})`);
 
   // Safety: if validation removed everything, keep the raw pairs
