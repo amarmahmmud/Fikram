@@ -7,7 +7,7 @@ import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
 import { Globe, MessageCircle, Heart, Search } from "lucide-react";
 
-const CATEGORIES = ["All", "Coding", "Finance", "Healthcare", "Writing", "Legal", "Education", "General"];
+const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
 type SortOption = "newest" | "popular";
 
 export default function BrowseModelsPage() {
