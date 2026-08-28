@@ -107,6 +107,77 @@
   letter-spacing: 0.03em;
 }
 
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.aiHelperBtn {
+  background: none;
+  border: 1px solid rgba(0, 229, 200, 0.2);
+  background: rgba(0, 229, 200, 0.05);
+  color: var(--accent-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+.aiHelperBtn:hover {
+  background: rgba(0, 229, 200, 0.12);
+  border-color: rgba(0, 229, 200, 0.4);
+}
+
+.aiGeneratorBox {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(0, 229, 200, 0.15);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  animation: fadeUp 0.25s ease;
+}
+
+.aiGeneratorHeader {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.toneChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.toneChip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.toneChip:hover {
+  border-color: rgba(0, 229, 200, 0.3);
+  color: var(--text-primary);
+}
+.toneChipActive {
+  background: rgba(0, 229, 200, 0.15);
+  border-color: rgba(0, 229, 200, 0.4);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
 .input {
   width: 100%;
   padding: 10px 14px;
@@ -153,12 +224,12 @@
 .dropzone {
   border: 2px dashed rgba(255, 255, 255, 0.15);
   border-radius: 14px;
-  padding: 40px 20px;
+  padding: 32px 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.2s;
   background: rgba(255, 255, 255, 0.02);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .dropzone:hover,
@@ -168,8 +239,8 @@
 }
 
 .dropzoneIcon {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
+  font-size: 2.2rem;
+  margin-bottom: 6px;
 }
 
 .dropzoneText {
@@ -189,12 +260,46 @@
   margin-top: 4px;
 }
 
+/* URL section */
+.urlSection {
+  margin-bottom: 16px;
+}
+
+.urlToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+.urlToggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+.urlInputRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  animation: fadeUp 0.2s ease;
+}
+.urlInputRow input {
+  flex: 1;
+}
+
 /* File list */
 .fileList {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
 }
 
 .fileRow {
@@ -206,6 +311,11 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.85rem;
+}
+
+.fileIcon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .fileName {
@@ -249,6 +359,21 @@
 .fileStatus_error {
   color: var(--error);
   background: hsl(0 84% 60% / 0.1);
+}
+
+.fileRemoveBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
+}
+.fileRemoveBtn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
 }
 
 @keyframes pulse {

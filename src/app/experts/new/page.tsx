@@ -4,15 +4,26 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
+import { apiClient } from "@/lib/apiClient";
 
 type Step = 1 | 2 | 3;
 
 interface UploadedFile {
   file: File;
+  sourceType: "file" | "url";
+  sourceUrl?: string;
   status: "pending" | "uploading" | "done" | "error";
   chunksStored?: number;
   error?: string;
 }
+
+const TONE_PRESETS = [
+  "Friendly & Encouraging",
+  "Professional & Precise",
+  "Direct & Concise",
+  "Academic & Detailed",
+  "Casual & Conversational",
+];
 
 export default function NewExpertPage() {
   const router = useRouter();
@@ -26,6 +37,16 @@ export default function NewExpertPage() {
   const [ingesting, setIngesting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Optional AI Prompt Helper state
+  const [showAiHelper, setShowAiHelper] = useState(false);
+  const [selectedTone, setSelectedTone] = useState(TONE_PRESETS[0]);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+
+  // Optional URL Ingestion state
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [urlInput, setUrlInput] = useState("");
+  const [scrapingUrl, setScrapingUrl] = useState(false);
 
   // Step 1: Create expert profile
   async function handleCreateExpert() {
@@ -54,6 +75,31 @@ export default function NewExpertPage() {
     setCreating(false);
   }
 
+  // AI Prompt Suggestion Helper
+  async function handleGeneratePrompt() {
+    if (!name.trim()) {
+      alert("Please enter an Expert Name first.");
+      return;
+    }
+    setGeneratingPrompt(true);
+    try {
+      const res = await apiClient.post<any>("/api/experts/suggest-prompt", {
+        name: name.trim(),
+        description: description.trim(),
+        tone: selectedTone,
+      });
+      if (res.ok && res.systemPrompt) {
+        setSystemPrompt(res.systemPrompt);
+        setShowAiHelper(false);
+      } else {
+        alert(res.error || "Could not generate prompt");
+      }
+    } catch {
+      alert("Failed to generate prompt — please try again");
+    }
+    setGeneratingPrompt(false);
+  }
+
   // Step 2: Upload & ingest files
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -65,6 +111,7 @@ export default function NewExpertPage() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
       addFiles(Array.from(e.target.files));
+      e.target.value = "";
     }
   }
 
@@ -78,8 +125,46 @@ export default function NewExpertPage() {
     );
     setFiles((prev) => [
       ...prev,
-      ...valid.map((file) => ({ file, status: "pending" as const })),
+      ...valid.map((file) => ({ file, sourceType: "file" as const, status: "pending" as const })),
     ]);
+  }
+
+  // Add scraped URL as a file
+  async function handleAddUrl() {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    if (!/^https?:\/\//i.test(trimmed)) {
+      setUrlInput("https://" + trimmed);
+      return;
+    }
+    setScrapingUrl(true);
+    try {
+      const res = await apiClient.post<any>("/api/scrape-url", { url: trimmed });
+      if (res.ok && res.text) {
+        const titleClean = (res.title || "webpage").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+        const virtualFile = new File([res.text], `${titleClean}.txt`, { type: "text/plain" });
+        setFiles((prev) => [
+          ...prev,
+          {
+            file: virtualFile,
+            sourceType: "url",
+            sourceUrl: trimmed,
+            status: "pending",
+          },
+        ]);
+        setUrlInput("");
+        setShowUrlInput(false);
+      } else {
+        alert(res.error || "Failed to fetch content from URL");
+      }
+    } catch {
+      alert("Network error fetching URL");
+    }
+    setScrapingUrl(false);
+  }
+
+  function removeFile(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
   async function handleIngest() {
@@ -184,10 +269,46 @@ export default function NewExpertPage() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Style Instructions (optional)</label>
+              <div className={styles.labelRow}>
+                <label className={styles.label} style={{ marginBottom: 0 }}>Style Instructions (optional)</label>
+                <button
+                  type="button"
+                  className={styles.aiHelperBtn}
+                  onClick={() => setShowAiHelper(!showAiHelper)}
+                >
+                  ✨ {showAiHelper ? "Hide AI Helper" : "Generate with AI"}
+                </button>
+              </div>
+
+              {showAiHelper && (
+                <div className={styles.aiGeneratorBox}>
+                  <div className={styles.aiGeneratorHeader}>Pick a tone &amp; generate custom instructions:</div>
+                  <div className={styles.toneChips}>
+                    {TONE_PRESETS.map((t) => (
+                      <button
+                        type="button"
+                        key={t}
+                        className={`${styles.toneChip} ${selectedTone === t ? styles.toneChipActive : ""}`}
+                        onClick={() => setSelectedTone(t)}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleGeneratePrompt}
+                    disabled={generatingPrompt || !name.trim()}
+                  >
+                    {generatingPrompt ? "Generating..." : "Apply AI Instructions →"}
+                  </button>
+                </div>
+              )}
+
               <textarea
                 className={styles.textarea}
-                placeholder="e.g., Speak in a friendly, encouraging tone. Use simple language. Always give practical examples."
+                placeholder="e.g., Speak in a friendly, encouraging tone. Base answers strictly on the knowledge base. Always cite sources."
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 rows={3}
@@ -212,7 +333,7 @@ export default function NewExpertPage() {
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>Upload Knowledge Content</h2>
             <p className={styles.cardDesc}>
-              Upload the expert's content — PDFs, text files, course materials. The AI will read and learn from these.
+              Upload the expert&apos;s content — PDFs, text files, course materials, or web links. The AI will read and index these.
             </p>
 
             <div
@@ -237,12 +358,53 @@ export default function NewExpertPage() {
               <p className={styles.dropzoneHint}>PDF, TXT, MD files supported</p>
             </div>
 
-            {/* File list */}
+            {/* URL Ingestion Section */}
+            <div className={styles.urlSection}>
+              {!showUrlInput ? (
+                <button
+                  type="button"
+                  className={styles.urlToggle}
+                  onClick={() => setShowUrlInput(true)}
+                >
+                  🔗 + Add web links (optional)
+                </button>
+              ) : (
+                <div className={styles.urlInputRow}>
+                  <input
+                    className={styles.input}
+                    placeholder="https://example.com/article"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleAddUrl}
+                    disabled={scrapingUrl || !urlInput.trim()}
+                  >
+                    {scrapingUrl ? "Fetching..." : "Add"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { setShowUrlInput(false); setUrlInput(""); }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* File & Source list */}
             {files.length > 0 && (
               <div className={styles.fileList}>
                 {files.map((f, i) => (
                   <div key={i} className={styles.fileRow}>
-                    <span className={styles.fileName}>{f.file.name}</span>
+                    <span className={styles.fileIcon}>{f.sourceType === "url" ? "🔗" : "📄"}</span>
+                    <span className={styles.fileName}>
+                      {f.sourceType === "url" ? `${f.file.name} (${f.sourceUrl})` : f.file.name}
+                    </span>
                     <span className={styles.fileSize}>
                       {(f.file.size / 1024).toFixed(0)} KB
                     </span>
@@ -252,6 +414,16 @@ export default function NewExpertPage() {
                       {f.status === "done" && `✓ ${f.chunksStored} chunks`}
                       {f.status === "error" && `✗ ${f.error}`}
                     </span>
+                    {f.status === "pending" && (
+                      <button
+                        type="button"
+                        className={styles.fileRemoveBtn}
+                        onClick={() => removeFile(i)}
+                        title="Remove"
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -263,7 +435,7 @@ export default function NewExpertPage() {
                 onClick={handleIngest}
                 disabled={files.length === 0 || ingesting}
               >
-                {ingesting ? "Processing..." : `Process ${files.length} file${files.length !== 1 ? "s" : ""} →`}
+                {ingesting ? "Processing..." : `Process ${files.length} source${files.length !== 1 ? "s" : ""} →`}
               </button>
               {allDone && (
                 <button className="btn btn-secondary" onClick={() => setStep(3)}>
