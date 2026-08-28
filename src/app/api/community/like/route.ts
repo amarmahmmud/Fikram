@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   try {
@@ -10,50 +11,41 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { targetId, targetType } = body;
 
-    if (!targetId || !targetType || !['expert', 'job'].includes(targetType)) {
+    if (!targetId || !targetType || !["expert", "job"].includes(targetType)) {
       return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
     }
 
-    // 1. Try to insert into user_likes
+    // 1. Record the like in user_likes (enforces uniqueness via DB constraint)
     const { error: likeError } = await supabase
-      .from('user_likes')
+      .from("user_likes")
       .insert({
         user_id: user.id,
         target_id: targetId,
-        target_type: targetType as "expert" | "job"
+        target_type: targetType as "expert" | "job",
       });
 
-    // If there's an error (like a unique constraint violation), the user already liked it.
     if (likeError) {
-      if (likeError.code === '23505') { // Postgres unique_violation code
+      // Unique constraint violation = user already liked this
+      if (likeError.code === "23505") {
         return NextResponse.json({ error: "Already liked" }, { status: 409 });
       }
       throw likeError;
     }
 
-    // 2. Increment the likes_count in the respective table
-    const table = targetType === 'expert' ? 'experts' : 'jobs';
-    
-    // Fallback manual fetch/update logic for the increment
-    const { data: currentData, error: fetchError } = await supabase
-      .from(table)
-      .select('likes_count')
-      .eq('id', targetId)
-      .single();
+    // 2. Atomically increment the counter using a SECURITY DEFINER function
+    //    so RLS doesn't block updating another user's row.
+    const admin = createAdminClient();
+    const rpcName = targetType === "expert" ? "increment_expert_likes" : "increment_job_likes";
+    const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
 
-    if (fetchError) throw fetchError;
+    const { data: newCount, error: rpcError } = await admin.rpc(rpcName, rpcArg);
+    if (rpcError) {
+      console.error("[Like API] RPC increment error:", rpcError);
+      // Don't fail the request — the like was recorded, count update is cosmetic
+    }
 
-    const newCount = (currentData.likes_count || 0) + 1;
-
-    const { error: updateError } = await supabase
-      .from(table)
-      .update({ likes_count: newCount } as any) // suppress TS error for dynamic table update
-      .eq('id', targetId);
-
-    if (updateError) throw updateError;
-
-    return NextResponse.json({ ok: true, likes_count: newCount });
-  } catch (err: any) {
+    return NextResponse.json({ ok: true, likes_count: newCount ?? null });
+  } catch (err: unknown) {
     console.error("[Community Like API Error]:", err);
     return NextResponse.json({ error: "Failed to process like" }, { status: 500 });
   }

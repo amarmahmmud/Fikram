@@ -248,6 +248,9 @@ export interface Database {
           embedding: string | null;
           source_filename: string | null;
           chunk_index: number | null;
+          section_title: string | null;
+          section_tier: string | null;
+          section_index: number | null;
           created_at: string;
         };
         Insert: {
@@ -257,6 +260,9 @@ export interface Database {
           embedding?: string | null;
           source_filename?: string | null;
           chunk_index?: number | null;
+          section_title?: string | null;
+          section_tier?: string | null;
+          section_index?: number | null;
           created_at?: string;
         };
         Update: {
@@ -266,6 +272,9 @@ export interface Database {
           embedding?: string | null;
           source_filename?: string | null;
           chunk_index?: number | null;
+          section_title?: string | null;
+          section_tier?: string | null;
+          section_index?: number | null;
           created_at?: string;
         };
         Relationships: [];
@@ -310,7 +319,25 @@ export interface Database {
           source_filename: string;
           chunk_index: number;
           similarity: number;
+          section_title: string | null;
+          section_tier: string | null;
         }[];
+      };
+      increment_expert_likes: {
+        Args: { expert_id: string };
+        Returns: number;
+      };
+      increment_job_likes: {
+        Args: { job_id: string };
+        Returns: number;
+      };
+      increment_expert_chats: {
+        Args: { expert_id: string };
+        Returns: number;
+      };
+      increment_job_chats: {
+        Args: { job_id: string };
+        Returns: number;
       };
     };
     Enums: Record<string, never>;

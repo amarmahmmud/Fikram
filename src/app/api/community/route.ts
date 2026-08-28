@@ -199,7 +199,7 @@ export async function PATCH(req: Request) {
 
       const { error: updateError } = await supabase
         .from("jobs")
-        .update({ config })
+        .update({ config: config as import("@/lib/supabase/types").Json })
         .eq("id", id)
         .eq("user_id", user.id);
       if (updateError) throw updateError;

@@ -1,40 +1,30 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient();
-    // We don't necessarily enforce strict auth here since anyone playing in playground counts as a chat.
-    
     const body = await req.json();
     const { targetId, targetType } = body;
 
-    if (!targetId || !targetType || !['expert', 'job'].includes(targetType)) {
+    if (!targetId || !targetType || !["expert", "job"].includes(targetType)) {
       return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
     }
 
-    const table = targetType === 'expert' ? 'experts' : 'jobs';
-    
-    // Fetch and increment
-    const { data: currentData, error: fetchError } = await supabase
-      .from(table)
-      .select('chats_count')
-      .eq('id', targetId)
-      .single();
+    // Use the admin client + SECURITY DEFINER RPC so the counter update
+    // works even when the model belongs to a different user.
+    const admin = createAdminClient();
+    const rpcName = targetType === "expert" ? "increment_expert_chats" : "increment_job_chats";
+    const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
 
-    if (fetchError) throw fetchError;
+    const { data: newCount, error } = await admin.rpc(rpcName, rpcArg);
 
-    const newCount = (currentData.chats_count || 0) + 1;
+    if (error) {
+      console.error("[ChatCount API] RPC increment error:", error);
+      return NextResponse.json({ error: "Failed to increment chat count" }, { status: 500 });
+    }
 
-    const { error: updateError } = await supabase
-      .from(table)
-      .update({ chats_count: newCount } as any)
-      .eq('id', targetId);
-
-    if (updateError) throw updateError;
-
-    return NextResponse.json({ ok: true, chats_count: newCount });
-  } catch (err: any) {
+    return NextResponse.json({ ok: true, chats_count: newCount ?? null });
+  } catch (err: unknown) {
     console.error("[Community ChatCount API Error]:", err);
     return NextResponse.json({ error: "Failed to increment chat count" }, { status: 500 });
   }

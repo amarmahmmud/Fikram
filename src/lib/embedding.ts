@@ -25,7 +25,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
-const EMBEDDING_MODEL = "gemini-embedding-2";
+const EMBEDDING_MODEL = "text-embedding-004";
 const EMBEDDING_DIMENSIONS = 768;
 
 /**
@@ -35,7 +35,6 @@ export async function embedText(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
   const result = await model.embedContent({
     content: { role: "user" as const, parts: [{ text }] },
-    outputDimensionality: EMBEDDING_DIMENSIONS,
   });
   return result.embedding.values;
 }
@@ -48,7 +47,6 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const result = await model.batchEmbedContents({
     requests: texts.map((text) => ({
       content: { role: "user" as const, parts: [{ text }] },
-      outputDimensionality: EMBEDDING_DIMENSIONS,
     })),
   });
   return result.embeddings.map((e) => e.values);
@@ -324,35 +322,15 @@ export async function retrieveChunks(
     throw new Error(`Retrieval failed: ${error.message}`);
   }
 
-  let rows = data || [];
+  const rows = data || [];
 
-  if (rows.length > 0 && rows[0].section_tier === undefined) {
-    // The RPC might not return the new columns. Fallback to fetching them by ID.
-    const ids = rows.map((r: any) => r.id).filter(Boolean);
-    if (ids.length > 0) {
-      const { data: chunksData } = await supabase
-        .from("expert_chunks")
-        .select("id, section_title, section_tier")
-        .in("id", ids);
-
-      if (chunksData) {
-        const chunksMap = new Map(chunksData.map((c) => [c.id, c]));
-        rows = rows.map((r: any) => ({
-          ...r,
-          section_title: chunksMap.get(r.id)?.section_title,
-          section_tier: chunksMap.get(r.id)?.section_tier,
-        }));
-      }
-    }
-  }
-
-  return rows.map((row: any) => ({
+  return rows.map((row) => ({
     content: row.content,
     source_filename: row.source_filename,
     chunk_index: row.chunk_index,
     similarity: row.similarity,
-    section_title: row.section_title,
-    section_tier: row.section_tier,
+    section_title: row.section_title ?? undefined,
+    section_tier: (row.section_tier as "primary" | "secondary" | undefined) ?? undefined,
   }));
 }
 
