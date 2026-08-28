@@ -25,17 +25,19 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
+// The SDK defaults to v1beta — embedding models live on v1 (stable).
+// Pass EMBED_REQUEST_OPTIONS to force the correct endpoint.
 const EMBEDDING_MODEL = "text-embedding-004";
 const EMBEDDING_DIMENSIONS = 768;
+const EMBED_REQUEST_OPTIONS = { apiVersion: "v1" } as const;
 
 /**
  * Generate an embedding vector for a single text string.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.embedContent({
-    content: { role: "user" as const, parts: [{ text }] },
-  });
+  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL }, EMBED_REQUEST_OPTIONS);
+  // Plain string overload — avoids the Content.role requirement
+  const result = await model.embedContent(text);
   return result.embedding.values;
 }
 
@@ -43,7 +45,7 @@ export async function embedText(text: string): Promise<number[]> {
  * Generate embeddings for multiple texts in batch.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL }, EMBED_REQUEST_OPTIONS);
   const result = await model.batchEmbedContents({
     requests: texts.map((text) => ({
       content: { role: "user" as const, parts: [{ text }] },
@@ -228,7 +230,7 @@ export async function ingestDocument(
 
   console.log(
     `[RAG] Chunked "${filename}" into ${chunks.length} section-aware pieces ` +
-      `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
+    `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
   );
 
   const embeddings = await embedTexts(chunks.map((c) => c.content));
@@ -322,15 +324,35 @@ export async function retrieveChunks(
     throw new Error(`Retrieval failed: ${error.message}`);
   }
 
-  const rows = data || [];
+  let rows = data || [];
 
-  return rows.map((row) => ({
+  if (rows.length > 0 && rows[0].section_tier === undefined) {
+    // The RPC might not return the new columns. Fallback to fetching them by ID.
+    const ids = rows.map((r: any) => r.id).filter(Boolean);
+    if (ids.length > 0) {
+      const { data: chunksData } = await supabase
+        .from("expert_chunks")
+        .select("id, section_title, section_tier")
+        .in("id", ids);
+
+      if (chunksData) {
+        const chunksMap = new Map(chunksData.map((c) => [c.id, c]));
+        rows = rows.map((r: any) => ({
+          ...r,
+          section_title: chunksMap.get(r.id)?.section_title,
+          section_tier: chunksMap.get(r.id)?.section_tier,
+        }));
+      }
+    }
+  }
+
+  return rows.map((row: any) => ({
     content: row.content,
     source_filename: row.source_filename,
     chunk_index: row.chunk_index,
     similarity: row.similarity,
-    section_title: row.section_title ?? undefined,
-    section_tier: (row.section_tier as "primary" | "secondary" | undefined) ?? undefined,
+    section_title: row.section_title,
+    section_tier: row.section_tier,
   }));
 }
 
@@ -370,16 +392,16 @@ export async function generateRAGResponse(
   const sourcesText =
     chunks.length > 0
       ? chunks
-          .map((c, i) => {
-            const tierLabel = c.section_tier
-              ? ` | tier: ${c.section_tier}`
-              : "";
-            const sectionLabel = c.section_title
-              ? ` | section: "${c.section_title}"`
-              : "";
-            return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
-          })
-          .join("\n\n")
+        .map((c, i) => {
+          const tierLabel = c.section_tier
+            ? ` | tier: ${c.section_tier}`
+            : "";
+          const sectionLabel = c.section_title
+            ? ` | section: "${c.section_title}"`
+            : "";
+          return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
+        })
+        .join("\n\n")
       : "No relevant sources found in the knowledge base.";
 
   const groundedSystemPrompt = `${systemPrompt}
@@ -424,7 +446,7 @@ ${sourcesText}`;
 
   const completion = await groq.chat.completions.create({
     messages: groqHistory,
-    model: "openai/gpt-oss-120b",
+    model: "llama-3.3-70b-versatile",
     temperature: 0.3,
     max_completion_tokens: 2048,
   });

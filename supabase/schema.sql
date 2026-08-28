@@ -1,5 +1,6 @@
 -- ============================================================
 -- MODEL FACTORY — Supabase Database Schema (Production-Ready)
+-- Safe to re-run: all statements use IF NOT EXISTS / OR REPLACE / IF EXISTS
 -- Run this in your Supabase SQL Editor (supabase.com → SQL Editor)
 -- ============================================================
 
@@ -28,6 +29,9 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
+
+drop policy if exists "Users can view own profile"  on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
 
 create policy "Users can view own profile"
   on public.profiles for select using (auth.uid() = id);
@@ -81,6 +85,8 @@ create table if not exists public.datasets (
 );
 
 alter table public.datasets enable row level security;
+
+drop policy if exists "Users manage own datasets" on public.datasets;
 create policy "Users manage own datasets"
   on public.datasets for all using (auth.uid() = user_id);
 
@@ -113,11 +119,12 @@ create table if not exists public.jobs (
 
 alter table public.jobs enable row level security;
 
--- Owner can do anything with their jobs
+drop policy if exists "Users manage own jobs"        on public.jobs;
+drop policy if exists "Public can view published jobs" on public.jobs;
+
 create policy "Users manage own jobs"
   on public.jobs for all using (auth.uid() = user_id);
 
--- Anyone can read a published (community) job
 create policy "Public can view published jobs"
   on public.jobs for select
   using ((config->>'published')::boolean is true);
@@ -139,6 +146,10 @@ create table if not exists public.credit_transactions (
 );
 
 alter table public.credit_transactions enable row level security;
+
+drop policy if exists "Users view own transactions"    on public.credit_transactions;
+drop policy if exists "Service can insert transactions" on public.credit_transactions;
+
 create policy "Users view own transactions"
   on public.credit_transactions for select using (auth.uid() = user_id);
 create policy "Service can insert transactions"
@@ -160,6 +171,8 @@ create table if not exists public.wizard_sessions (
 );
 
 alter table public.wizard_sessions enable row level security;
+
+drop policy if exists "Users manage own sessions" on public.wizard_sessions;
 create policy "Users manage own sessions"
   on public.wizard_sessions for all using (auth.uid() = user_id);
 
@@ -185,11 +198,12 @@ create table if not exists public.experts (
 
 alter table public.experts enable row level security;
 
--- Owner can do anything
+drop policy if exists "Users manage own experts"       on public.experts;
+drop policy if exists "Public can view published experts" on public.experts;
+
 create policy "Users manage own experts"
   on public.experts for all using (auth.uid() = user_id);
 
--- Anyone can read a published expert
 create policy "Public can view published experts"
   on public.experts for select using (is_published = true);
 
@@ -202,18 +216,25 @@ create table if not exists public.expert_chunks (
   id               uuid default gen_random_uuid() primary key,
   expert_id        uuid references public.experts(id) on delete cascade not null,
   content          text not null,
-  embedding        vector(768),        -- text-embedding-004 produces 768-dim vectors
+  embedding        vector(768),
   source_filename  text,
   chunk_index      integer,
-  section_title    text,               -- e.g. "3. Enzyme-Converted Kidney"
-  section_tier     text,               -- "primary" | "secondary"
-  section_index    integer,            -- order of the section in the document
+  section_title    text,
+  section_tier     text,
+  section_index    integer,
   created_at       timestamptz default now()
 );
 
+-- Add new columns to existing table if they don't exist yet
+alter table public.expert_chunks add column if not exists section_title  text;
+alter table public.expert_chunks add column if not exists section_tier   text;
+alter table public.expert_chunks add column if not exists section_index  integer;
+
 alter table public.expert_chunks enable row level security;
 
--- Owner can manage their expert's chunks
+drop policy if exists "Users manage own expert chunks"          on public.expert_chunks;
+drop policy if exists "Public can read published expert chunks" on public.expert_chunks;
+
 create policy "Users manage own expert chunks"
   on public.expert_chunks for all
   using (
@@ -223,7 +244,6 @@ create policy "Users manage own expert chunks"
     )
   );
 
--- Anyone can read chunks of a published expert (needed for public chat)
 create policy "Public can read published expert chunks"
   on public.expert_chunks for select
   using (
@@ -250,13 +270,16 @@ create table if not exists public.user_likes (
   target_id   uuid not null,
   target_type text check (target_type in ('expert','job')) not null,
   created_at  timestamptz default now(),
-  unique (user_id, target_id, target_type)  -- prevent double-liking
+  unique (user_id, target_id, target_type)
 );
 
 alter table public.user_likes enable row level security;
+
+drop policy if exists "Users manage own likes" on public.user_likes;
+drop policy if exists "Public can view likes"  on public.user_likes;
+
 create policy "Users manage own likes"
   on public.user_likes for all using (auth.uid() = user_id);
--- Anyone can read likes (needed for like counts on browse page)
 create policy "Public can view likes"
   on public.user_likes for select using (true);
 
@@ -264,9 +287,6 @@ create policy "Public can view likes"
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 9. Atomic Increment Functions (bypass RLS for cross-user counter updates)
 -- ─────────────────────────────────────────────────────────────────────────────
--- These SECURITY DEFINER functions allow anyone to increment like/chat
--- counters on published models without needing write access to the underlying
--- row (which belongs to a different user).
 
 create or replace function public.increment_job_likes(job_id uuid)
 returns integer language plpgsql security definer set search_path = public
@@ -305,7 +325,7 @@ begin
   update public.jobs
   set chats_count = chats_count + 1
   where id = job_id
-  returning likes_count into new_count;
+  returning chats_count into new_count;
   return new_count;
 end;
 $$;
@@ -328,6 +348,9 @@ $$;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 10. Vector Similarity Search RPC
 -- ─────────────────────────────────────────────────────────────────────────────
+
+-- Drop first so we can change the return type (add section_title, section_tier)
+drop function if exists public.match_expert_chunks(vector, uuid, int, float);
 
 create or replace function public.match_expert_chunks(
   query_embedding   vector(768),
@@ -371,5 +394,21 @@ $$;
 -- 11. Realtime subscriptions
 -- ─────────────────────────────────────────────────────────────────────────────
 
-alter publication supabase_realtime add table public.jobs;
-alter publication supabase_realtime add table public.profiles;
+do $$
+begin
+  -- Only add if not already a member (safe to re-run)
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'jobs'
+  ) then
+    alter publication supabase_realtime add table public.jobs;
+  end if;
+
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table public.profiles;
+  end if;
+end;
+$$;
