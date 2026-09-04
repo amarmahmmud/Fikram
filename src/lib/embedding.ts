@@ -326,7 +326,11 @@ export interface RetrievedChunk {
  * Keeps the fix simple (no extra LLM call) while fixing the top-5-starves-
  * coverage problem that caused the "summarize the five breakthroughs" miss.
  */
-function adaptiveTopK(query: string): number {
+function adaptiveTopK(query: string, mode?: string): number {
+  // Evaluative mode always needs broad cross-document coverage
+  // (rubric + market sizing + competitor graveyard) regardless of query phrasing
+  if (mode === "evaluative") return 10;
+
   const BROAD_QUERY_RE =
     /\b(summariz|summary|all|every|each|list|overview|entire|complete|full report)\b/i;
 
@@ -353,9 +357,10 @@ export async function retrieveChunks(
   expertId: string,
   topK?: number,
   matchThreshold: number = 0.3,
+  mode?: string,
 ): Promise<RetrievedChunk[]> {
   const supabase = await createClient();
-  const resolvedTopK = topK ?? adaptiveTopK(query);
+  const resolvedTopK = topK ?? adaptiveTopK(query, mode);
 
   const queryEmbedding = await embedText(query);
 
@@ -405,6 +410,22 @@ export async function retrieveChunks(
 
 // ── Generate (retrieve + prompt + answer) ────────────────────────────────────
 
+// Static rubric dimensions — pinned here instead of relying on retrieval,
+// so the scorecard format is consistent regardless of which rubric chunks
+// happen to match best for a given query.
+const RUBRIC_DIMENSIONS = [
+  "Market Size",
+  "Problem Severity",
+  "Timing",
+  "Competition",
+  "Business Model Clarity",
+  "Technical Feasibility",
+  "Regulatory Feasibility",
+  "Defensibility",
+  "Unit Economics",
+  "Team-Market Fit",
+] as const;
+
 export interface GenerateRAGOptions {
   reasoningMode?: "strict" | "evaluative" | "hybrid";
   webSearchEnabled?: boolean;
@@ -423,7 +444,103 @@ export interface RAGResponse {
 }
 
 /**
- * Full RAG pipeline: embed query → retrieve chunks → (optional live web search) → build dynamic prompt → generate answer.
+ * Verifier pass: checks every company name in the draft against the actual
+ * retrieved chunks. If a company is mentioned but its specific claims aren't
+ * supported by the sources, the verifier patches the draft to use generic
+ * failure patterns instead. Runs at temperature=0 for maximum precision.
+ */
+async function verifyEntityClaims(
+  draft: string,
+  chunks: RetrievedChunk[],
+  webResults: WebSearchResult[],
+): Promise<string> {
+  // Quick check: if the draft doesn't look like it contains company references, skip
+  const hasHistoricalSection = /\b(fail|died|shut down|dissolved|wound down|acqui-?hir|absorbed|pivot)/i.test(draft)
+    && /[A-Z][a-z]+\s(?:AI|Inc|Labs|Corp|Co\b)/i.test(draft);
+  if (!hasHistoricalSection) return draft;
+
+  const sourcesBlock = chunks
+    .map((c, i) => `[Chunk ${i} — ${c.source_filename}]: ${c.content}`)
+    .join("\n\n");
+
+  const webBlock = webResults.length > 0
+    ? webResults.map((r, i) => `[Web ${i} — ${r.title}]: ${r.snippet}`).join("\n\n")
+    : "No web sources.";
+
+  const verifierPrompt = `You are a strict fact-checker. Below is a DRAFT response and the SOURCE CHUNKS + WEB INTEL it was grounded in.
+
+Your task: Find every real company name mentioned in the DRAFT. For each one, check whether the SPECIFIC CLAIM made about that company (what it built, why it failed, who acquired it, what market it was in) is explicitly and accurately supported by the SOURCE CHUNKS or WEB INTEL below.
+
+A company name simply appearing in a source is NOT enough — the specific claim about that company must match what the source says.
+
+Return ONLY valid JSON with this exact structure:
+{"violations": [{"company": "CompanyName", "claim": "the specific false claim made", "fix": "a generic rewrite that describes the failure pattern without naming the company"}]}
+
+If there are no violations, return: {"violations": []}
+
+SOURCE CHUNKS:
+${sourcesBlock}
+
+WEB INTEL:
+${webBlock}
+
+DRAFT:
+${draft}`;
+
+  try {
+    const result = await groq.chat.completions.create({
+      messages: [{ role: "user", content: verifierPrompt }],
+      model: "openai/gpt-oss-120b",
+      temperature: 0,
+      max_completion_tokens: 1024,
+    });
+
+    const raw = result.choices[0]?.message?.content?.trim() ?? "{}";
+    // Extract JSON from potential markdown code blocks
+    const jsonStr = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+    const parsed = JSON.parse(jsonStr);
+    const violations = parsed?.violations;
+
+    if (!violations?.length) {
+      console.log("[RAG Verifier] No entity claim violations found.");
+      return draft;
+    }
+
+    console.log(`[RAG Verifier] Found ${violations.length} violation(s):`, violations.map((v: any) => v.company));
+
+    // Apply fixes: replace each violating company mention with the generic pattern
+    const patchPrompt = `You are an editor. Rewrite the DRAFT below by applying ONLY the fixes listed. Do not change anything else — keep all formatting, tone, and structure identical.
+
+FIXES TO APPLY:
+${violations.map((v: any, i: number) => `${i + 1}. Replace claims about "${v.company}" with: ${v.fix}`).join("\n")}
+
+DRAFT:
+${draft}`;
+
+    const patched = await groq.chat.completions.create({
+      messages: [{ role: "user", content: patchPrompt }],
+      model: "openai/gpt-oss-120b",
+      temperature: 0,
+      max_completion_tokens: 2048,
+    });
+
+    const patchedReply = patched.choices[0]?.message?.content?.trim();
+    if (patchedReply && patchedReply.length > draft.length * 0.5) {
+      console.log("[RAG Verifier] Draft patched successfully.");
+      return patchedReply;
+    }
+
+    // If patching produced garbage, return original draft
+    console.warn("[RAG Verifier] Patch output was too short or empty, using original draft.");
+    return draft;
+  } catch (err: any) {
+    console.warn("[RAG Verifier] Verification failed, using original draft:", err.message);
+    return draft;
+  }
+}
+
+/**
+ * Full RAG pipeline: embed query → retrieve chunks → (optional live web search) → build dynamic prompt → generate answer → verify entity claims.
  * Adapts instructions based on reasoningMode ("strict" | "evaluative" | "hybrid") and includes live web intelligence if webSearchEnabled.
  */
 export async function generateRAGResponse(
@@ -433,7 +550,8 @@ export async function generateRAGResponse(
   chatHistory: { role: string; content: string }[] = [],
   options?: GenerateRAGOptions,
 ): Promise<RAGResponse> {
-  const chunks = await retrieveChunks(query, expertId);
+  const mode = options?.reasoningMode || "hybrid";
+  const chunks = await retrieveChunks(query, expertId, undefined, 0.3, mode);
 
   console.log(
     `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"}) | Mode: ${options?.reasoningMode || "hybrid"} | WebSearch: ${options?.webSearchEnabled ? "ON" : "OFF"}`,
@@ -474,7 +592,6 @@ export async function generateRAGResponse(
   }
 
   // Build mode-specific instructions
-  const mode = options?.reasoningMode || "hybrid";
   let modeInstructions = "";
 
   if (mode === "strict") {
@@ -494,6 +611,11 @@ OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
 - Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
 - If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth.
 - Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
+
+MANDATORY SCORECARD FORMAT:
+You must ALWAYS score exactly these 10 dimensions, in this order, 0–10 each:
+${RUBRIC_DIMENSIONS.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+Total is always reported out of 100. Never omit a dimension, never change the dimension names.
 
 ABSOLUTE FACTUALITY CONSTRAINT — VIOLATION = FAILURE:
 - You may deduce WHY something will fail using logic, physics, math, economics, and law. This is ENCOURAGED.
@@ -562,7 +684,12 @@ ${finalGroundingBlock}`;
     max_completion_tokens: 2048,
   });
 
-  const reply = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+  const draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+
+  // Fix 1: Verifier pass — check every company name against actual retrieved chunks
+  // This catches the "sticky name" hallucination where the model uses real company
+  // names but fabricates their business models/failure reasons to fit the pitch.
+  const reply = await verifyEntityClaims(draft, chunks, webResults);
 
   return {
     reply,
