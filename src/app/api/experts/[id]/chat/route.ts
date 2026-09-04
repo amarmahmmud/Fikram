@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateRAGResponse } from "@/lib/embedding";
+import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 
 export async function POST(
   req: Request,
@@ -10,6 +11,25 @@ export async function POST(
     const { id: expertId } = await params;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Rate limiting: use user ID if logged in, IP if anonymous
+    const rateLimitKey = user ? `user:${user.id}` : `ip:${getClientIP(req)}`;
+    const rateLimitConfig = user ? AUTH_CHAT_LIMIT : ANON_CHAT_LIMIT;
+    const { allowed, remaining, resetMs } = checkRateLimit(rateLimitKey, rateLimitConfig);
+
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. Please try again later.",
+          remaining: 0,
+          retryAfterMs: resetMs,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) },
+        },
+      );
+    }
 
     const body = await req.json();
     const { message, history } = body;

@@ -67,12 +67,27 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Assistant not found or access denied" }, { status: 404 });
       }
 
+      // Build description with embedded category/tags metadata
+      // Strip any existing metadata tags first to avoid duplicates
+      let cleanDesc = (description?.trim() || expert.description || "")
+        .replace(/\[Category:\s*[^\]]+\]/gi, "")
+        .replace(/\[Tags:\s*[^\]]+\]/gi, "")
+        .trim();
+
+      // Append metadata tags (parsed by the community API for filtering)
+      if (category) {
+        cleanDesc += ` [Category: ${category}]`;
+      }
+      if (Array.isArray(tags) && tags.length > 0) {
+        cleanDesc += ` [Tags: ${tags.join(", ")}]`;
+      }
+
       const { data: updatedExpert, error: updateErr } = await supabase
         .from("experts")
         .update({
           is_published: Boolean(published),
           name: title?.trim() || expert.name,
-          description: description?.trim() || expert.description,
+          description: cleanDesc,
         })
         .eq("id", id)
         .select()

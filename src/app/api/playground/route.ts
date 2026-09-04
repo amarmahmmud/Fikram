@@ -1,10 +1,30 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, getClientIP, AUTH_CHAT_LIMIT, INFERENCE_LIMIT } from "@/lib/rate-limiter";
 
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Rate limiting: stricter for inference (GPU-expensive)
+    const rateLimitKey = user ? `user:inference:${user.id}` : `ip:inference:${getClientIP(req)}`;
+    const rateLimitConfig = user ? AUTH_CHAT_LIMIT : INFERENCE_LIMIT;
+    const { allowed, remaining, resetMs } = checkRateLimit(rateLimitKey, rateLimitConfig);
+
+    if (!allowed) {
+      return NextResponse.json(
+        {
+          error: "Rate limit exceeded. Please try again later.",
+          remaining: 0,
+          retryAfterMs: resetMs,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) },
+        },
+      );
+    }
 
     const { jobId, messages, systemPrompt, temperature, maxNewTokens } = await req.json();
     if (!jobId || !messages || !Array.isArray(messages)) {

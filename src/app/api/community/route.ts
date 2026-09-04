@@ -21,74 +21,11 @@ export interface CommunityItem {
   ownerId?: string;
 }
 
-const FEATURED_COMMUNITY_MODELS: CommunityItem[] = [
-  {
-    id: "featured-1",
-    type: "smart_assistant",
-    title: "SaaS Financial & Tax Advisor",
-    description: "Expert assistant grounded on US & International tax law, SaaS metrics (ARR, CAC, LTV), and startup accounting best practices.",
-    category: "Finance",
-    author: { name: "Elena Rostova", avatarUrl: "" },
-    baseModel: "Grounded RAG (Gemini + PDF Knowledge Base)",
-    likesCount: 142,
-    chatsCount: 1890,
-    publishedAt: "2026-08-15T10:00:00Z",
-    chatUrl: "/experts/new",
-    tags: ["Finance", "SaaS", "Tax", "Startups"],
-    isVerified: true,
-  },
-  {
-    id: "featured-2",
-    type: "fine_tuned",
-    title: "TypeScript Fullstack Architect",
-    description: "Fine-tuned on 100k+ modern Next.js 15, TypeScript 5, Tailwind, and Supabase clean code architecture examples.",
-    category: "Coding",
-    author: { name: "Antigravity Lab", avatarUrl: "" },
-    baseModel: "Llama 3.1 8B (LoRA)",
-    likesCount: 384,
-    chatsCount: 4210,
-    publishedAt: "2026-08-18T14:30:00Z",
-    chatUrl: "/new-job",
-    tags: ["TypeScript", "Next.js", "Architecture", "LoRA"],
-    isVerified: true,
-  },
-  {
-    id: "featured-3",
-    type: "smart_assistant",
-    title: "Medical Research Navigator",
-    description: "Synthesizes recent clinical trials, PubMed abstracts, and pharmacology papers with instant source citations.",
-    category: "Healthcare",
-    author: { name: "Dr. Marcus Vance", avatarUrl: "" },
-    baseModel: "Grounded RAG (Llama 3.1 70B)",
-    likesCount: 215,
-    chatsCount: 2430,
-    publishedAt: "2026-08-20T09:15:00Z",
-    chatUrl: "/experts/new",
-    tags: ["Medicine", "Research", "Citations"],
-    isVerified: true,
-  },
-  {
-    id: "featured-4",
-    type: "fine_tuned",
-    title: "B2B Copywriting Specialist",
-    description: "Trained on high-converting landing pages, cold emails, and VC pitch decks. Writes punchy, crisp marketing copy.",
-    category: "Writing",
-    author: { name: "Fikram Community", avatarUrl: "" },
-    baseModel: "Mistral 7B v0.3 (LoRA)",
-    likesCount: 198,
-    chatsCount: 3100,
-    publishedAt: "2026-08-22T16:45:00Z",
-    chatUrl: "/new-job",
-    tags: ["Marketing", "Copywriting", "Mistral"],
-    isVerified: true,
-  },
-];
-
 export async function GET() {
   try {
     const supabase = await createClient();
 
-    // 1. Fetch published experts
+    // 1. Fetch published experts (with owner's profile for real author name)
     const { data: dbExperts } = await supabase
       .from("experts")
       .select("*")
@@ -101,23 +38,62 @@ export async function GET() {
       .select("*")
       .eq("status", "completed");
 
+    // 3. Collect all owner IDs to batch-fetch profile names
+    const ownerIds = new Set<string>();
+    dbExperts?.forEach((e) => ownerIds.add(e.user_id));
+    dbJobs?.forEach((j) => ownerIds.add(j.user_id));
+
+    const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+    if (ownerIds.size > 0) {
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, avatar_url")
+        .in("id", Array.from(ownerIds));
+
+      profiles?.forEach((p) => {
+        profileMap.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url });
+      });
+    }
+
     const dynamicItems: CommunityItem[] = [];
 
     if (dbExperts && dbExperts.length > 0) {
       for (const exp of dbExperts) {
+        const profile = profileMap.get(exp.user_id);
+        const authorName = profile?.full_name || "Community Creator";
+
+        // Parse category from description if it contains a [Category: ...] tag
+        let category = "General";
+        let tags: string[] = ["Knowledge Base", "Q&A"];
+        const descText = exp.description || "";
+        const categoryMatch = descText.match(/\[Category:\s*([^\]]+)\]/i);
+        if (categoryMatch) {
+          category = categoryMatch[1].trim();
+        }
+        const tagsMatch = descText.match(/\[Tags:\s*([^\]]+)\]/i);
+        if (tagsMatch) {
+          tags = tagsMatch[1].split(",").map((t: string) => t.trim()).filter(Boolean);
+        }
+
+        // Clean the description by removing metadata tags for display
+        const cleanDescription = descText
+          .replace(/\[Category:\s*[^\]]+\]/gi, "")
+          .replace(/\[Tags:\s*[^\]]+\]/gi, "")
+          .trim() || "Grounded smart assistant with verified knowledge base.";
+
         dynamicItems.push({
           id: exp.id,
           type: "smart_assistant",
           title: exp.name,
-          description: exp.description || "Grounded smart assistant with verified knowledge base.",
-          category: "General",
-          author: { name: "Creator" },
+          description: cleanDescription,
+          category,
+          author: { name: authorName, avatarUrl: profile?.avatar_url || undefined },
           baseModel: "Smart Assistant (RAG)",
           likesCount: exp.likes_count || 0,
           chatsCount: exp.chats_count || 0,
           publishedAt: exp.created_at,
           chatUrl: `/experts/${exp.id}/chat`,
-          tags: ["Knowledge Base", "Q&A"],
+          tags,
           isVerified: false,
           ownerId: exp.user_id,
         });
@@ -130,13 +106,16 @@ export async function GET() {
           ? (job.config as Record<string, unknown>) 
           : {};
         if (config.published) {
+          const profile = profileMap.get(job.user_id);
+          const authorName = profile?.full_name || "Community Creator";
+
           dynamicItems.push({
             id: job.id,
             type: "fine_tuned",
             title: (config.public_title as string) || job.name,
             description: (config.public_description as string) || `Fine-tuned ${job.base_model} model trained with custom dataset.`,
             category: (config.category as string) || "General",
-            author: { name: "Creator" },
+            author: { name: authorName, avatarUrl: profile?.avatar_url || undefined },
             baseModel: `${job.base_model} (${job.method.toUpperCase()})`,
             likesCount: job.likes_count || 0,
             chatsCount: job.chats_count || 0,
@@ -150,10 +129,7 @@ export async function GET() {
       }
     }
 
-    // Only return real dynamic creator models
-    const allItems = [...dynamicItems];
-
-    return NextResponse.json({ ok: true, models: allItems });
+    return NextResponse.json({ ok: true, models: dynamicItems });
   } catch (err: unknown) {
     console.error("[Community API Error]:", err);
     return NextResponse.json({ ok: true, models: [] });
