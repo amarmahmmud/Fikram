@@ -615,15 +615,33 @@ OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
   - BAD: "...the metaverse market is $450B (Source 10)."
   - GOOD: "...the metaverse market is roughly $450B."
 
+### CRITICAL GENERATION PIPELINE (CHAIN OF THOUGHT) ###
+Before generating the Scorecard or Roast, you MUST evaluate the core unit economics and logical flaws inside the "analysis_scratchpad" JSON field.
+1. PRE-COMPUTE: Explicitly lock in your assumptions for Customer Acquisition Cost (CAC), Lifetime Value (LTV), wholesale margins, and regulatory reality.
+2. NARRATIVE LOCK: Decide right now if the economics are viable or fatal. Write a one-sentence verdict.
+3. CONSISTENCY BINDING: The Scorecard and the Roast MUST strictly reflect the assumptions established in the scratchpad.
+- If you deduce in the scratchpad that margins are terrible, the Unit Economics score MUST be low (0-3) and the Scorecard explanation MUST attack the margins.
+- You are strictly forbidden from praising a metric in the Scorecard and roasting that same metric in the Roast section.
+
+OUTPUT INTEGRITY RULE:
+You MUST generate all required JSON fields in full. Never close the JSON object early.
+- "scorecard": Must contain all 10 dimensions.
+- "total_verdict": MUST be a punchy 3-word summary verdict (e.g., "Dead on Arrival", "Cash-Flow Trap"). NEVER use asterisks or blanks.
+- "roast": Minimum 4 brutal, first-principles paragraphs.
+- "graveyard": 3-4 structural failure patterns.
+- "pivot": Actionable, higher-margin alternative.
+
 MANDATORY JSON OUTPUT FORMAT:
 You must output a strictly valid JSON object matching this exact schema. Do NOT wrap it in markdown blockticks (\`\`\`json).
-You MUST include all 4 top-level keys ("scorecard", "roast", "graveyard", "pivot"). Do not skip any section.
+You MUST include all 6 top-level keys ("analysis_scratchpad", "scorecard", "total_verdict", "roast", "graveyard", "pivot"). Do not skip any section.
 
 {
+  "analysis_scratchpad": "Your internal chain-of-thought to lock in CAC, LTV, margins, and narrative BEFORE scoring.",
   "scorecard": [
     { "dimension": "Market Size", "score": 8, "reasoning": "Why you gave this score" },
     ... exactly 10 dimensions, in the order specified below ...
   ],
+  "total_verdict": "A punchy 3-word summary verdict of the idea.",
   "roast": "Markdown text of your roast section (e.g. ## 🔥 ROAST...). Must be present.",
   "graveyard": "Markdown text of failure patterns (e.g. ## 📉 WHY SIMILAR STARTUPS HAVE DIED...). Must be present.",
   "pivot": "Markdown text of your pivot section (e.g. ## 🛠️ CONSTRUCTIVE PIVOT...). Must be present."
@@ -632,6 +650,7 @@ You MUST include all 4 top-level keys ("scorecard", "roast", "graveyard", "pivot
 You must ALWAYS score exactly these 10 dimensions, in this exact order, 0–10 each:
 ${RUBRIC_DIMENSIONS.map((d, i) => `${i + 1}. ${d}`).join("\n")}
 Never omit a dimension, never change the dimension names.
+IMPORTANT: "Team-Market Fit" MUST always be scored. If the pitch doesn't mention the team, score based on what the concept demands (e.g., "requires deep neurotech + crypto + creator-economy expertise") and note what's missing.
 
 ABSOLUTE FACTUALITY CONSTRAINT — VIOLATION = FAILURE:
 - You may deduce WHY something will fail using logic, physics, math, economics, and law. This is ENCOURAGED.
@@ -697,7 +716,7 @@ ${finalGroundingBlock}`;
     messages: groqHistory,
     model: "openai/gpt-oss-120b",
     temperature: mode === "evaluative" ? 0.25 : 0.3,
-    max_completion_tokens: 2048,
+    max_completion_tokens: 4096,
     ...(mode === "evaluative" ? { response_format: { type: "json_object" } } : {}),
   });
 
@@ -715,15 +734,19 @@ ${finalGroundingBlock}`;
       
       // Enforce all 10 dimensions are present, even if LLM missed one
       for (const dim of RUBRIC_DIMENSIONS) {
-        const row = scorecardData.find((r: any) => r.dimension === dim) || { score: 0, reasoning: "Evaluation skipped due to processing error." };
+        const row = scorecardData.find((r: any) => r.dimension === dim) || { score: 3, reasoning: "No specific details provided; scored conservatively based on concept requirements." };
         const score = typeof row.score === 'number' ? row.score : parseInt(String(row.score), 10) || 0;
         totalScore += score;
         scorecardMd += `| ${dim} | ${score} | ${row.reasoning.replace(/\n/g, ' ')} |\n`;
       }
       
-      scorecardMd += `| **Total** | **${totalScore} / 100** | |\n---\n`;
+      const totalVerdict = parsed.total_verdict ? parsed.total_verdict.replace(/\n/g, ' ') : "";
+      scorecardMd += `| **Total** | **${totalScore} / 100** | **${totalVerdict}** |\n---\n`;
       
       draft = `${scorecardMd}\n${parsed.roast || ""}\n---\n${parsed.graveyard || ""}\n---\n${parsed.pivot || ""}`.trim();
+      
+      // Clean up any duplicate horizontal rules caused by LLM adding its own or empty sections
+      draft = draft.replace(/(?:\n\s*---\s*){2,}/g, '\n---');
     } catch (e: any) {
       console.error("[RAG] Failed to parse evaluative JSON output:", e.message);
       // draft remains the raw string which might look ugly but won't crash
