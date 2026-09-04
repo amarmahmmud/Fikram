@@ -489,11 +489,21 @@ OPERATING RULES (STRICT DOCUMENT GROUNDING):
     modeInstructions = `
 OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
 - You are evaluating a novel, user-submitted pitch, concept, or question.
-- The Sources below provide your internal evaluation frameworks, scoring rubrics, benchmark data, and historical failure patterns.
-- APPLY these frameworks and rubrics directly to the pitch using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
+- The Sources below provide your internal evaluation frameworks, scoring rubrics, and industry benchmarks.
+- APPLY these frameworks directly to the pitch using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
 - Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
 - If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth.
-- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.`;
+- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
+
+ABSOLUTE FACTUALITY CONSTRAINT — VIOLATION = FAILURE:
+- You may deduce WHY something will fail using logic, physics, math, economics, and law. This is ENCOURAGED.
+- You must NEVER fabricate, invent, or distort ANY factual claim. This includes ALL of the following:
+  (a) Inventing fake company names or product names that do not exist.
+  (b) Inventing fake historical events, regulatory rulings, crackdowns, fines, or lawsuits that never happened.
+  (c) Using REAL company names but FABRICATING their business model, reason for failure, pivot story, or acquisition details. This is called "historical revisionism" and is the WORST form of hallucination.
+- BEFORE you write any company name in your response, ask yourself: "Can I verify EVERY claim I'm about to make about this company from my Sources or Live Web Intel?" If the answer is NO, do NOT mention that company. Describe the general failure pattern instead.
+- If your sources contain NO company that genuinely and accurately matches this pitch, DO NOT force unrelated companies into the analysis. Instead write: "No direct historical equivalents exist in the current database — this concept is either visionary or entirely unproven territory." This is intellectually honest and preferred over fabrication.
+- It is ALWAYS better to SKIP a section entirely than to fill it with fabricated or distorted facts.`;
   } else {
     // Hybrid / Balanced
     modeInstructions = `
@@ -501,44 +511,23 @@ OPERATING RULES (BALANCED HYBRID MODE):
 - Use the Sources below as your primary foundation of facts, principles, and guidelines.
 - You are encouraged to extrapolate, explain, give real-world context, and reason using general world knowledge while remaining grounded in the themes and principles of your knowledge base.
 - If the user asks about an idea or topic not literally in your files, use your best judgment to connect it to your knowledge base principles.
-- Maintain your persona naturally without mechanically citing sources unless requested.`;
+- Maintain your persona naturally without mechanically citing sources unless requested.
+
+FACTUALITY CONSTRAINT:
+- When mentioning real companies, people, or events, every claim must be factually accurate. Never distort a real entity's history to fit your narrative.
+- If unsure about a specific claim, describe the general pattern instead. It is better to say "several companies in this space failed due to..." than to name a company and fabricate its story.`;
   }
 
   const webInstruction = webResults.length > 0
     ? `\n- Real-time Web Search Intelligence is included below. Weave in relevant current news, competitors, and market updates to ensure your analysis is up to date.`
     : "";
 
+  // Short, punchy final reminder at recency position (last thing the model reads)
   const finalGroundingBlock = mode === "evaluative"
     ? `
-GROUNDING & FACTUALITY RULES (CRITICAL — NEVER VIOLATE):
 
-1. LOGIC vs FACTS — Know the Difference:
-   - ALLOWED: First-principles deduction (physics, math, unit economics, legal mechanics, market dynamics). You may reason about WHY something will fail using universal laws and common sense.
-   - FORBIDDEN: Inventing, fabricating, or distorting specific facts, names, dates, events, rulings, or company histories that are not explicitly present in your sources.
-
-2. NO FABRICATED ENTITIES:
-   - Do NOT invent fake company names, startup names, product names, or person names.
-   - If your sources do not contain a matching example, describe the failure PATTERN generically (e.g., "several hardware delivery startups in this space failed due to...").
-
-3. NO FABRICATED EVENTS:
-   - Do NOT invent specific historical events, regulatory rulings, agency directives, crackdowns, fines, or lawsuits.
-   - Instead, cite the MECHANICS of the law or regulation itself (e.g., "FAA Part 107 requires visual line-of-sight for commercial drones, with fines up to $27,500 per violation").
-
-4. NO HISTORICAL REVISIONISM:
-   - Do NOT take a real company name and fabricate or distort its business model, pivot history, funding story, or reason for failure to fit the current pitch.
-   - If you mention a real company, every claim about it (what it did, why it failed, who acquired it) MUST be factually accurate as stated in your sources or live web intel.
-   - If you are unsure whether your knowledge about a real company is accurate, DO NOT mention it. Describe the general failure pattern instead.
-
-5. DATA INTEGRITY OVERRIDE:
-   - If your sources do not contain a historically accurate company, case study, or precedent that genuinely matches the user's pitch, DO NOT force unrelated examples into the narrative.
-   - Instead, honestly state: "There are no direct historical equivalents in the current database — this concept is either visionary or charting entirely unproven territory."
-   - It is ALWAYS better to omit a section than to fill it with distorted, fabricated, or forced facts. Skipping a section is a sign of intellectual honesty, not a weakness.`
-    : mode === "hybrid"
-    ? `
-FACTUALITY RULES:
-- When mentioning real companies, people, or historical events, ensure your claims about them are factually accurate. Do not distort a real entity's history to fit your narrative.
-- If you are unsure whether a specific claim about a real entity is accurate, describe the general pattern instead of making a specific, potentially false claim.
-- It is always better to say "I'm not certain about the specifics" than to present fabricated details as fact.`
+FINAL CHECK (READ THIS LAST BEFORE RESPONDING):
+Before you output your response, scan it for any company name. For each one, verify: Is every claim about this company (its product, its failure reason, its acquirer) explicitly stated in the Sources above or Live Web Intel? If you cannot verify it, DELETE that company from your response and describe the general failure pattern instead. Never force-fit real companies into fake narratives. Skipping a section is always better than fabricating one.`
     : "";
 
   const groundedSystemPrompt = `${systemPrompt}
@@ -569,7 +558,7 @@ ${finalGroundingBlock}`;
   const completion = await groq.chat.completions.create({
     messages: groqHistory,
     model: "openai/gpt-oss-120b",
-    temperature: mode === "evaluative" ? 0.4 : 0.3,
+    temperature: mode === "evaluative" ? 0.25 : 0.3,
     max_completion_tokens: 2048,
   });
 
