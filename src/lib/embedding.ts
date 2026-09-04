@@ -469,12 +469,12 @@ async function verifyEntityClaims(
 
   const verifierPrompt = `You are a strict fact-checker. Below is a DRAFT response and the SOURCE CHUNKS + WEB INTEL it was grounded in.
 
-Your task: Find every real company name mentioned in the DRAFT. For each one, check whether the SPECIFIC CLAIM made about that company (what it built, why it failed, who acquired it, what market it was in) is explicitly and accurately supported by the SOURCE CHUNKS or WEB INTEL below.
+Your task: Find every real company name AND every specific numerical claim (e.g., market sizes, costs, percentages) mentioned in the DRAFT. For each one, check whether the SPECIFIC CLAIM made (what the company built, why it failed, or what label the number is attached to) is explicitly and accurately supported by the SOURCE CHUNKS or WEB INTEL below.
 
-A company name simply appearing in a source is NOT enough — the specific claim about that company must match what the source says.
+A company name or number simply appearing in a source is NOT enough — the specific claim about that entity or the label attached to that number must match what the source says. If a number is cited from a source (e.g., "Source 10"), verify that the source actually attributes that number to the specific industry/context claimed in the draft.
 
 Return ONLY valid JSON with this exact structure:
-{"violations": [{"company": "CompanyName", "claim": "the specific false claim made", "fix": "a generic rewrite that describes the failure pattern without naming the company"}]}
+{"violations": [{"claim": "the specific false or misattributed claim made", "fix": "a generic rewrite that describes the pattern without naming the company, or removes the misattributed number"}]}
 
 If there are no violations, return: {"violations": []}
 
@@ -502,17 +502,17 @@ ${draft}`;
     const violations = parsed?.violations;
 
     if (!violations?.length) {
-      console.log("[RAG Verifier] No entity claim violations found.");
+      console.log("[RAG Verifier] No entity/numeric claim violations found.");
       return draft;
     }
 
-    console.log(`[RAG Verifier] Found ${violations.length} violation(s):`, violations.map((v: any) => v.company));
+    console.log(`[RAG Verifier] Found ${violations.length} violation(s):`, violations.map((v: any) => v.claim));
 
-    // Apply fixes: replace each violating company mention with the generic pattern
+    // Apply fixes: replace each violating mention with the generic pattern
     const patchPrompt = `You are an editor. Rewrite the DRAFT below by applying ONLY the fixes listed. Do not change anything else — keep all formatting, tone, and structure identical.
 
 FIXES TO APPLY:
-${violations.map((v: any, i: number) => `${i + 1}. Replace claims about "${v.company}" with: ${v.fix}`).join("\n")}
+${violations.map((v: any, i: number) => `${i + 1}. Fix the claim "${v.claim}" with: ${v.fix}`).join("\n")}
 
 DRAFT:
 ${draft}`;
@@ -611,11 +611,25 @@ OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
 - Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
 - If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth.
 - Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
+- Never cite sources inline with parentheses.
+  - BAD: "...the metaverse market is $450B (Source 10)."
+  - GOOD: "...the metaverse market is roughly $450B."
 
-MANDATORY SCORECARD FORMAT:
-You must ALWAYS score exactly these 10 dimensions, in this order, 0–10 each:
+MANDATORY JSON OUTPUT FORMAT:
+You must output a strictly valid JSON object matching this schema. Do NOT wrap it in markdown blockticks (\`\`\`json).
+{
+  "scorecard": [
+    { "dimension": "Market Size", "score": 8, "reasoning": "Why you gave this score" },
+    ... exactly 10 dimensions, in the order specified below ...
+  ],
+  "roast": "Markdown text of your roast section (e.g. ## 🔥 ROAST...)",
+  "graveyard": "Markdown text of failure patterns (e.g. ## 📉 WHY SIMILAR STARTUPS HAVE DIED...)",
+  "pivot": "Markdown text of your pivot section (e.g. ## 🛠️ CONSTRUCTIVE PIVOT...)"
+}
+
+You must ALWAYS score exactly these 10 dimensions, in this exact order, 0–10 each:
 ${RUBRIC_DIMENSIONS.map((d, i) => `${i + 1}. ${d}`).join("\n")}
-Total is always reported out of 100. Never omit a dimension, never change the dimension names.
+Never omit a dimension, never change the dimension names.
 
 ABSOLUTE FACTUALITY CONSTRAINT — VIOLATION = FAILURE:
 - You may deduce WHY something will fail using logic, physics, math, economics, and law. This is ENCOURAGED.
@@ -682,9 +696,37 @@ ${finalGroundingBlock}`;
     model: "openai/gpt-oss-120b",
     temperature: mode === "evaluative" ? 0.25 : 0.3,
     max_completion_tokens: 2048,
+    ...(mode === "evaluative" ? { response_format: { type: "json_object" } } : {}),
   });
 
-  const draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+  let draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+
+  // Re-assemble JSON into markdown if in evaluative mode
+  if (mode === "evaluative") {
+    try {
+      const parsed = JSON.parse(draft.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim());
+      
+      let totalScore = 0;
+      let scorecardMd = "## 🚀 QUICK‑LOOK SCORECARD\n| Dimension | Score (0‑10) | Why you’re getting that number |\n|-----------|--------------|--------------------------------|\n";
+      
+      const scorecardData = Array.isArray(parsed.scorecard) ? parsed.scorecard : [];
+      
+      // Enforce all 10 dimensions are present, even if LLM missed one
+      for (const dim of RUBRIC_DIMENSIONS) {
+        const row = scorecardData.find((r: any) => r.dimension === dim) || { score: 0, reasoning: "Evaluation skipped due to processing error." };
+        const score = typeof row.score === 'number' ? row.score : parseInt(String(row.score), 10) || 0;
+        totalScore += score;
+        scorecardMd += `| ${dim} | ${score} | ${row.reasoning.replace(/\n/g, ' ')} |\n`;
+      }
+      
+      scorecardMd += `| **Total** | **${totalScore} / 100** | |\n---\n`;
+      
+      draft = `${scorecardMd}\n${parsed.roast || ""}\n---\n${parsed.graveyard || ""}\n---\n${parsed.pivot || ""}`.trim();
+    } catch (e: any) {
+      console.error("[RAG] Failed to parse evaluative JSON output:", e.message);
+      // draft remains the raw string which might look ugly but won't crash
+    }
+  }
 
   // Fix 1: Verifier pass — check every company name against actual retrieved chunks
   // This catches the "sticky name" hallucination where the model uses real company
