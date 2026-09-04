@@ -420,10 +420,10 @@ const RUBRIC_DIMENSIONS = [
   "Competition",
   "Business Model Clarity",
   "Technical Feasibility",
-  "Regulatory Feasibility",
   "Defensibility",
   "Unit Economics",
   "Team-Market Fit",
+  "Scalability",
 ] as const;
 
 export interface GenerateRAGOptions {
@@ -616,15 +616,17 @@ OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
   - GOOD: "...the metaverse market is roughly $450B."
 
 MANDATORY JSON OUTPUT FORMAT:
-You must output a strictly valid JSON object matching this schema. Do NOT wrap it in markdown blockticks (\`\`\`json).
+You must output a strictly valid JSON object matching this exact schema. Do NOT wrap it in markdown blockticks (\`\`\`json).
+You MUST include all 4 top-level keys ("scorecard", "roast", "graveyard", "pivot"). Do not skip any section.
+
 {
   "scorecard": [
     { "dimension": "Market Size", "score": 8, "reasoning": "Why you gave this score" },
     ... exactly 10 dimensions, in the order specified below ...
   ],
-  "roast": "Markdown text of your roast section (e.g. ## 🔥 ROAST...)",
-  "graveyard": "Markdown text of failure patterns (e.g. ## 📉 WHY SIMILAR STARTUPS HAVE DIED...)",
-  "pivot": "Markdown text of your pivot section (e.g. ## 🛠️ CONSTRUCTIVE PIVOT...)"
+  "roast": "Markdown text of your roast section (e.g. ## 🔥 ROAST...). Must be present.",
+  "graveyard": "Markdown text of failure patterns (e.g. ## 📉 WHY SIMILAR STARTUPS HAVE DIED...). Must be present.",
+  "pivot": "Markdown text of your pivot section (e.g. ## 🛠️ CONSTRUCTIVE PIVOT...). Must be present."
 }
 
 You must ALWAYS score exactly these 10 dimensions, in this exact order, 0–10 each:
