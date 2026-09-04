@@ -642,10 +642,12 @@ You MUST include all 6 top-level keys ("analysis_scratchpad", "scorecard", "tota
     ... exactly 10 dimensions, in the order specified below ...
   ],
   "total_verdict": "A punchy 3-word summary verdict of the idea.",
-  "roast": "Markdown text of your roast section (e.g. ## 🔥 ROAST...). Must be present.",
-  "graveyard": "Markdown text of failure patterns (e.g. ## 📉 WHY SIMILAR STARTUPS HAVE DIED...). Must be present.",
-  "pivot": "Markdown text of your pivot section (e.g. ## 🛠️ CONSTRUCTIVE PIVOT...). Must be present."
+  "roast": "The roast paragraphs ONLY. No heading, no failure patterns, no pivot. Minimum 4 paragraphs.",
+  "graveyard": "The failure-pattern bullet points ONLY. No heading, no roast, no pivot. Minimum 3 bullets using markdown list syntax (- item).",
+  "pivot": "The pivot content ONLY. No heading, no roast, no failure patterns."
 }
+
+CRITICAL: Each JSON field must contain ONLY its own section's content (no headings, no duplicates across fields).
 
 You must ALWAYS score exactly these 10 dimensions, in this exact order, 0–10 each:
 ${RUBRIC_DIMENSIONS.map((d, i) => `${i + 1}. ${d}`).join("\n")}
@@ -743,10 +745,16 @@ ${finalGroundingBlock}`;
       const totalVerdict = parsed.total_verdict ? parsed.total_verdict.replace(/\n/g, ' ') : "";
       scorecardMd += `| **Total** | **${totalScore} / 100** | **${totalVerdict}** |\n---\n`;
       
-      draft = `${scorecardMd}\n${parsed.roast || ""}\n---\n${parsed.graveyard || ""}\n---\n${parsed.pivot || ""}`.trim();
+      // Strip any headings the LLM may have snuck into content fields (we hardcode them)
+      const stripHeadings = (text: string) => text.replace(/^##\s*[🔥📉🛠️].*\n?/gm, '').trim();
+      const roastContent = stripHeadings(parsed.roast || "");
+      const graveyardContent = stripHeadings(parsed.graveyard || "");
+      const pivotContent = stripHeadings(parsed.pivot || "");
       
-      // Clean up any duplicate horizontal rules caused by LLM adding its own or empty sections
-      draft = draft.replace(/(?:\n\s*---\s*){2,}/g, '\n---');
+      draft = `${scorecardMd}\n## 🔥 ROAST\n${roastContent}\n\n---\n\n## 📉 WHY SIMILAR STARTUPS HAVE DIED\n${graveyardContent}\n\n---\n\n## 🛠️ CONSTRUCTIVE PIVOT\n${pivotContent}`.trim();
+      
+      // Clean up any duplicate horizontal rules
+      draft = draft.replace(/(?:\n\s*---\s*){2,}/g, '\n\n---');
     } catch (e: any) {
       console.error("[RAG] Failed to parse evaluative JSON output:", e.message);
       // draft remains the raw string which might look ugly but won't crash
