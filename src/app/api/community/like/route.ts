@@ -50,3 +50,57 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Failed to process like" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const body = await req.json();
+    const { targetId, targetType } = body;
+
+    if (!targetId || !targetType || !["expert", "job"].includes(targetType)) {
+      return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
+    }
+
+    // 1. Remove the like record
+    const { error: deleteError } = await supabase
+      .from("user_likes")
+      .delete()
+      .match({
+        user_id: user.id,
+        target_id: targetId,
+        target_type: targetType as "expert" | "job",
+      });
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    // 2. Decrement the counter (using admin client to bypass RLS)
+    const admin = createAdminClient();
+    const table = targetType === "expert" ? "experts" : "jobs";
+    
+    // Fetch current count to decrement (since we don't have a decrement RPC)
+    const { data: currentData } = await admin
+      .from(table)
+      .select("likes_count")
+      .eq("id", targetId)
+      .single();
+
+    let newCount = null;
+    if (currentData) {
+      newCount = Math.max(0, currentData.likes_count - 1);
+      await admin
+        .from(table)
+        .update({ likes_count: newCount })
+        .eq("id", targetId);
+    }
+
+    return NextResponse.json({ ok: true, likes_count: newCount });
+  } catch (err: unknown) {
+    console.error("[Community Unlike API Error]:", err);
+    return NextResponse.json({ error: "Failed to process unlike" }, { status: 500 });
+  }
+}

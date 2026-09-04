@@ -19,6 +19,7 @@ export interface CommunityItem {
   tags: string[];
   isVerified?: boolean;
   ownerId?: string;
+  hasLiked?: boolean;
 }
 
 export async function GET() {
@@ -42,6 +43,18 @@ export async function GET() {
     const ownerIds = new Set<string>();
     dbExperts?.forEach((e) => ownerIds.add(e.user_id));
     dbJobs?.forEach((j) => ownerIds.add(j.user_id));
+
+    // 4. Check which items the current user has liked
+    const { data: { user } } = await supabase.auth.getUser();
+    const userLikedIds = new Set<string>();
+    if (user) {
+      const { data: userLikes } = await supabase
+        .from("user_likes")
+        .select("target_id")
+        .eq("user_id", user.id);
+      
+      userLikes?.forEach((like) => userLikedIds.add(like.target_id));
+    }
 
     const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
     if (ownerIds.size > 0) {
@@ -96,6 +109,7 @@ export async function GET() {
           tags,
           isVerified: false,
           ownerId: exp.user_id,
+          hasLiked: userLikedIds.has(exp.id),
         });
       }
     }
@@ -124,6 +138,7 @@ export async function GET() {
             tags: (config.tags as string[]) || ["Fine-Tuned", job.base_model],
             isVerified: false,
             ownerId: job.user_id,
+            hasLiked: userLikedIds.has(job.id),
           });
         }
       }

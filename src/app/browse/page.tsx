@@ -24,6 +24,14 @@ export default function BrowseModelsPage() {
       .then((data) => {
         if (data.ok && data.models) {
           setModels(data.models);
+          // Initialize liked models from server state
+          const initialLikedIds = new Set<string>();
+          data.models.forEach((m: CommunityItem) => {
+            if (m.hasLiked) initialLikedIds.add(m.id);
+          });
+          if (initialLikedIds.size > 0) {
+            setLikedIds(initialLikedIds);
+          }
         }
       })
       .catch((err) => console.error("Error fetching models:", err))
@@ -31,29 +39,68 @@ export default function BrowseModelsPage() {
   }, []);
 
   const handleLike = async (id: string, type: string) => {
-    if (likedIds.has(id)) return; // Already liked this session
-
+    const isLiked = likedIds.has(id);
+    const targetType = type === "smart_assistant" ? "expert" : "job";
+    
     // Optimistically update UI
-    setLikedIds((prev) => new Set(prev).add(id));
-    setLocalStats((prev) => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        likes: (prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0) + 1,
-      }
-    }));
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+    setLocalStats((prev) => {
+      const currentLikes = prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0;
+      return {
+        ...prev,
+        [id]: {
+          ...prev[id],
+          likes: isLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1,
+        }
+      };
+    });
 
     try {
-      const res = await apiClient.post<any>("/api/community/like", { targetId: id, targetType: type });
+      let res;
+      if (isLiked) {
+        // Unlike
+        res = await apiClient.delete<any>("/api/community/like", { 
+          body: JSON.stringify({ targetId: id, targetType }) 
+        });
+      } else {
+        // Like
+        res = await apiClient.post<any>("/api/community/like", { targetId: id, targetType });
+      }
+
       if (res.ok && res.likes_count !== undefined) {
         setLocalStats((prev) => ({
           ...prev,
           [id]: { ...prev[id], likes: res.likes_count }
         }));
       }
-    } catch (err) {
-      console.error("Failed to like:", err);
-      // Revert on error could go here
+    } catch (err: any) {
+      console.error(`Failed to ${isLiked ? 'unlike' : 'like'}:`, err);
+      // Revert optimistic update on failure
+      if (err?.status !== 409) {
+        setLikedIds((prev) => {
+          const next = new Set(prev);
+          if (isLiked) next.add(id); // Re-add if unlike failed
+          else next.delete(id);      // Re-delete if like failed
+          return next;
+        });
+      }
+      
+      setLocalStats((prev) => {
+        const currentLikes = prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0;
+        return {
+          ...prev,
+          [id]: {
+            ...prev[id],
+            likes: isLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
+          }
+        };
+      });
     }
   };
 
@@ -184,7 +231,7 @@ export default function BrowseModelsPage() {
                     className={styles.statItem} 
                     title="Likes"
                     style={{ cursor: 'pointer', transition: 'color 0.2s' }}
-                    onClick={() => handleLike(item.id, item.type)}
+                    onClick={() => handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job")}
                   >
                     <Heart 
                       size={14} 
