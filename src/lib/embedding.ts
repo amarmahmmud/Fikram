@@ -492,15 +492,8 @@ OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
 - The Sources below provide your internal evaluation frameworks, scoring rubrics, benchmark data, and historical failure patterns.
 - APPLY these frameworks and rubrics directly to the pitch using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
 - Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
-- If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth—never hide behind bureaucratic disclaimers or claim you "lack information".
-- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
-
-FACTUAL CITATION CONSTRAINT (CRITICAL — NEVER VIOLATE):
-- When citing specific companies, startups, lawsuits, fines, or historical failures, you MUST use ONLY names that appear in the Internal Knowledge Base Sources below OR in the Live Web Intel results.
-- If no exact company name is available from your sources, describe the failure PATTERN generically (e.g., "multiple food-delivery drone startups in 2022–2024 failed due to...") instead of inventing a company name.
-- NEVER fabricate or hallucinate a company name, founding year, fine amount, lawsuit, or post-mortem that is not explicitly present in your provided sources.
-- NEVER invent specific historical events, regulatory crackdowns, enforcement actions, or dated incidents (e.g., do NOT say "the 2023 FAA drone-spam crackdown" unless that exact event is in your sources). Instead, cite the MECHANICS of the law or regulation itself (e.g., "FAA Part 107 requires visual line-of-sight, and violations carry fines up to $27,500 per incident").
-- You ARE allowed to reason about WHY something would fail using physics, economics, law, and first principles — that is extrapolating LOGIC, which is encouraged. You are NOT allowed to extrapolate FACTS, NAMES, DATES, or HISTORICAL EVENTS.`;
+- If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth.
+- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.`;
   } else {
     // Hybrid / Balanced
     modeInstructions = `
@@ -515,6 +508,14 @@ OPERATING RULES (BALANCED HYBRID MODE):
     ? `\n- Real-time Web Search Intelligence is included below. Weave in relevant current news, competitors, and market updates to ensure your analysis is up to date.`
     : "";
 
+  const finalGroundingBlock = mode === "evaluative"
+    ? `\nGROUNDING & FACTUALITY RULES (CRITICAL — NEVER VIOLATE):
+1. You may use first-principles logic (physics, math, unit economics) to deduce why an idea will fail.
+2. DO NOT invent, fabricate, or hallucinate specific historical events, regulatory rulings, agency directives (e.g. fake FAA warnings/crackdowns), lawsuits, or startup post-mortems to make your point sound stronger.
+3. If a pitch violates common sense or general law (e.g., flying drones into houses), point out the general legal barrier (e.g., FAA Part 107 BVLOS restrictions) WITHOUT inventing a specific year, warning, or fine that didn't happen.
+4. When citing specific companies or post-mortems, rely ONLY on exact names present in your provided sources or live web intel. If not present, describe the failure pattern generically instead of inventing a name.`
+    : "";
+
   const groundedSystemPrompt = `${systemPrompt}
 
 ${modeInstructions}
@@ -522,7 +523,8 @@ ${webInstruction}
 
 Internal Knowledge Base Sources:
 ${sourcesText}
-${webSourcesText}`;
+${webSourcesText}
+${finalGroundingBlock}`;
 
   const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: groundedSystemPrompt },
