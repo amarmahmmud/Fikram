@@ -5,8 +5,9 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import { PublishModal } from "@/components/PublishModal";
+import { KnowledgeModal } from "@/components/KnowledgeModal";
 import { apiClient } from "@/lib/apiClient";
-import { Globe } from "lucide-react";
+import { Globe, BookOpen } from "lucide-react";
 
 interface Message {
   role: "user" | "model";
@@ -24,22 +25,44 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [totalChunks, setTotalChunks] = useState(0);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  async function loadExpertDetails() {
+    try {
+      const res = await apiClient.get<any>(`/api/experts/${resolvedParams.id}`);
+      if (res.ok && res.expert) {
+        setExpert(res.expert);
+        setIsOwner(Boolean(res.isOwner));
+        setTotalChunks(res.totalChunks || 0);
+        return res.expert;
+      }
+    } catch {
+      // fallback to direct supabase select
+    }
+
+    const { data } = await supabase
+      .from("experts")
+      .select("*")
+      .eq("id", resolvedParams.id)
+      .single();
+
+    if (data) {
+      setExpert(data);
+    }
+    return data;
+  }
 
   // Load expert info
   useEffect(() => {
-    async function loadExpert() {
-      const { data } = await supabase
-        .from("experts")
-        .select("*")
-        .eq("id", resolvedParams.id)
-        .single();
-
-      if (data) {
-        setExpert(data);
+    async function init() {
+      const exp = await loadExpertDetails();
+      if (exp) {
         setMessages([{
           role: "model",
-          content: `Hello! I'm **${data.name}**${data.description ? ` — ${data.description}` : ""}. Ask me anything about my expertise.`,
+          content: `Hello! I'm **${exp.name}**${exp.description ? ` — ${exp.description}` : ""}. Ask me anything about my expertise.`,
         }]);
 
         // Trigger chat count increment
@@ -48,7 +71,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       }
       setLoading(false);
     }
-    loadExpert();
+    init();
   }, [resolvedParams.id]);
 
   // Auto-scroll
@@ -153,6 +176,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         <div className={styles.headerBadge} style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             className="btn btn-secondary btn-sm"
+            onClick={() => setSourcesModalOpen(true)}
+            style={{ gap: 6 }}
+            title="View indexed knowledge sources or upload new documents"
+          >
+            <BookOpen size={16} />
+            Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
             onClick={() => setPublishModalOpen(true)}
             style={{ gap: 6 }}
           >
@@ -223,20 +255,29 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {expert && (
-        <PublishModal
-          isOpen={publishModalOpen}
-          onClose={() => setPublishModalOpen(false)}
-          type="expert"
-          id={expert.id}
-          initialTitle={expert.name}
-          initialDescription={expert.description || ""}
-          initialPublished={Boolean(expert.is_published)}
-          onPublishSuccess={(isPub, updatedData) => {
-            if (updatedData) {
-              setExpert(updatedData);
-            }
-          }}
-        />
+        <>
+          <PublishModal
+            isOpen={publishModalOpen}
+            onClose={() => setPublishModalOpen(false)}
+            type="expert"
+            id={expert.id}
+            initialTitle={expert.name}
+            initialDescription={expert.description || ""}
+            initialPublished={Boolean(expert.is_published)}
+            onPublishSuccess={(isPub, updatedData) => {
+              if (updatedData) {
+                setExpert(updatedData);
+              }
+            }}
+          />
+          <KnowledgeModal
+            isOpen={sourcesModalOpen}
+            onClose={() => setSourcesModalOpen(false)}
+            expertId={expert.id}
+            isOwner={isOwner}
+            onSourcesUpdated={loadExpertDetails}
+          />
+        </>
       )}
     </div>
   );

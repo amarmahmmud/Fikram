@@ -171,6 +171,8 @@ export default function NewExpertPage() {
     if (!expertId || files.length === 0) return;
     setIngesting(true);
 
+    let hasErrors = false;
+
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === "done") continue;
 
@@ -195,6 +197,7 @@ export default function NewExpertPage() {
             )
           );
         } else {
+          hasErrors = true;
           setFiles((prev) =>
             prev.map((f, idx) =>
               idx === i ? { ...f, status: "error", error: data.error } : f
@@ -202,6 +205,7 @@ export default function NewExpertPage() {
           );
         }
       } catch {
+        hasErrors = true;
         setFiles((prev) =>
           prev.map((f, idx) =>
             idx === i ? { ...f, status: "error", error: "Upload failed" } : f
@@ -211,7 +215,9 @@ export default function NewExpertPage() {
     }
 
     setIngesting(false);
-    setStep(3);
+    if (!hasErrors) {
+      setStep(3);
+    }
   }
 
   const totalChunks = files.reduce((a, f) => a + (f.chunksStored || 0), 0);
@@ -437,9 +443,9 @@ export default function NewExpertPage() {
               >
                 {ingesting ? "Processing..." : `Process ${files.length} source${files.length !== 1 ? "s" : ""} →`}
               </button>
-              {allDone && (
+              {totalChunks > 0 && (
                 <button className="btn btn-secondary" onClick={() => setStep(3)}>
-                  Continue →
+                  {allDone ? "Continue →" : `Continue with ${totalChunks} chunks →`}
                 </button>
               )}
             </div>

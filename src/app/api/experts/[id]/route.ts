@@ -1,6 +1,62 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+// GET /api/experts/[id] — get expert details, total chunks, and knowledge sources summary
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data: expert, error } = await supabase
+      .from("experts")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (error || !expert) {
+      return NextResponse.json({ error: "Expert not found" }, { status: 404 });
+    }
+
+    // Access check: owner or published
+    if ((!user || expert.user_id !== user.id) && !expert.is_published) {
+      return NextResponse.json({ error: "Expert not found" }, { status: 404 });
+    }
+
+    // Fetch chunks summary
+    const { data: chunks } = await supabase
+      .from("expert_chunks")
+      .select("source_filename")
+      .eq("expert_id", id);
+
+    const fileMap: Record<string, number> = {};
+    chunks?.forEach((c) => {
+      const fn = c.source_filename || "Unknown Source";
+      fileMap[fn] = (fileMap[fn] || 0) + 1;
+    });
+
+    const sources = Object.entries(fileMap).map(([filename, chunkCount]) => ({
+      filename,
+      chunkCount,
+    }));
+
+    const isOwner = Boolean(user && expert.user_id === user.id);
+
+    return NextResponse.json({
+      ok: true,
+      expert,
+      totalChunks: chunks?.length || 0,
+      sources,
+      isOwner,
+    });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to load expert" }, { status: 500 });
+  }
+}
+
 // DELETE /api/experts/[id] — delete an expert owned by the authenticated user
 export async function DELETE(
   _req: Request,

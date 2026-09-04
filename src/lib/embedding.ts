@@ -29,29 +29,75 @@ const EMBEDDING_MODEL = "gemini-embedding-2";
 const EMBEDDING_DIMENSIONS = 768;
 
 /**
- * Generate an embedding vector for a single text string.
+ * Helper to pause execution.
+ */
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Generate an embedding vector for a single text string with retry on 429 quota.
  */
 export async function embedText(text: string): Promise<number[]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.embedContent({
-    content: { role: "user" as const, parts: [{ text }] },
-    outputDimensionality: EMBEDDING_DIMENSIONS,
-  } as any);
-  return result.embedding.values;
+  let attempts = 0;
+  while (attempts < 5) {
+    attempts++;
+    try {
+      const result = await model.embedContent({
+        content: { role: "user" as const, parts: [{ text }] },
+        outputDimensionality: EMBEDDING_DIMENSIONS,
+      } as any);
+      return result.embedding.values;
+    } catch (err: any) {
+      const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
+      if (isQuota && attempts < 5) {
+        console.warn(`[Embedding] Gemini quota hit on embedText, retrying in 8s (attempt ${attempts}/5)...`);
+        await delay(8000);
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error("Failed to embed text after retries");
 }
 
 /**
- * Generate embeddings for multiple texts in batch.
+ * Generate embeddings for multiple texts in batch with sub-batching and retry on 429 quota.
+ * Google Gemini batchEmbedContents accepts at most 100 requests per batch and 100 req/min on free tier.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
-  const result = await model.batchEmbedContents({
-    requests: texts.map((text) => ({
-      content: { role: "user" as const, parts: [{ text }] },
-      outputDimensionality: EMBEDDING_DIMENSIONS,
-    } as any)),
-  });
-  return result.embeddings.map((e) => e.values);
+  const BATCH_SIZE = 50;
+  const allEmbeddings: number[][] = [];
+
+  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const slice = texts.slice(i, i + BATCH_SIZE);
+    let attempts = 0;
+    let success = false;
+
+    while (!success && attempts < 5) {
+      attempts++;
+      try {
+        const result = await model.batchEmbedContents({
+          requests: slice.map((text) => ({
+            content: { role: "user" as const, parts: [{ text }] },
+            outputDimensionality: EMBEDDING_DIMENSIONS,
+          } as any)),
+        });
+        allEmbeddings.push(...result.embeddings.map((e) => e.values));
+        success = true;
+      } catch (err: any) {
+        const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
+        if (isQuota && attempts < 5) {
+          console.warn(`[Embedding] Gemini quota hit on batch ${i / BATCH_SIZE + 1}, retrying in 8s (attempt ${attempts}/5)...`);
+          await delay(8000);
+        } else {
+          throw err;
+        }
+      }
+    }
+  }
+
+  return allEmbeddings;
 }
 
 // ── Section-aware chunking ────────────────────────────────────────────────────
