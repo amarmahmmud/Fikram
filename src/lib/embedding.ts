@@ -19,6 +19,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
+import { searchWeb, WebSearchResult } from "@/lib/web-search";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -404,6 +405,11 @@ export async function retrieveChunks(
 
 // ── Generate (retrieve + prompt + answer) ────────────────────────────────────
 
+export interface GenerateRAGOptions {
+  reasoningMode?: "strict" | "evaluative" | "hybrid";
+  webSearchEnabled?: boolean;
+}
+
 export interface RAGResponse {
   reply: string;
   sources: {
@@ -413,26 +419,24 @@ export interface RAGResponse {
     sectionTitle?: string;
     sectionTier?: string;
   }[];
+  webSources?: WebSearchResult[];
 }
 
 /**
- * Full RAG pipeline: embed query → retrieve chunks → build grounded prompt → generate answer.
- * The grounded prompt now surfaces each source's section title/tier, so the
- * model can honor structural distinctions (e.g. "major numbered section" vs.
- * "additional/minor mention") instead of treating every chunk as equally
- * central, and can flag when a question's premise doesn't match the source
- * (e.g. asking for "two" items when the source lists four).
+ * Full RAG pipeline: embed query → retrieve chunks → (optional live web search) → build dynamic prompt → generate answer.
+ * Adapts instructions based on reasoningMode ("strict" | "evaluative" | "hybrid") and includes live web intelligence if webSearchEnabled.
  */
 export async function generateRAGResponse(
   query: string,
   expertId: string,
   systemPrompt: string,
   chatHistory: { role: string; content: string }[] = [],
+  options?: GenerateRAGOptions,
 ): Promise<RAGResponse> {
   const chunks = await retrieveChunks(query, expertId);
 
   console.log(
-    `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"})`,
+    `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"}) | Mode: ${options?.reasoningMode || "hybrid"} | WebSearch: ${options?.webSearchEnabled ? "ON" : "OFF"}`,
   );
 
   const sourcesText =
@@ -448,32 +452,76 @@ export async function generateRAGResponse(
           return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
         })
         .join("\n\n")
-      : "No relevant sources found in the knowledge base.";
+      : "No relevant documents found in the internal knowledge base.";
+
+  // Optional Live Web Search
+  let webSourcesText = "";
+  let webResults: WebSearchResult[] = [];
+
+  if (options?.webSearchEnabled) {
+    try {
+      webResults = await searchWeb(query, 3);
+      if (webResults.length > 0) {
+        webSourcesText =
+          `\n\nLive Internet Search Intelligence (Real-time Market Data & Recent News):\n` +
+          webResults
+            .map((r, i) => `[Live Web Intel ${i + 1} — ${r.title} (${r.link})]:\n${r.snippet}`)
+            .join("\n\n");
+      }
+    } catch (searchErr: any) {
+      console.warn("[RAG] Web search warning:", searchErr.message);
+    }
+  }
+
+  // Build mode-specific instructions
+  const mode = options?.reasoningMode || "hybrid";
+  let modeInstructions = "";
+
+  if (mode === "strict") {
+    modeInstructions = `
+OPERATING RULES (STRICT DOCUMENT GROUNDING):
+- Answer the user's question using ONLY the facts explicitly stated in the Sources below.
+- If the answer is NOT in the sources, say: "I don't have information about that in my knowledge base."
+- Do NOT extrapolate, speculate, or make up facts not present in the sources.
+- When possible, mention which source your answer comes from.
+- Be concise, accurate, and completely faithful to the provided text.`;
+  } else if (mode === "evaluative") {
+    modeInstructions = `
+OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
+- You are evaluating a novel, user-submitted pitch, concept, or question.
+- The Sources below provide your internal evaluation frameworks, scoring rubrics, benchmark data, and historical failure patterns.
+- APPLY these frameworks and rubrics directly to the pitch using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
+- Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
+- If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth—never hide behind bureaucratic disclaimers or claim you "lack information".
+- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
+
+FACTUAL CITATION CONSTRAINT (CRITICAL — NEVER VIOLATE):
+- When citing specific companies, startups, lawsuits, fines, or historical failures, you MUST use ONLY names that appear in the Internal Knowledge Base Sources below OR in the Live Web Intel results.
+- If no exact company name is available from your sources, describe the failure PATTERN generically (e.g., "multiple food-delivery drone startups in 2022–2024 failed due to...") instead of inventing a company name.
+- NEVER fabricate or hallucinate a company name, founding year, fine amount, lawsuit, or post-mortem that is not explicitly present in your provided sources.
+- You ARE allowed to reason about WHY something would fail using physics, economics, law, and first principles — that is extrapolating LOGIC, which is encouraged. You are NOT allowed to extrapolate FACTS, NAMES, or HISTORICAL EVENTS.`;
+  } else {
+    // Hybrid / Balanced
+    modeInstructions = `
+OPERATING RULES (BALANCED HYBRID MODE):
+- Use the Sources below as your primary foundation of facts, principles, and guidelines.
+- You are encouraged to extrapolate, explain, give real-world context, and reason using general world knowledge while remaining grounded in the themes and principles of your knowledge base.
+- If the user asks about an idea or topic not literally in your files, use your best judgment to connect it to your knowledge base principles.
+- Maintain your persona naturally without mechanically citing sources unless requested.`;
+  }
+
+  const webInstruction = webResults.length > 0
+    ? `\n- Real-time Web Search Intelligence is included below. Weave in relevant current news, competitors, and market updates to ensure your analysis is up to date.`
+    : "";
 
   const groundedSystemPrompt = `${systemPrompt}
 
-IMPORTANT RULES:
-- Answer the user's question using ONLY the information from the Sources below.
-- If the answer is NOT in the sources, say "I don't have information about that in my knowledge base."
-- Do NOT make up facts, names, numbers, or details that aren't in the sources.
-- Each source is labeled with its section title and tier ("primary" = a numbered
-  major section of the report, "secondary" = an additional/minor mention, e.g.
-  under a catch-all "Additional Notable Advances" heading). When asked to
-  identify "major" breakthroughs, answer using ONLY "primary" tier sources.
-  If there are fewer or more primary-tier items than the question or a
-  requested count implies, say so explicitly (e.g. "the report names N
-  major breakthroughs, not five") rather than quietly filling the gap with
-  secondary-tier items.
-- If the user's question assumes a count (e.g. "name two X", "which two Y")
-  that doesn't match what the sources actually show, answer using the
-  source's true count and explicitly note the discrepancy before or after
-  the answer — do not silently truncate or pad your answer to match the
-  question's assumed number.
-- When possible, mention which source your answer comes from.
-- Be concise and direct.
+${modeInstructions}
+${webInstruction}
 
-Sources:
-${sourcesText}`;
+Internal Knowledge Base Sources:
+${sourcesText}
+${webSourcesText}`;
 
   const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
     { role: "system", content: groundedSystemPrompt },
@@ -493,7 +541,7 @@ ${sourcesText}`;
   const completion = await groq.chat.completions.create({
     messages: groqHistory,
     model: "openai/gpt-oss-120b",
-    temperature: 0.3,
+    temperature: mode === "evaluative" ? 0.4 : 0.3,
     max_completion_tokens: 2048,
   });
 
@@ -508,6 +556,7 @@ ${sourcesText}`;
       sectionTitle: c.section_title,
       sectionTier: c.section_tier,
     })),
+    webSources: webResults,
   };
 }
 

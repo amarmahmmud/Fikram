@@ -31,6 +31,8 @@ export default function NewExpertPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
+  const [reasoningMode, setReasoningMode] = useState<"strict" | "evaluative" | "hybrid">("hybrid");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [expertId, setExpertId] = useState<string | null>(null);
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [creating, setCreating] = useState(false);
@@ -60,6 +62,8 @@ export default function NewExpertPage() {
           name: name.trim(),
           description: description.trim(),
           systemPrompt: systemPrompt.trim() || undefined,
+          reasoningMode,
+          webSearchEnabled,
         }),
       });
       const data = await res.json();
@@ -272,6 +276,64 @@ export default function NewExpertPage() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
+            </div>
+
+            {/* Reasoning & Grounding Mode */}
+            <div className={styles.field}>
+              <label className={styles.label}>Reasoning &amp; Knowledge Mode</label>
+              <div className={styles.modeGrid}>
+                <div
+                  className={`${styles.modeOption} ${reasoningMode === "strict" ? styles.modeOptionActive : ""}`}
+                  onClick={() => setReasoningMode("strict")}
+                >
+                  <div className={styles.modeTitle}>🔒 Strict Grounding</div>
+                  <div className={styles.modeDesc}>
+                    Answers strictly with words from your documents. Refuses if not in text. Best for HR, Legal, Compliance.
+                  </div>
+                </div>
+
+                <div
+                  className={`${styles.modeOption} ${reasoningMode === "evaluative" ? styles.modeOptionActive : ""}`}
+                  onClick={() => setReasoningMode("evaluative")}
+                >
+                  <div className={styles.modeTitle}>🔥 Critical Thinker</div>
+                  <div className={styles.modeDesc}>
+                    Uses documents as rubrics &amp; benchmarks. Evaluates new ideas using logic, economics, and sharp wit. Best for Roasts &amp; Audits.
+                  </div>
+                </div>
+
+                <div
+                  className={`${styles.modeOption} ${reasoningMode === "hybrid" ? styles.modeOptionActive : ""}`}
+                  onClick={() => setReasoningMode("hybrid")}
+                >
+                  <div className={styles.modeTitle}>⚖️ Balanced Hybrid</div>
+                  <div className={styles.modeDesc}>
+                    Grounded in your files as primary foundation, but freely explains and extrapolates with world knowledge.
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Web Search Toggle */}
+              <div
+                className={`${styles.webToggleCard} ${webSearchEnabled ? styles.webToggleActive : ""}`}
+                onClick={() => setWebSearchEnabled(!webSearchEnabled)}
+              >
+                <div className={styles.webToggleInfo}>
+                  <div className={styles.webToggleTitle}>
+                    🌐 Live Web Search &amp; Market Intelligence
+                  </div>
+                  <div className={styles.webToggleDesc}>
+                    Allows the AI to search the web in real-time for latest news, competitors, and industry trends.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={webSearchEnabled}
+                  onChange={(e) => setWebSearchEnabled(e.target.checked)}
+                  style={{ width: 18, height: 18, accentColor: "var(--accent-primary)", cursor: "pointer" }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
             </div>
 
             <div className={styles.field}>

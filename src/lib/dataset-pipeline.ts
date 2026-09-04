@@ -413,7 +413,7 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] General pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] General pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     // 4-second delay between requests to stay well under Gemini's 15 RPM limit
     if (i + PARALLEL_LIMIT < totalChunks) {
@@ -445,7 +445,7 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] Recall pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] Recall pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     // 4-second delay between requests
     if (i + PARALLEL_LIMIT < totalChunks) {
@@ -477,7 +477,7 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] Reinforcement pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] Reinforcement pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     if (i + PARALLEL_LIMIT < totalChunks) {
       await new Promise(resolve => setTimeout(resolve, 4000));
@@ -509,7 +509,7 @@ export async function generateDataset(
       allPairs.push(...pairs);
     }
 
-    console.log(`[Pipeline] Negative pass: chunk ${i+1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] Negative pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     if (i + PARALLEL_LIMIT < totalChunks) {
       await new Promise(resolve => setTimeout(resolve, 4000));

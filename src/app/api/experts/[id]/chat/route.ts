@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateRAGResponse } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
+import { parseExpertMetadata } from "@/lib/expert-metadata";
 
 export async function POST(
   req: Request,
@@ -68,18 +69,26 @@ export async function POST(
       });
     }
 
+    // Parse expert configuration metadata (mode, web search, etc.)
+    const metadata = parseExpertMetadata(expert.description || "", expert.name);
+
     // Run RAG pipeline
     const result = await generateRAGResponse(
       message.trim(),
       expertId,
       expert.system_prompt || `You are ${expert.name}, a knowledgeable expert.`,
       history || [],
+      {
+        reasoningMode: metadata.reasoningMode,
+        webSearchEnabled: metadata.webSearchEnabled,
+      }
     );
 
     return NextResponse.json({
       ok: true,
       reply: result.reply,
       sources: result.sources,
+      webSources: result.webSources,
     });
   } catch (err: any) {
     console.error("[Expert Chat] Error:", err);

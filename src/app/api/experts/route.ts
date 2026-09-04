@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { formatExpertDescription, ReasoningMode } from "@/lib/expert-metadata";
 
 // GET /api/experts — list user's experts
 export async function GET() {
@@ -27,11 +28,18 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, description, systemPrompt } = body;
+  const { name, description, systemPrompt, reasoningMode, webSearchEnabled, category, tags } = body;
 
   if (!name?.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
+
+  const finalDescription = formatExpertDescription(description?.trim() || "", {
+    category,
+    tags,
+    reasoningMode: reasoningMode as ReasoningMode,
+    webSearchEnabled: Boolean(webSearchEnabled),
+  });
 
   // Generate a URL-friendly slug from the name
   const slug = name
@@ -47,7 +55,7 @@ export async function POST(req: Request) {
       user_id: user.id,
       name: name.trim(),
       slug,
-      description: description?.trim() || null,
+      description: finalDescription || null,
       system_prompt: systemPrompt?.trim() || `You are ${name.trim()}, a knowledgeable expert. Answer questions based on your expertise.`,
     })
     .select()

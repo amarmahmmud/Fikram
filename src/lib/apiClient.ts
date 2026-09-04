@@ -66,6 +66,23 @@ export const apiClient = {
     });
   },
 
+  patch: <T>(url: string, body?: any, options?: RequestInit) => {
+    const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
+    const isBlob = typeof Blob !== "undefined" && body instanceof Blob;
+    const headers = new Headers(options?.headers);
+    
+    if (!isFormData && !isBlob && body && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    
+    return fetchWithHandling<T>(url, {
+      ...options,
+      method: "PATCH",
+      headers,
+      body: (isFormData || isBlob) ? body : (body ? JSON.stringify(body) : undefined),
+    });
+  },
+
   delete: <T>(url: string, options?: RequestInit) =>
     fetchWithHandling<T>(url, { ...options, method: "DELETE" }),
 };

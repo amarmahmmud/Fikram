@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { parseExpertMetadata, formatExpertDescription, ReasoningMode } from "@/lib/expert-metadata";
 
 // GET /api/experts/[id] — get expert details, total chunks, and knowledge sources summary
 export async function GET(
@@ -44,16 +45,74 @@ export async function GET(
     }));
 
     const isOwner = Boolean(user && expert.user_id === user.id);
+    const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
     return NextResponse.json({
       ok: true,
       expert,
+      metadata,
       totalChunks: chunks?.length || 0,
       sources,
       isOwner,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load expert" }, { status: 500 });
+  }
+}
+
+// PATCH /api/experts/[id] — update expert settings (reasoning mode, web search, prompt, description)
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { data: expert } = await supabase
+      .from("experts")
+      .select("*")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (!expert) return NextResponse.json({ error: "Expert not found" }, { status: 404 });
+
+    const body = await req.json();
+    const { systemPrompt, reasoningMode, webSearchEnabled, description, name } = body;
+
+    const currentMeta = parseExpertMetadata(expert.description || "", expert.name);
+    const newDescription = formatExpertDescription(
+      description !== undefined ? description : currentMeta.cleanDescription,
+      {
+        category: currentMeta.category,
+        tags: currentMeta.tags,
+        reasoningMode: (reasoningMode || currentMeta.reasoningMode) as ReasoningMode,
+        webSearchEnabled: webSearchEnabled !== undefined ? webSearchEnabled : currentMeta.webSearchEnabled,
+      }
+    );
+
+    const updates: any = {
+      description: newDescription,
+      updated_at: new Date().toISOString(),
+    };
+    if (systemPrompt !== undefined) updates.system_prompt = systemPrompt;
+    if (name !== undefined) updates.name = name;
+
+    const { data: updated, error } = await supabase
+      .from("experts")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ ok: true, expert: updated });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to update expert" }, { status: 500 });
   }
 }
 

@@ -13,6 +13,7 @@ interface Message {
   role: "user" | "model";
   content: string;
   sources?: { filename: string; chunkIndex: number; similarity: number }[];
+  webSources?: { title: string; snippet: string; link: string }[];
 }
 
 export default function ExpertChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -28,6 +29,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [totalChunks, setTotalChunks] = useState(0);
+  const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   async function loadExpertDetails() {
@@ -37,6 +39,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setExpert(res.expert);
         setIsOwner(Boolean(res.isOwner));
         setTotalChunks(res.totalChunks || 0);
+        setExpertMetadata(res.metadata || null);
         return res.expert;
       }
     } catch {
@@ -99,7 +102,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       if (data.ok) {
         setMessages((prev) => [
           ...prev,
-          { role: "model", content: data.reply, sources: data.sources },
+          {
+            role: "model",
+            content: data.reply,
+            sources: data.sources,
+            webSources: data.webSources,
+          },
         ]);
       } else {
         setMessages((prev) => [
@@ -170,7 +178,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
           <div>
             <div className={styles.expertName}>{expert.name}</div>
-            <div className={styles.expertTag}>Smart Assistant · RAG</div>
+            <div className={styles.expertTag}>
+              {expertMetadata?.reasoningMode === "evaluative"
+                ? "🔥 Critical Thinker"
+                : expertMetadata?.reasoningMode === "strict"
+                ? "🔒 Strict Grounding"
+                : "⚖️ Smart Assistant"}
+              {expertMetadata?.webSearchEnabled ? " · 🌐 Live Web" : " · RAG"}
+            </div>
           </div>
         </div>
         <div className={styles.headerBadge} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -217,6 +232,24 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                   <span key={si} className={styles.sourceChip}>
                     {s.filename} (chunk {s.chunkIndex + 1}, {(s.similarity * 100).toFixed(0)}% match)
                   </span>
+                ))}
+              </div>
+            )}
+            {msg.webSources && msg.webSources.length > 0 && (
+              <div className={styles.sources} style={{ marginTop: 6 }}>
+                <span className={styles.sourcesLabel} style={{ color: "var(--accent-primary)" }}>🌐 Live Web:</span>
+                {msg.webSources.map((ws, wsi) => (
+                  <a
+                    key={wsi}
+                    href={ws.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={styles.sourceChip}
+                    style={{ textDecoration: "none", cursor: "pointer", color: "inherit" }}
+                    title={ws.snippet}
+                  >
+                    🔗 {ws.title.slice(0, 32)}...
+                  </a>
                 ))}
               </div>
             )}

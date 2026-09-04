@@ -380,3 +380,93 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+.modeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.modeOption {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modeOption:hover {
+  border-color: var(--border-focus);
+  background: var(--bg-surface-hover);
+}
+
+.modeOptionActive {
+  border-color: var(--accent-primary);
+  background: rgba(0, 229, 200, 0.05);
+  box-shadow: 0 0 0 1px rgba(0, 229, 200, 0.25);
+}
+
+.modeTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.modeDesc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.webToggleCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  margin-top: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.webToggleCard:hover {
+  border-color: var(--border-focus);
+}
+
+.webToggleActive {
+  border-color: rgba(0, 229, 200, 0.5);
+  background: rgba(0, 229, 200, 0.03);
+}
+
+.webToggleInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.webToggleTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.webToggleDesc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+

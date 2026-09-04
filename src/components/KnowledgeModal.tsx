@@ -27,6 +27,8 @@ export function KnowledgeModal({
 }: KnowledgeModalProps) {
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [totalChunks, setTotalChunks] = useState(0);
+  const [reasoningMode, setReasoningMode] = useState<"strict" | "evaluative" | "hybrid">("hybrid");
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
@@ -39,11 +41,36 @@ export function KnowledgeModal({
       if (res.ok) {
         setSources(res.sources || []);
         setTotalChunks(res.totalChunks || 0);
+        if (res.metadata) {
+          setReasoningMode(res.metadata.reasoningMode || "hybrid");
+          setWebSearchEnabled(Boolean(res.metadata.webSearchEnabled));
+        }
       }
     } catch (err: any) {
       console.error("Failed to load expert sources:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleUpdateMode(newMode: "strict" | "evaluative" | "hybrid") {
+    setReasoningMode(newMode);
+    try {
+      await apiClient.patch(`/api/experts/${expertId}`, { reasoningMode: newMode });
+      if (onSourcesUpdated) onSourcesUpdated();
+    } catch (e) {
+      console.error("Failed to update mode:", e);
+    }
+  }
+
+  async function handleToggleWebSearch() {
+    const nextVal = !webSearchEnabled;
+    setWebSearchEnabled(nextVal);
+    try {
+      await apiClient.patch(`/api/experts/${expertId}`, { webSearchEnabled: nextVal });
+      if (onSourcesUpdated) onSourcesUpdated();
+    } catch (e) {
+      console.error("Failed to toggle web search:", e);
     }
   }
 
@@ -158,6 +185,60 @@ export function KnowledgeModal({
               </div>
             )}
           </div>
+
+          {/* Reasoning & Intelligence Configuration for Owner */}
+          {isOwner && (
+            <div>
+              <div className={styles.sectionTitle}>Reasoning &amp; Intelligence Mode</div>
+              <div className={styles.modePills}>
+                <button
+                  type="button"
+                  className={`${styles.modePill} ${reasoningMode === "strict" ? styles.modePillActive : ""}`}
+                  onClick={() => handleUpdateMode("strict")}
+                  title="Answer strictly from documents. Refuses if not found."
+                >
+                  🔒 Strict (Docs Only)
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modePill} ${reasoningMode === "evaluative" ? styles.modePillActive : ""}`}
+                  onClick={() => handleUpdateMode("evaluative")}
+                  title="Uses docs as rubrics. Evaluates new pitches with logic and sharp wit."
+                >
+                  🔥 Critical Thinker
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modePill} ${reasoningMode === "hybrid" ? styles.modePillActive : ""}`}
+                  onClick={() => handleUpdateMode("hybrid")}
+                  title="Uses docs as primary ground, but explains and extrapolates freely."
+                >
+                  ⚖️ Hybrid Balanced
+                </button>
+              </div>
+
+              <div
+                className={styles.webSearchToggle}
+                onClick={handleToggleWebSearch}
+              >
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                    🌐 Live Web Search &amp; Market Intelligence
+                  </span>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    Searches Google/web in real-time for market trends, competitors &amp; breaking news
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={webSearchEnabled}
+                  onChange={handleToggleWebSearch}
+                  style={{ width: 16, height: 16, accentColor: "var(--accent-primary)", cursor: "pointer" }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Upload Area for Owner */}
           {isOwner && (
