@@ -499,7 +499,8 @@ FACTUAL CITATION CONSTRAINT (CRITICAL — NEVER VIOLATE):
 - When citing specific companies, startups, lawsuits, fines, or historical failures, you MUST use ONLY names that appear in the Internal Knowledge Base Sources below OR in the Live Web Intel results.
 - If no exact company name is available from your sources, describe the failure PATTERN generically (e.g., "multiple food-delivery drone startups in 2022–2024 failed due to...") instead of inventing a company name.
 - NEVER fabricate or hallucinate a company name, founding year, fine amount, lawsuit, or post-mortem that is not explicitly present in your provided sources.
-- You ARE allowed to reason about WHY something would fail using physics, economics, law, and first principles — that is extrapolating LOGIC, which is encouraged. You are NOT allowed to extrapolate FACTS, NAMES, or HISTORICAL EVENTS.`;
+- NEVER invent specific historical events, regulatory crackdowns, enforcement actions, or dated incidents (e.g., do NOT say "the 2023 FAA drone-spam crackdown" unless that exact event is in your sources). Instead, cite the MECHANICS of the law or regulation itself (e.g., "FAA Part 107 requires visual line-of-sight, and violations carry fines up to $27,500 per incident").
+- You ARE allowed to reason about WHY something would fail using physics, economics, law, and first principles — that is extrapolating LOGIC, which is encouraged. You are NOT allowed to extrapolate FACTS, NAMES, DATES, or HISTORICAL EVENTS.`;
   } else {
     // Hybrid / Balanced
     modeInstructions = `
