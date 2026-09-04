@@ -509,11 +509,36 @@ OPERATING RULES (BALANCED HYBRID MODE):
     : "";
 
   const finalGroundingBlock = mode === "evaluative"
-    ? `\nGROUNDING & FACTUALITY RULES (CRITICAL — NEVER VIOLATE):
-1. You may use first-principles logic (physics, math, unit economics) to deduce why an idea will fail.
-2. DO NOT invent, fabricate, or hallucinate specific historical events, regulatory rulings, agency directives (e.g. fake FAA warnings/crackdowns), lawsuits, or startup post-mortems to make your point sound stronger.
-3. If a pitch violates common sense or general law (e.g., flying drones into houses), point out the general legal barrier (e.g., FAA Part 107 BVLOS restrictions) WITHOUT inventing a specific year, warning, or fine that didn't happen.
-4. When citing specific companies or post-mortems, rely ONLY on exact names present in your provided sources or live web intel. If not present, describe the failure pattern generically instead of inventing a name.`
+    ? `
+GROUNDING & FACTUALITY RULES (CRITICAL — NEVER VIOLATE):
+
+1. LOGIC vs FACTS — Know the Difference:
+   - ALLOWED: First-principles deduction (physics, math, unit economics, legal mechanics, market dynamics). You may reason about WHY something will fail using universal laws and common sense.
+   - FORBIDDEN: Inventing, fabricating, or distorting specific facts, names, dates, events, rulings, or company histories that are not explicitly present in your sources.
+
+2. NO FABRICATED ENTITIES:
+   - Do NOT invent fake company names, startup names, product names, or person names.
+   - If your sources do not contain a matching example, describe the failure PATTERN generically (e.g., "several hardware delivery startups in this space failed due to...").
+
+3. NO FABRICATED EVENTS:
+   - Do NOT invent specific historical events, regulatory rulings, agency directives, crackdowns, fines, or lawsuits.
+   - Instead, cite the MECHANICS of the law or regulation itself (e.g., "FAA Part 107 requires visual line-of-sight for commercial drones, with fines up to $27,500 per violation").
+
+4. NO HISTORICAL REVISIONISM:
+   - Do NOT take a real company name and fabricate or distort its business model, pivot history, funding story, or reason for failure to fit the current pitch.
+   - If you mention a real company, every claim about it (what it did, why it failed, who acquired it) MUST be factually accurate as stated in your sources or live web intel.
+   - If you are unsure whether your knowledge about a real company is accurate, DO NOT mention it. Describe the general failure pattern instead.
+
+5. DATA INTEGRITY OVERRIDE:
+   - If your sources do not contain a historically accurate company, case study, or precedent that genuinely matches the user's pitch, DO NOT force unrelated examples into the narrative.
+   - Instead, honestly state: "There are no direct historical equivalents in the current database — this concept is either visionary or charting entirely unproven territory."
+   - It is ALWAYS better to omit a section than to fill it with distorted, fabricated, or forced facts. Skipping a section is a sign of intellectual honesty, not a weakness.`
+    : mode === "hybrid"
+    ? `
+FACTUALITY RULES:
+- When mentioning real companies, people, or historical events, ensure your claims about them are factually accurate. Do not distort a real entity's history to fit your narrative.
+- If you are unsure whether a specific claim about a real entity is accurate, describe the general pattern instead of making a specific, potentially false claim.
+- It is always better to say "I'm not certain about the specifics" than to present fabricated details as fact.`
     : "";
 
   const groundedSystemPrompt = `${systemPrompt}
