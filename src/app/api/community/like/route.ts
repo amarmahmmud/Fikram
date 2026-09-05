@@ -5,46 +5,140 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please log in to like this model", unauthorized: true },
+        { status: 401 }
+      );
+    }
 
     const body = await req.json();
-    const { targetId, targetType } = body;
+    const { targetId, targetType, action } = body;
 
     if (!targetId || !targetType || !["expert", "job"].includes(targetType)) {
       return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
     }
 
-    // 1. Record the like in user_likes (enforces uniqueness via DB constraint)
-    const { error: likeError } = await supabase
-      .from("user_likes")
-      .insert({
-        user_id: user.id,
-        target_id: targetId,
-        target_type: targetType as "expert" | "job",
-      });
-
-    if (likeError) {
-      // Unique constraint violation = user already liked this
-      if (likeError.code === "23505") {
-        return NextResponse.json({ error: "Already liked" }, { status: 409 });
-      }
-      throw likeError;
-    }
-
-    // 2. Atomically increment the counter using a SECURITY DEFINER function
-    //    so RLS doesn't block updating another user's row.
     const admin = createAdminClient();
-    const rpcName = targetType === "expert" ? "increment_expert_likes" : "increment_job_likes";
-    const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
+    const table = targetType === "expert" ? "experts" : "jobs";
 
-    const { data: newCount, error: rpcError } = await admin.rpc(rpcName, rpcArg);
-    if (rpcError) {
-      console.error("[Like API] RPC increment error:", rpcError);
-      // Don't fail the request — the like was recorded, count update is cosmetic
+    // 1. Check existing like status in DB
+    const { data: existingLike } = await supabase
+      .from("user_likes")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("target_id", targetId)
+      .eq("target_type", targetType)
+      .maybeSingle();
+
+    const isCurrentlyLiked = Boolean(existingLike);
+
+    // 2. Determine target state (toggle, explicit like, or explicit unlike)
+    let shouldLike: boolean;
+    if (action === "like") {
+      shouldLike = true;
+    } else if (action === "unlike") {
+      shouldLike = false;
+    } else {
+      // Default: toggle
+      shouldLike = !isCurrentlyLiked;
     }
 
-    return NextResponse.json({ ok: true, likes_count: newCount ?? null });
+    // 3. Idempotent check: if state already matches requested action, return success immediately
+    if (shouldLike === isCurrentlyLiked) {
+      const { data: currentItem } = await admin
+        .from(table)
+        .select("likes_count")
+        .eq("id", targetId)
+        .maybeSingle();
+
+      return NextResponse.json({
+        ok: true,
+        liked: isCurrentlyLiked,
+        likes_count: currentItem?.likes_count ?? 0,
+        idempotent: true,
+      });
+    }
+
+    if (shouldLike) {
+      // Record like (upsert with ignoreDuplicates to guarantee no 23505 conflict crashes)
+      const { error: insertErr } = await supabase.from("user_likes").upsert(
+        {
+          user_id: user.id,
+          target_id: targetId,
+          target_type: targetType as "expert" | "job",
+        },
+        { onConflict: "user_id,target_id,target_type", ignoreDuplicates: true }
+      );
+
+      if (insertErr && insertErr.code !== "23505") {
+        console.error("[Like API] Insert error:", insertErr);
+      }
+
+      // Atomically increment counter
+      const rpcName = targetType === "expert" ? "increment_expert_likes" : "increment_job_likes";
+      const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
+
+      const { data: newCount, error: rpcError } = await admin.rpc(rpcName as any, rpcArg);
+
+      let finalCount = newCount;
+      if (rpcError || finalCount === null || finalCount === undefined) {
+        // Fallback: direct update if RPC is missing
+        const { data: cur } = await admin
+          .from(table)
+          .select("likes_count")
+          .eq("id", targetId)
+          .single();
+        finalCount = (cur?.likes_count ?? 0) + 1;
+        await admin.from(table).update({ likes_count: finalCount }).eq("id", targetId);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        liked: true,
+        likes_count: finalCount,
+      });
+    } else {
+      // Remove like
+      const { error: deleteError } = await supabase
+        .from("user_likes")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("target_id", targetId)
+        .eq("target_type", targetType);
+
+      if (deleteError) {
+        console.error("[Like API] Delete error:", deleteError);
+      }
+
+      // Atomically decrement counter
+      const rpcName = targetType === "expert" ? "decrement_expert_likes" : "decrement_job_likes";
+      const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
+
+      const { data: newCount, error: rpcError } = await admin.rpc(rpcName as any, rpcArg);
+
+      let finalCount = newCount;
+      if (rpcError || finalCount === null || finalCount === undefined) {
+        // Fallback: direct update if RPC is missing
+        const { data: cur } = await admin
+          .from(table)
+          .select("likes_count")
+          .eq("id", targetId)
+          .single();
+        finalCount = Math.max(0, (cur?.likes_count ?? 1) - 1);
+        await admin.from(table).update({ likes_count: finalCount }).eq("id", targetId);
+      }
+
+      return NextResponse.json({
+        ok: true,
+        liked: false,
+        likes_count: finalCount,
+      });
+    }
   } catch (err: unknown) {
     console.error("[Community Like API Error]:", err);
     return NextResponse.json({ error: "Failed to process like" }, { status: 500 });
@@ -54,51 +148,63 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    const body = await req.json();
-    const { targetId, targetType } = body;
+    if (!user) {
+      return NextResponse.json(
+        { error: "Please log in to unlike", unauthorized: true },
+        { status: 401 }
+      );
+    }
+
+    let targetId: string | null = null;
+    let targetType: string | null = null;
+
+    try {
+      const body = await req.json();
+      targetId = body?.targetId;
+      targetType = body?.targetType;
+    } catch {
+      // Try search params if body was empty
+      const url = new URL(req.url);
+      targetId = url.searchParams.get("targetId");
+      targetType = url.searchParams.get("targetType");
+    }
 
     if (!targetId || !targetType || !["expert", "job"].includes(targetType)) {
       return NextResponse.json({ error: "Invalid request data" }, { status: 400 });
     }
 
-    // 1. Remove the like record
-    const { error: deleteError } = await supabase
-      .from("user_likes")
-      .delete()
-      .match({
-        user_id: user.id,
-        target_id: targetId,
-        target_type: targetType as "expert" | "job",
-      });
-
-    if (deleteError) {
-      throw deleteError;
-    }
-
-    // 2. Decrement the counter (using admin client to bypass RLS)
+    // Delegate to unlike logic (idempotent)
     const admin = createAdminClient();
     const table = targetType === "expert" ? "experts" : "jobs";
-    
-    // Fetch current count to decrement (since we don't have a decrement RPC)
-    const { data: currentData } = await admin
-      .from(table)
-      .select("likes_count")
-      .eq("id", targetId)
-      .single();
 
-    let newCount = null;
-    if (currentData) {
-      newCount = Math.max(0, currentData.likes_count - 1);
-      await admin
+    await supabase
+      .from("user_likes")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("target_id", targetId)
+      .eq("target_type", targetType);
+
+    const rpcName = targetType === "expert" ? "decrement_expert_likes" : "decrement_job_likes";
+    const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };
+
+    const { data: newCount, error: rpcError } = await admin.rpc(rpcName as any, rpcArg);
+
+    let finalCount = newCount;
+    if (rpcError || finalCount === null || finalCount === undefined) {
+      const { data: cur } = await admin
         .from(table)
-        .update({ likes_count: newCount })
-        .eq("id", targetId);
+        .select("likes_count")
+        .eq("id", targetId)
+        .single();
+      finalCount = Math.max(0, (cur?.likes_count ?? 1) - 1);
+      await admin.from(table).update({ likes_count: finalCount }).eq("id", targetId);
     }
 
-    return NextResponse.json({ ok: true, likes_count: newCount });
+    return NextResponse.json({ ok: true, liked: false, likes_count: finalCount });
   } catch (err: unknown) {
     console.error("[Community Unlike API Error]:", err);
     return NextResponse.json({ error: "Failed to process unlike" }, { status: 500 });

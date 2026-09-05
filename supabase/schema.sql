@@ -316,6 +316,34 @@ begin
 end;
 $$;
 
+create or replace function public.decrement_job_likes(job_id uuid)
+returns integer language plpgsql security definer set search_path = public
+as $$
+declare
+  new_count integer;
+begin
+  update public.jobs
+  set likes_count = greatest(0, likes_count - 1)
+  where id = job_id
+  returning likes_count into new_count;
+  return new_count;
+end;
+$$;
+
+create or replace function public.decrement_expert_likes(expert_id uuid)
+returns integer language plpgsql security definer set search_path = public
+as $$
+declare
+  new_count integer;
+begin
+  update public.experts
+  set likes_count = greatest(0, likes_count - 1)
+  where id = expert_id
+  returning likes_count into new_count;
+  return new_count;
+end;
+$$;
+
 create or replace function public.increment_job_chats(job_id uuid)
 returns integer language plpgsql security definer set search_path = public
 as $$

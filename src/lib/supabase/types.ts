@@ -384,7 +384,15 @@ export interface Database {
         Args: { expert_id: string };
         Returns: number;
       };
+      decrement_expert_likes: {
+        Args: { expert_id: string };
+        Returns: number;
+      };
       increment_job_likes: {
+        Args: { job_id: string };
+        Returns: number;
+      };
+      decrement_job_likes: {
         Args: { job_id: string };
         Returns: number;
       };

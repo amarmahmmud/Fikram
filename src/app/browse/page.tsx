@@ -18,6 +18,7 @@ export default function BrowseModelsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [localStats, setLocalStats] = useState<Record<string, { likes: number; chats: number }>>({});
+  const [likeInProgress, setLikeInProgress] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     apiClient.get<any>("/api/community")
@@ -39,67 +40,88 @@ export default function BrowseModelsPage() {
   }, []);
 
   const handleLike = async (id: string, type: string) => {
-    const isLiked = likedIds.has(id);
+    // Prevent duplicate concurrent requests
+    if (likeInProgress.has(id)) return;
+
+    const wasLiked = likedIds.has(id);
     const targetType = type === "smart_assistant" ? "expert" : "job";
+    const nextLiked = !wasLiked;
     
+    setLikeInProgress((prev) => new Set(prev).add(id));
+
     // Optimistically update UI
     setLikedIds((prev) => {
       const next = new Set(prev);
-      if (isLiked) next.delete(id);
-      else next.add(id);
+      if (nextLiked) next.add(id);
+      else next.delete(id);
       return next;
     });
 
     setLocalStats((prev) => {
-      const currentLikes = prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0;
+      const currentLikes = prev[id]?.likes ?? models.find((m) => m.id === id)?.likesCount ?? 0;
       return {
         ...prev,
         [id]: {
           ...prev[id],
-          likes: isLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1,
-        }
+          likes: nextLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
+        },
       };
     });
 
     try {
-      let res;
-      if (isLiked) {
-        // Unlike
-        res = await apiClient.delete<any>("/api/community/like", { 
-          body: JSON.stringify({ targetId: id, targetType }) 
-        });
-      } else {
-        // Like
-        res = await apiClient.post<any>("/api/community/like", { targetId: id, targetType });
-      }
+      // Use unified idempotent POST endpoint with action intent
+      const res = await apiClient.post<any>("/api/community/like", {
+        targetId: id,
+        targetType,
+        action: nextLiked ? "like" : "unlike",
+      });
 
-      if (res.ok && res.likes_count !== undefined) {
-        setLocalStats((prev) => ({
-          ...prev,
-          [id]: { ...prev[id], likes: res.likes_count }
-        }));
+      if (res.ok) {
+        // Authoritative server state sync
+        if (typeof res.liked === "boolean") {
+          setLikedIds((prev) => {
+            const next = new Set(prev);
+            if (res.liked) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        }
+        if (res.likes_count !== undefined && res.likes_count !== null) {
+          setLocalStats((prev) => ({
+            ...prev,
+            [id]: { ...prev[id], likes: res.likes_count },
+          }));
+        }
       }
     } catch (err: any) {
-      console.error(`Failed to ${isLiked ? 'unlike' : 'like'}:`, err);
-      // Revert optimistic update on failure
-      if (err?.status !== 409) {
-        setLikedIds((prev) => {
-          const next = new Set(prev);
-          if (isLiked) next.add(id); // Re-add if unlike failed
-          else next.delete(id);      // Re-delete if like failed
-          return next;
-        });
-      }
+      console.warn(`[Like] Could not complete like update for ${id}:`, err?.message || err);
+      // Revert optimistic update on error
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (wasLiked) next.add(id);
+        else next.delete(id);
+        return next;
+      });
       
       setLocalStats((prev) => {
-        const currentLikes = prev[id]?.likes ?? models.find(m => m.id === id)?.likesCount ?? 0;
+        const currentLikes = prev[id]?.likes ?? models.find((m) => m.id === id)?.likesCount ?? 0;
         return {
           ...prev,
           [id]: {
             ...prev[id],
-            likes: isLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
-          }
+            likes: wasLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1),
+          },
         };
+      });
+
+      if (err?.status === 401) {
+        alert("Please log in to like models and smart assistants.");
+      }
+    } finally {
+      setLikeInProgress((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
       });
     }
   };
@@ -229,15 +251,33 @@ export default function BrowseModelsPage() {
                   </div>
                   <div 
                     className={styles.statItem} 
-                    title="Likes"
-                    style={{ cursor: 'pointer', transition: 'color 0.2s' }}
+                    title={likedIds.has(item.id) ? "Unlike" : "Like"}
+                    role="button"
+                    tabIndex={0}
+                    style={{ 
+                      cursor: likeInProgress.has(item.id) ? 'wait' : 'pointer', 
+                      transition: 'all 0.2s',
+                      opacity: likeInProgress.has(item.id) ? 0.6 : 1,
+                    }}
                     onClick={() => handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job")}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job");
+                      }
+                    }}
                   >
                     <Heart 
                       size={14} 
                       fill={likedIds.has(item.id) ? "#C77DFF" : "none"}
                       color={likedIds.has(item.id) ? "#C77DFF" : "currentColor"}
-                      style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} 
+                      style={{ 
+                        display: 'inline', 
+                        verticalAlign: 'text-bottom', 
+                        marginRight: 4,
+                        transform: likedIds.has(item.id) ? 'scale(1.1)' : 'scale(1)',
+                        transition: 'transform 0.15s ease, fill 0.15s ease',
+                      }} 
                     /> 
                     {localStats[item.id]?.likes ?? item.likesCount}
                   </div>

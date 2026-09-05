@@ -83,6 +83,25 @@ export const apiClient = {
     });
   },
 
-  delete: <T>(url: string, options?: RequestInit) =>
-    fetchWithHandling<T>(url, { ...options, method: "DELETE" }),
+  delete: <T>(url: string, bodyOrOptions?: any, options?: RequestInit) => {
+    let finalOptions: RequestInit = {};
+    if (bodyOrOptions && ("method" in bodyOrOptions || "headers" in bodyOrOptions || "body" in bodyOrOptions || "signal" in bodyOrOptions)) {
+      finalOptions = bodyOrOptions;
+    } else if (bodyOrOptions !== undefined) {
+      const isFormData = typeof FormData !== "undefined" && bodyOrOptions instanceof FormData;
+      const isBlob = typeof Blob !== "undefined" && bodyOrOptions instanceof Blob;
+      const headers = new Headers(options?.headers);
+      if (!isFormData && !isBlob && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
+      finalOptions = {
+        ...options,
+        headers,
+        body: (isFormData || isBlob) ? bodyOrOptions : JSON.stringify(bodyOrOptions),
+      };
+    } else {
+      finalOptions = options || {};
+    }
+    return fetchWithHandling<T>(url, { ...finalOptions, method: "DELETE" });
+  },
 };
