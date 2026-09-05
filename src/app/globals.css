@@ -896,7 +896,7 @@ select.input {
 }
 .chat-bubble.user {
   background: var(--gradient-btn);
-  color: white;
+  color: #000;
   border-bottom-right-radius: 4px;
   align-self: flex-end;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
@@ -912,7 +912,7 @@ select.input {
   flex-shrink: 0;
 }
 .chat-avatar.ai   { background: var(--bg-elevated); border: 1px solid var(--border); color: var(--accent-primary); }
-.chat-avatar.user { background: var(--gradient-btn); color: white; }
+.chat-avatar.user { background: var(--gradient-btn); color: #000; }
 
 /* ── Upload Zone ── */
 .upload-zone {
