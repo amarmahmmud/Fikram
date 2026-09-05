@@ -303,6 +303,63 @@ export interface Database {
         };
         Relationships: [];
       };
+      expert_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          expert_id: string;
+          title: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          expert_id: string;
+          title?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          expert_id?: string;
+          title?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      expert_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          role: "user" | "model" | "system";
+          content: string;
+          sources: Json;
+          web_sources: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          role: "user" | "model" | "system";
+          content: string;
+          sources?: Json;
+          web_sources?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          role?: "user" | "model" | "system";
+          content?: string;
+          sources?: Json;
+          web_sources?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

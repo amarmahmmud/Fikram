@@ -412,3 +412,52 @@ begin
   end if;
 end;
 $$;
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 12. Expert Chat History & Sessions
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.expert_conversations (
+  id          uuid default gen_random_uuid() primary key,
+  user_id     uuid references public.profiles(id) on delete cascade not null,
+  expert_id   uuid references public.experts(id) on delete cascade not null,
+  title       text not null default 'New Conversation',
+  created_at  timestamptz default now(),
+  updated_at  timestamptz default now()
+);
+
+create index if not exists expert_conversations_user_expert_idx
+  on public.expert_conversations (user_id, expert_id, updated_at desc);
+
+create table if not exists public.expert_messages (
+  id              uuid default gen_random_uuid() primary key,
+  conversation_id uuid references public.expert_conversations(id) on delete cascade not null,
+  role            text check (role in ('user', 'model', 'system')) not null,
+  content         text not null,
+  sources         jsonb default '[]'::jsonb,
+  web_sources     jsonb default '[]'::jsonb,
+  created_at      timestamptz default now()
+);
+
+create index if not exists expert_messages_conversation_idx
+  on public.expert_messages (conversation_id, created_at asc);
+
+alter table public.expert_conversations enable row level security;
+alter table public.expert_messages enable row level security;
+
+drop policy if exists "Users manage own conversations" on public.expert_conversations;
+create policy "Users manage own conversations"
+  on public.expert_conversations for all
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users manage messages in own conversations" on public.expert_messages;
+create policy "Users manage messages in own conversations"
+  on public.expert_messages for all
+  using (
+    exists (
+      select 1 from public.expert_conversations c
+      where c.id = conversation_id and c.user_id = auth.uid()
+    )
+  );
+

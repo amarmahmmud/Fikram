@@ -1,23 +1,43 @@
 "use client";
 
-import { useState, useRef, useEffect, use } from "react";
+import { useState, useRef, useEffect, use, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import { PublishModal } from "@/components/PublishModal";
 import { KnowledgeModal } from "@/components/KnowledgeModal";
+import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, BookOpen } from "lucide-react";
+import {
+  Globe,
+  BookOpen,
+  PanelLeft,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ExternalLink,
+  MessageSquare,
+  Clock,
+} from "lucide-react";
 
 interface Message {
+  id?: string;
   role: "user" | "model";
   content: string;
   sources?: { filename: string; chunkIndex: number; similarity: number }[];
   webSources?: { title: string; snippet: string; link: string }[];
 }
 
+interface ConversationItem {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export default function ExpertChatPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
+  const expertId = resolvedParams.id;
   const supabase = createClient();
 
   const [expert, setExpert] = useState<any>(null);
@@ -30,11 +50,35 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [isOwner, setIsOwner] = useState(false);
   const [totalChunks, setTotalChunks] = useState(0);
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Sidebar and Conversation state
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  async function loadExpertDetails() {
+  /** Helper to sanitize expert description and avoid leaking config bracket tags */
+  const sanitizeDescription = useCallback((desc: string = "") => {
+    return desc
+      .replace(/\[(Category|Tags|Mode|WebSearch):[^\]]+\]/gi, "")
+      .trim();
+  }, []);
+
+  /** Initial welcome message for this expert */
+  const getInitialWelcomeMessage = useCallback((exp: any): Message => {
+    const cleanDesc = sanitizeDescription(exp?.description);
+    return {
+      role: "model",
+      content: `Hello! I'm **${exp?.name}**${cleanDesc ? ` — ${cleanDesc}` : ""}.\n\nAsk me anything about my knowledge base or submit a concept for evaluation.`,
+    };
+  }, [sanitizeDescription]);
+
+  /** Load expert details */
+  const loadExpertDetails = useCallback(async () => {
     try {
-      const res = await apiClient.get<any>(`/api/experts/${resolvedParams.id}`);
+      const res = await apiClient.get<any>(`/api/experts/${expertId}`);
       if (res.ok && res.expert) {
         setExpert(res.expert);
         setIsOwner(Boolean(res.isOwner));
@@ -49,39 +93,142 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     const { data } = await supabase
       .from("experts")
       .select("*")
-      .eq("id", resolvedParams.id)
+      .eq("id", expertId)
       .single();
 
     if (data) {
       setExpert(data);
     }
     return data;
-  }
+  }, [expertId, supabase]);
 
-  // Load expert info
+  /** Fetch past conversations list */
+  const loadConversations = useCallback(async () => {
+    try {
+      const res = await apiClient.get<any>(`/api/experts/${expertId}/conversations`);
+      if (res.ok && Array.isArray(res.conversations)) {
+        setConversations(res.conversations);
+        return res.conversations;
+      }
+    } catch {
+      // Check local storage for anonymous fallback
+      try {
+        const local = localStorage.getItem(`mf_expert_convs_${expertId}`);
+        if (local) {
+          const parsed = JSON.parse(local);
+          setConversations(parsed);
+          return parsed;
+        }
+      } catch (e) {
+        console.warn("[Local Storage] Failed to load local conversations", e);
+      }
+    }
+    return [];
+  }, [expertId]);
+
+  // Check auth user and load data
   useEffect(() => {
     async function init() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+
       const exp = await loadExpertDetails();
       if (exp) {
-        setMessages([{
-          role: "model",
-          content: `Hello! I'm **${exp.name}**${exp.description ? ` — ${exp.description}` : ""}. Ask me anything about my expertise.`,
-        }]);
+        const convs = await loadConversations();
+        if (convs.length > 0) {
+          // Load most recent conversation
+          await selectConversation(convs[0].id);
+        } else {
+          setMessages([getInitialWelcomeMessage(exp)]);
+        }
 
         // Trigger chat count increment
-        apiClient.post("/api/community/chat-count", { targetId: resolvedParams.id, targetType: "expert" })
+        apiClient.post("/api/community/chat-count", { targetId: expertId, targetType: "expert" })
           .catch(console.error);
       }
       setLoading(false);
     }
     init();
-  }, [resolvedParams.id]);
+  }, [expertId, loadExpertDetails, loadConversations, getInitialWelcomeMessage, supabase.auth]);
 
-  // Auto-scroll
+  // Auto-scroll on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, sending]);
 
+  /** Select and load a conversation */
+  async function selectConversation(convId: string) {
+    setActiveConvId(convId);
+    try {
+      const res = await apiClient.get<any>(`/api/experts/${expertId}/conversations/${convId}`);
+      if (res.ok && Array.isArray(res.messages)) {
+        if (res.messages.length === 0 && expert) {
+          setMessages([getInitialWelcomeMessage(expert)]);
+        } else {
+          setMessages(
+            res.messages.map((m: any) => ({
+              id: m.id,
+              role: m.role,
+              content: m.content,
+              sources: m.sources,
+              webSources: m.webSources,
+            }))
+          );
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn("[Conversation] Failed to load remote conversation", err);
+    }
+
+    // Fallback: check local storage
+    try {
+      const localMsgs = localStorage.getItem(`mf_expert_msgs_${convId}`);
+      if (localMsgs) {
+        setMessages(JSON.parse(localMsgs));
+        return;
+      }
+    } catch {}
+
+    if (expert) {
+      setMessages([getInitialWelcomeMessage(expert)]);
+    }
+  }
+
+  /** Start a new chat */
+  function handleNewChat() {
+    setActiveConvId(null);
+    if (expert) {
+      setMessages([getInitialWelcomeMessage(expert)]);
+    }
+  }
+
+  /** Delete a conversation */
+  async function handleDeleteConversation(convId: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this chat history?")) return;
+
+    try {
+      await apiClient.delete(`/api/experts/${expertId}/conversations/${convId}`);
+    } catch {}
+
+    // Update local state and storage
+    setConversations((prev) => prev.filter((c) => c.id !== convId));
+    try {
+      localStorage.removeItem(`mf_expert_msgs_${convId}`);
+      const localConvs = localStorage.getItem(`mf_expert_convs_${expertId}`);
+      if (localConvs) {
+        const parsed = JSON.parse(localConvs).filter((c: any) => c.id !== convId);
+        localStorage.setItem(`mf_expert_convs_${expertId}`, JSON.stringify(parsed));
+      }
+    } catch {}
+
+    if (activeConvId === convId) {
+      handleNewChat();
+    }
+  }
+
+  /** Send message */
   async function handleSend() {
     if (!input.trim() || sending) return;
 
@@ -91,8 +238,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     setSending(true);
 
     try {
-      const data = await apiClient.post<any>(`/api/experts/${resolvedParams.id}/chat`, {
+      const data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
         message: userMsg,
+        conversationId: activeConvId,
         history: messages
           .filter((m) => m.role === "user" || m.role === "model")
           .slice(-10) // last 10 messages for context
@@ -100,19 +248,43 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       });
 
       if (data.ok) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "model",
-            content: data.reply,
-            sources: data.sources,
-            webSources: data.webSources,
-          },
-        ]);
+        const newModelMsg: Message = {
+          role: "model",
+          content: data.reply,
+          sources: data.sources,
+          webSources: data.webSources,
+        };
+
+        setMessages((prev) => [...prev, newModelMsg]);
+
+        // Sync conversation ID
+        if (data.conversationId) {
+          if (!activeConvId) {
+            setActiveConvId(data.conversationId);
+          }
+          await loadConversations();
+        } else if (!currentUser) {
+          // Save locally for anonymous user
+          const anonConvId = activeConvId || `local_${Date.now()}`;
+          if (!activeConvId) {
+            setActiveConvId(anonConvId);
+            const newLocalConv = {
+              id: anonConvId,
+              title: userMsg.slice(0, 32),
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+            const updated = [newLocalConv, ...conversations];
+            setConversations(updated);
+            localStorage.setItem(`mf_expert_convs_${expertId}`, JSON.stringify(updated));
+          }
+          const allMsgs = [...messages, { role: "user", content: userMsg }, newModelMsg];
+          localStorage.setItem(`mf_expert_msgs_${anonConvId}`, JSON.stringify(allMsgs));
+        }
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "model", content: `Error: ${data.error || "Something went wrong"}` },
+          { role: "model", content: `**Error**: ${data.error || "Something went wrong"}` },
         ]);
       }
     } catch {
@@ -132,26 +304,26 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  /** Lightweight bold renderer */
-  function renderText(text: string) {
-    const parts: React.ReactNode[] = [];
-    const regex = /\*\*(.+?)\*\*/g;
-    let lastIndex = 0;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      if (match.index > lastIndex) parts.push(text.substring(lastIndex, match.index));
-      parts.push(<strong key={match.index}>{match[1]}</strong>);
-      lastIndex = regex.lastIndex;
+  /** Format relative date string */
+  function formatRelativeDate(dateStr: string) {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return "Today";
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch {
+      return "";
     }
-    if (lastIndex < text.length) parts.push(text.substring(lastIndex));
-    return parts.length > 0 ? parts : [text];
   }
 
   if (loading) {
     return (
       <div className={styles.loading}>
         <div className={styles.spinner} />
-        Loading expert...
+        Loading expert & chat workspace...
       </div>
     );
   }
@@ -161,130 +333,236 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       <div className={styles.loading}>
         <p>Expert not found.</p>
         <Link href="/dashboard" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-          ← Dashboard
+          ← Back to Dashboard
         </Link>
       </div>
     );
   }
 
   return (
-    <div className={styles.chatLayout}>
-      {/* Header */}
-      <div className={styles.header}>
-        <Link href="/dashboard" className={styles.backBtn}>←</Link>
-        <div className={styles.headerInfo}>
-          <div className={styles.expertAvatar}>
-            {expert.name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div className={styles.expertName}>{expert.name}</div>
-            <div className={styles.expertTag}>
-              {expertMetadata?.reasoningMode === "evaluative"
-                ? "🔥 Critical Thinker"
-                : expertMetadata?.reasoningMode === "strict"
-                ? "🔒 Strict Grounding"
-                : "⚖️ Smart Assistant"}
-              {expertMetadata?.webSearchEnabled ? " · 🌐 Live Web" : " · RAG"}
-            </div>
-          </div>
-        </div>
-        <div className={styles.headerBadge} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setSourcesModalOpen(true)}
-            style={{ gap: 6 }}
-            title="View indexed knowledge sources or upload new documents"
-          >
-            <BookOpen size={16} />
-            Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}
+    <div className={styles.chatContainer}>
+      {/* ──────────────── Left Sidebar: Chat History ──────────────── */}
+      <aside className={`${styles.sidebar} ${!sidebarOpen ? styles.sidebarCollapsed : ""}`}>
+        <div className={styles.sidebarHeader}>
+          <button className={styles.newChatBtn} onClick={handleNewChat}>
+            <Plus size={16} />
+            <span>New Chat</span>
           </button>
           <button
-            className="btn btn-secondary btn-sm"
-            onClick={() => setPublishModalOpen(true)}
-            style={{ gap: 6 }}
+            className={styles.closeSidebarBtn}
+            onClick={() => setSidebarOpen(false)}
+            title="Collapse sidebar"
           >
-            <Globe size={16} />
-            {expert.is_published ? "Published (Share)" : "Publish & Share"}
+            <PanelLeft size={18} />
           </button>
-          <span className="badge badge-success">
-            <span className="status-dot completed" />
-            Online
-          </span>
         </div>
-      </div>
 
-      {/* Messages */}
-      <div className={styles.messagesArea}>
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`${styles.messageBubble} ${msg.role === "user" ? styles.userBubble : styles.modelBubble}`}
-          >
-            <div className={styles.messageContent}>
-              {msg.content.split("\n").map((line, li) => (
-                <div key={li}>{renderText(line)}</div>
-              ))}
+        <div className={styles.conversationsList}>
+          <div className={styles.historySectionLabel}>Recent Conversations</div>
+          {conversations.length === 0 ? (
+            <div style={{ padding: "16px 12px", color: "var(--text-muted)", fontSize: "0.78rem" }}>
+              No past conversations yet. Ask a question to start one!
             </div>
-            {msg.sources && msg.sources.length > 0 && (
-              <div className={styles.sources}>
-                <span className={styles.sourcesLabel}>Sources:</span>
-                {msg.sources.map((s, si) => (
-                  <span key={si} className={styles.sourceChip}>
-                    {s.filename} (chunk {s.chunkIndex + 1}, {(s.similarity * 100).toFixed(0)}% match)
-                  </span>
-                ))}
-              </div>
-            )}
-            {msg.webSources && msg.webSources.length > 0 && (
-              <div className={styles.sources} style={{ marginTop: 6 }}>
-                <span className={styles.sourcesLabel} style={{ color: "var(--accent-primary)" }}>🌐 Live Web:</span>
-                {msg.webSources.map((ws, wsi) => (
-                  <a
-                    key={wsi}
-                    href={ws.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={styles.sourceChip}
-                    style={{ textDecoration: "none", cursor: "pointer", color: "inherit" }}
-                    title={ws.snippet}
+          ) : (
+            conversations.map((conv) => {
+              const isActive = activeConvId === conv.id;
+              return (
+                <div
+                  key={conv.id}
+                  className={`${styles.conversationItem} ${isActive ? styles.conversationItemActive : ""}`}
+                  onClick={() => selectConversation(conv.id)}
+                >
+                  <div className={styles.conversationInfo}>
+                    <div className={styles.conversationTitle}>{conv.title || "Untitled Conversation"}</div>
+                    <div className={styles.conversationDate}>
+                      {formatRelativeDate(conv.updated_at || conv.created_at)}
+                    </div>
+                  </div>
+                  <button
+                    className={styles.deleteConvBtn}
+                    onClick={(e) => handleDeleteConversation(conv.id, e)}
+                    title="Delete conversation"
                   >
-                    🔗 {ws.title.slice(0, 32)}...
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
 
-        {sending && (
-          <div className={`${styles.messageBubble} ${styles.modelBubble}`}>
-            <div className={styles.typingDots}>
-              <span /><span /><span />
+        <div className={styles.sidebarFooter}>
+          <span>Model Factory RAG v2</span>
+          <span style={{ color: "var(--accent-primary)" }}>● Online</span>
+        </div>
+      </aside>
+
+      {/* ──────────────── Main Chat View ──────────────── */}
+      <div className={styles.chatMain}>
+        {/* Header */}
+        <header className={styles.header}>
+          {!sidebarOpen && (
+            <button
+              className={styles.sidebarToggleBtn}
+              onClick={() => setSidebarOpen(true)}
+              title="Open chat history sidebar"
+            >
+              <PanelLeft size={18} />
+            </button>
+          )}
+
+          <Link href="/dashboard" className={styles.backBtn} title="Back to Dashboard">
+            ←
+          </Link>
+
+          <div className={styles.headerInfo}>
+            <div className={styles.expertAvatar}>
+              {expert.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className={styles.expertName}>{expert.name}</div>
+              <div className={styles.expertTag}>
+                {expertMetadata?.reasoningMode === "evaluative"
+                  ? "🔥 Critical Evaluator & Scorecard"
+                  : expertMetadata?.reasoningMode === "strict"
+                  ? "🔒 Strict Grounding"
+                  : "⚖️ Smart Assistant"}
+                {expertMetadata?.webSearchEnabled ? " · 🌐 Live Web Intelligence" : " · Internal RAG"}
+              </div>
             </div>
           </div>
-        )}
 
-        <div ref={chatEndRef} />
-      </div>
+          <div className={styles.headerActions}>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setSourcesModalOpen(true)}
+              style={{ gap: 6 }}
+              title="View indexed knowledge sources or upload new documents"
+            >
+              <BookOpen size={16} />
+              Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}
+            </button>
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setPublishModalOpen(true)}
+              style={{ gap: 6 }}
+            >
+              <Globe size={16} />
+              {expert.is_published ? "Published (Share)" : "Publish & Share"}
+            </button>
+          </div>
+        </header>
 
-      {/* Input */}
-      <div className={styles.inputArea}>
-        <textarea
-          className={styles.chatInput}
-          placeholder={`Ask ${expert.name} a question...`}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          rows={1}
-          disabled={sending}
-        />
-        <button
-          className={styles.sendBtn}
-          onClick={handleSend}
-          disabled={!input.trim() || sending}
-        >
-          ↑
-        </button>
+        {/* Messages */}
+        <div className={styles.messagesArea}>
+          {messages.map((msg, i) => (
+            <div
+              key={i}
+              className={`${styles.messageBubble} ${
+                msg.role === "user" ? styles.userBubble : styles.modelBubble
+              }`}
+            >
+              <div className={styles.messageContent}>
+                <MarkdownContent content={msg.content} />
+              </div>
+
+              {/* Collapsible Verified Citations & Live Web Sources */}
+              {((msg.sources && msg.sources.length > 0) ||
+                (msg.webSources && msg.webSources.length > 0)) && (
+                <details className={styles.sourcesAccordion}>
+                  <summary className={styles.sourcesSummary}>
+                    <div className={styles.summaryBadges}>
+                      {msg.sources && msg.sources.length > 0 && (
+                        <span className={styles.sourceCountBadge}>
+                          📚 {msg.sources.length} Knowledge Base Chunks
+                        </span>
+                      )}
+                      {msg.webSources && msg.webSources.length > 0 && (
+                        <span className={styles.webCountBadge}>
+                          🌐 {msg.webSources.length} Live Web References
+                        </span>
+                      )}
+                    </div>
+                    <ChevronDown size={14} className={styles.chevronIcon} />
+                  </summary>
+
+                  <div className={styles.sourcesDrawer}>
+                    {/* Knowledge base chunks */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className={styles.sourcesGrid}>
+                        {msg.sources.map((s, si) => (
+                          <div key={si} className={styles.sourceCard}>
+                            <div className={styles.sourceFilename} title={s.filename}>
+                              📄 {s.filename}
+                            </div>
+                            <div className={styles.sourceMetadata}>
+                              <span>Chunk {s.chunkIndex + 1}</span>
+                              <span className={styles.sourceMatchPill}>
+                                {(s.similarity * 100).toFixed(0)}% match
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Live Web Results */}
+                    {msg.webSources && msg.webSources.length > 0 && (
+                      <div className={styles.sourcesGrid} style={{ marginTop: 6 }}>
+                        {msg.webSources.map((ws, wsi) => (
+                          <a
+                            key={wsi}
+                            href={ws.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className={styles.webSourceCard}
+                            title={ws.snippet}
+                          >
+                            <div className={styles.webSourceTitle}>
+                              🔗 {ws.title}
+                            </div>
+                            <div className={styles.webSourceSnippet}>{ws.snippet}</div>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+            </div>
+          ))}
+
+          {sending && (
+            <div className={`${styles.messageBubble} ${styles.modelBubble}`}>
+              <div className={styles.typingDots}>
+                <span /><span /><span />
+              </div>
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input Area */}
+        <div className={styles.inputArea}>
+          <textarea
+            className={styles.chatInput}
+            placeholder={`Ask ${expert.name} a question, or pitch an idea to validate...`}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            rows={1}
+            disabled={sending}
+          />
+          <button
+            className={styles.sendBtn}
+            onClick={handleSend}
+            disabled={!input.trim() || sending}
+            title="Send message (Enter)"
+          >
+            ↑
+          </button>
+        </div>
       </div>
 
       {expert && (

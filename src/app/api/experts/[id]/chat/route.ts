@@ -33,7 +33,7 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { message, history } = body;
+    const { message, history, conversationId } = body;
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
@@ -69,6 +69,64 @@ export async function POST(
       });
     }
 
+    // Ensure conversation exists if user is authenticated
+    let activeConvId = conversationId;
+    if (user) {
+      if (activeConvId) {
+        const { data: existingConv } = await supabase
+          .from("expert_conversations")
+          .select("id, title")
+          .eq("id", activeConvId)
+          .eq("user_id", user.id)
+          .eq("expert_id", expertId)
+          .maybeSingle();
+
+        if (!existingConv) {
+          activeConvId = null;
+        }
+      }
+
+      if (!activeConvId) {
+        const cleanTitle = message.trim().slice(0, 40);
+        const { data: newConv } = await supabase
+          .from("expert_conversations")
+          .insert({
+            user_id: user.id,
+            expert_id: expertId,
+            title: cleanTitle || "New Conversation",
+          })
+          .select()
+          .single();
+
+        if (newConv) {
+          activeConvId = newConv.id;
+        }
+      } else {
+        // If existing conversation title is default, update it with user message
+        const { data: conv } = await supabase
+          .from("expert_conversations")
+          .select("title")
+          .eq("id", activeConvId)
+          .single();
+
+        if (conv && (conv.title === "New Conversation" || !conv.title)) {
+          await supabase
+            .from("expert_conversations")
+            .update({ title: message.trim().slice(0, 40) })
+            .eq("id", activeConvId);
+        }
+      }
+
+      // Save user message to database
+      if (activeConvId) {
+        await supabase.from("expert_messages").insert({
+          conversation_id: activeConvId,
+          role: "user",
+          content: message.trim(),
+        });
+      }
+    }
+
     // Parse expert configuration metadata (mode, web search, etc.)
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
@@ -84,11 +142,28 @@ export async function POST(
       }
     );
 
+    // Save model response to database if conversation exists
+    if (user && activeConvId) {
+      await supabase.from("expert_messages").insert({
+        conversation_id: activeConvId,
+        role: "model",
+        content: result.reply,
+        sources: (result.sources || []) as any,
+        web_sources: (result.webSources || []) as any,
+      });
+
+      await supabase
+        .from("expert_conversations")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", activeConvId);
+    }
+
     return NextResponse.json({
       ok: true,
       reply: result.reply,
       sources: result.sources,
       webSources: result.webSources,
+      conversationId: activeConvId || null,
     });
   } catch (err: any) {
     console.error("[Expert Chat] Error:", err);
