@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { getModelCatalogPrompt, MODELS } from "@/lib/models";
+import { getModelCatalogPrompt, getRecommendedModel, MODELS } from "@/lib/models";
 import { WIZARD_QUESTION_IDS, type InterviewAnswerMap } from "@/lib/wizard-types";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
@@ -333,18 +333,24 @@ export async function POST(req: Request) {
     // If AI couldn't produce a valid response, use smart fallback
     if (!parsed) {
       console.log(`[Wizard] Using fallback (userMsgCount=${userMsgCount}, phase=${phase}, answeredKeys=${Object.keys(answeredQuestions).join(",")})`);
+
+      // Use document-size-aware recommendation instead of always MODELS[0]
+      const recommended = getRecommendedModel({
+        documentSizeChars: documentSummary?.length ?? 0,
+      });
+
       if (phase === "config") {
         parsed = {
           type: "config",
           summary: "Custom AI assistant based on your requirements",
-          recommendedModel: MODELS[0].id,
+          recommendedModel: recommended.id,
           method: "lora",
           epochs: 3,
           learningRate: 0.00002,
           batchSize: 4,
-          estimatedCredits: 28,
-          estimatedTime: "12-18 min",
-          reasoning: `${MODELS[0].name} is the best general-purpose model with excellent quality-to-cost ratio.`,
+          estimatedCredits: recommended.credits.min,
+          estimatedTime: `${recommended.speed === "fast" ? "5-15" : "10-25"} min`,
+          reasoning: `${recommended.name} is recommended based on your document size — best quality-to-cost ratio for your data.`,
         };
       } else {
         // Use the keyed answer map — NEVER positional array access
@@ -356,7 +362,10 @@ export async function POST(req: Request) {
     if (parsed.type === "config" && parsed.recommendedModel) {
       const exists = MODELS.find((m) => m.id === parsed.recommendedModel);
       if (!exists) {
-        parsed.recommendedModel = MODELS[0].id;
+        const recommended = getRecommendedModel({
+          documentSizeChars: documentSummary?.length ?? 0,
+        });
+        parsed.recommendedModel = recommended.id;
       }
     }
 
@@ -367,19 +376,20 @@ export async function POST(req: Request) {
     console.error("Wizard API error:", message);
 
     // Even in total failure, return config after enough attempts
+    const recommended = getRecommendedModel();
     return NextResponse.json({
       ok: true,
       data: {
         type: "config",
         summary: "Custom AI assistant",
-        recommendedModel: MODELS[0].id,
+        recommendedModel: recommended.id,
         method: "lora",
         epochs: 3,
         learningRate: 0.00002,
         batchSize: 4,
-        estimatedCredits: 28,
-        estimatedTime: "12-18 min",
-        reasoning: `${MODELS[0].name} is the best general-purpose model with excellent quality-to-cost ratio.`,
+        estimatedCredits: recommended.credits.min,
+        estimatedTime: `${recommended.speed === "fast" ? "5-15" : "10-25"} min`,
+        reasoning: `${recommended.name} is recommended as a reliable general-purpose model.`,
       },
     });
   }

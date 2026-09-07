@@ -11,6 +11,7 @@ export interface Database {
           avatar_url: string | null;
           plan: "free" | "personal" | "pro" | "enterprise";
           credits_balance: number;
+          credits_held: number;
           created_at: string;
         };
         Insert: {
@@ -20,6 +21,7 @@ export interface Database {
           avatar_url?: string | null;
           plan?: "free" | "personal" | "pro" | "enterprise";
           credits_balance?: number;
+          credits_held?: number;
           created_at?: string;
         };
         Update: {
@@ -29,6 +31,7 @@ export interface Database {
           avatar_url?: string | null;
           plan?: "free" | "personal" | "pro" | "enterprise";
           credits_balance?: number;
+          credits_held?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -136,7 +139,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          type: "signup_bonus" | "purchase" | "job_consumed" | "refund";
+          type: "signup_bonus" | "purchase" | "job_consumed" | "refund" | "job_hold" | "job_refund";
           label: string;
           amount: number;
           balance_after: number;
@@ -146,7 +149,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          type: "signup_bonus" | "purchase" | "job_consumed" | "refund";
+          type: "signup_bonus" | "purchase" | "job_consumed" | "refund" | "job_hold" | "job_refund";
           label?: string;
           amount: number;
           balance_after: number;
@@ -156,7 +159,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          type?: "signup_bonus" | "purchase" | "job_consumed" | "refund";
+          type?: "signup_bonus" | "purchase" | "job_consumed" | "refund" | "job_hold" | "job_refund";
           label?: string;
           amount?: number;
           balance_after?: number;

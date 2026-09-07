@@ -335,16 +335,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </Link>
                 )}
 
-                {(isRunning || isPending) && (
-                  <button
-                    className="btn btn-secondary w-full"
-                    onClick={handleMarkFailed}
-                    disabled={actionLoading}
-                    style={{ color: "var(--error)", borderColor: "rgba(239, 68, 68, 0.3)" }}
-                  >
-                    {actionLoading ? "Updating..." : "Mark as Failed"}
-                  </button>
-                )}
 
                 {job.result_url && (
                   <div className={styles.configRow} style={{ padding: "8px 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>

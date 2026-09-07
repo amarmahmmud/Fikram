@@ -10,6 +10,7 @@ type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 export default function CreditsPage() {
   const supabase = createClient();
   const [balance, setBalance] = useState<number>(0);
+  const [held, setHeld] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,15 +20,16 @@ export default function CreditsPage() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Fetch profile credits balance
+        // Fetch profile credits balance + held
         const { data: profile } = await supabase
           .from("profiles")
-          .select("credits_balance")
+          .select("credits_balance, credits_held")
           .eq("id", user.id)
           .single();
 
         if (profile) {
           setBalance(profile.credits_balance);
+          setHeld((profile as Record<string, unknown>).credits_held as number ?? 0);
         }
 
         // Fetch user's credit transactions
@@ -50,13 +52,27 @@ export default function CreditsPage() {
   }, [supabase]);
 
   const total = 100; // Free signup tier quota
+  const available = Math.max(0, balance - held);
   const used = Math.max(0, total - balance);
-  const pct = Math.min(100, Math.max(0, Math.round((balance / total) * 100)));
+  const pct = Math.min(100, Math.max(0, Math.round((available / total) * 100)));
+
+  /** Map transaction type to a human-readable badge */
+  function txBadge(type: string) {
+    switch (type) {
+      case "signup_bonus": return { label: "SIGNUP BONUS", cls: "badge-success" };
+      case "purchase": return { label: "PURCHASE", cls: "badge-success" };
+      case "job_consumed": return { label: "JOB CHARGE", cls: "badge-default" };
+      case "job_hold": return { label: "HOLD", cls: "badge-indigo" };
+      case "job_refund": return { label: "REFUND", cls: "badge-success" };
+      case "refund": return { label: "REFUND", cls: "badge-success" };
+      default: return { label: type.replace("_", " ").toUpperCase(), cls: "badge-default" };
+    }
+  }
 
   return (
     <>
       <div className="topbar">
-        <span className="topbar-title">Credits & Billing</span>
+        <span className="topbar-title">Credits &amp; Billing</span>
         <button className="btn btn-primary btn-sm" disabled>
           Buy More Credits <span className="badge badge-default" style={{ fontSize: "0.625rem", marginLeft: 4 }}>Soon</span>
         </button>
@@ -68,9 +84,9 @@ export default function CreditsPage() {
           <div className={styles.balanceGlow} />
           <div className={styles.balanceContent}>
             <div>
-              <div className={styles.balanceLabel}>Current Balance</div>
-              <div className={styles.balanceValue}>{loading ? "..." : balance}</div>
-              <div className={styles.balanceUnit}>credits remaining</div>
+              <div className={styles.balanceLabel}>Available Balance</div>
+              <div className={styles.balanceValue}>{loading ? "..." : available}</div>
+              <div className={styles.balanceUnit}>credits available</div>
             </div>
             <div className={styles.balanceChart}>
               <svg viewBox="0 0 120 120" className={styles.radialSvg}>
@@ -92,7 +108,7 @@ export default function CreditsPage() {
                   </linearGradient>
                 </defs>
                 <text x="60" y="55" textAnchor="middle" fill="white" fontSize="18" fontWeight="800" fontFamily="Inter,sans-serif">{pct}%</text>
-                <text x="60" y="72" textAnchor="middle" fill="#52525b" fontSize="9" fontFamily="Inter,sans-serif">remaining</text>
+                <text x="60" y="72" textAnchor="middle" fill="#52525b" fontSize="9" fontFamily="Inter,sans-serif">available</text>
               </svg>
             </div>
           </div>
@@ -106,12 +122,18 @@ export default function CreditsPage() {
               <span className={styles.creditStatValue} style={{ color: "var(--warning)" }}>{used}</span>
               <span className={styles.creditStatLabel}>Consumed</span>
             </div>
+            {held > 0 && (
+              <div className={styles.creditStat}>
+                <span className={styles.creditStatValue} style={{ color: "var(--accent-primary)" }}>{held}</span>
+                <span className={styles.creditStatLabel}>Held (active jobs)</span>
+              </div>
+            )}
             <div className={styles.creditStat}>
-              <span className={styles.creditStatValue} style={{ color: "var(--success)" }}>{balance}</span>
+              <span className={styles.creditStatValue} style={{ color: "var(--success)" }}>{available}</span>
               <span className={styles.creditStatLabel}>Available</span>
             </div>
             <div className={styles.creditStat}>
-              <span className={styles.creditStatValue}>~{Math.floor(balance / 28)}</span>
+              <span className={styles.creditStatValue}>~{Math.floor(available / 28)}</span>
               <span className={styles.creditStatLabel}>Est. Jobs Left</span>
             </div>
           </div>
@@ -122,16 +144,17 @@ export default function CreditsPage() {
           <h3 className={styles.sectionTitle}>Fine-Tuning Cost Reference</h3>
           <div className={styles.estimatorGrid}>
             {[
-              { model: "Llama 3.1 8B Instruct", method: "LoRA", cost: "~28 credits", time: "5–15 min (Modal L4 GPU)" },
-              { model: "Mistral 7B Instruct", method: "LoRA", cost: "~25 credits", time: "5–15 min (Modal L4 GPU)" },
-              { model: "Phi-3 Mini 3.8B", method: "LoRA", cost: "~15 credits", time: "4–8 min (Modal L4 GPU)" },
-              { model: "Gemma 2 9B Instruct", method: "LoRA", cost: "~35 credits", time: "8–20 min (Modal L4 GPU)" },
+              { model: "Llama 3.1 8B Instruct", method: "LoRA", cost: "~28 credits", time: "5–15 min", gpu: "L4" },
+              { model: "Mistral 7B Instruct", method: "LoRA", cost: "~25 credits", time: "5–15 min", gpu: "L4" },
+              { model: "Phi-3 Mini 3.8B", method: "LoRA", cost: "~15 credits", time: "4–8 min", gpu: "L4" },
+              { model: "Gemma 2 9B Instruct", method: "QLoRA", cost: "~35 credits", time: "8–20 min", gpu: "A100-40GB" },
+              { model: "Gemma 2 27B Instruct", method: "QLoRA", cost: "~80 credits", time: "15–35 min", gpu: "A100-80GB" },
             ].map((e) => (
               <div key={e.model} className={styles.estimatorRow}>
                 <div className={styles.estimatorModel}>{e.model}</div>
                 <span className="badge badge-indigo">{e.method}</span>
                 <div className={styles.estimatorCost}>{e.cost}</div>
-                <div className={styles.estimatorTime}>{e.time}</div>
+                <div className={styles.estimatorTime}>{e.time} ({e.gpu})</div>
               </div>
             ))}
           </div>
@@ -157,23 +180,31 @@ export default function CreditsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((tx) => (
-                    <tr key={tx.id}>
-                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{tx.label}</td>
-                      <td>
-                        <span className={`badge ${tx.amount > 0 ? "badge-success" : "badge-default"}`}>
-                          {tx.type.replace("_", " ").toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="font-mono" style={{ color: tx.amount > 0 ? "var(--success)" : "var(--warning)", fontWeight: 700 }}>
-                        {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
-                      </td>
-                      <td className="font-mono">{tx.balance_after}</td>
-                      <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                        {new Date(tx.created_at).toLocaleDateString()} {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                    </tr>
-                  ))}
+                  {transactions.map((tx) => {
+                    const badge = txBadge(tx.type);
+                    return (
+                      <tr key={tx.id}>
+                        <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{tx.label}</td>
+                        <td>
+                          <span className={`badge ${badge.cls}`}>
+                            {badge.label}
+                          </span>
+                        </td>
+                        <td className="font-mono" style={{
+                          color: tx.amount > 0 ? "var(--success)"
+                            : tx.type === "job_hold" ? "var(--accent-primary)"
+                            : "var(--warning)",
+                          fontWeight: 700,
+                        }}>
+                          {tx.amount > 0 ? `+${tx.amount}` : tx.amount}
+                        </td>
+                        <td className="font-mono">{tx.balance_after}</td>
+                        <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                          {new Date(tx.created_at).toLocaleDateString()} {new Date(tx.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

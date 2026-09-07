@@ -4,10 +4,11 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
-import { MODELS } from "@/lib/models";
+import { MODELS, getRecommendedModel, getRecommendationReason } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import type { WizardContext, GoldExample, InterviewAnswerMap, WizardValidationWarning } from "@/lib/wizard-types";
 import { validateWizardContext } from "@/lib/wizard-types";
+import { MAX_TRAINING_EXAMPLES, type CostEstimate } from "@/lib/training-config";
 
 /* ── Types ── */
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -126,13 +127,79 @@ export default function NewJobPage() {
   const [retrainSourceJobId, setRetrainSourceJobId] = useState<string | null>(null);
   const [retrainLoading, setRetrainLoading] = useState(false);
 
-  /* Use AI config or defaults */
+  // ── Cost estimation & billing ──
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [costLoading, setCostLoading] = useState(false);
+  const [userBalance, setUserBalance] = useState<number>(100);
+  const [userHeld, setUserHeld] = useState<number>(0);
+  const [insufficientCredits, setInsufficientCredits] = useState(false);
+  const [downgradeSuggestions, setDowngradeSuggestions] = useState<Array<{
+    id: string; name: string; size: string; sizeNum: number;
+    estimated_credits?: number; gpu_tier?: string;
+  }>>([]);
+  const [datasetRowCount, setDatasetRowCount] = useState<number>(0);
+
+  /* Use AI config or live cost estimate, falling back to defaults */
   const config: TrainingConfig = aiConfig ?? {
     baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct",
     method: "LoRA (auto-selected)",
     epochs: 3, learningRate: 0.00002, batchSize: 4, warmupSteps: 10,
-    estimatedCredits: 28, estimatedTime: "12–18 min",
+    estimatedCredits: costEstimate?.estimated_credits ?? 28,
+    estimatedTime: costEstimate?.estimated_training_seconds
+      ? `${Math.ceil(costEstimate.estimated_training_seconds / 60)} min`
+      : "12–18 min",
   };
+
+  /* ── Fetch user balance on mount ── */
+  useEffect(() => {
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("credits_balance, credits_held")
+          .eq("id", user.id)
+          .single();
+        if (profile) {
+          setUserBalance(profile.credits_balance);
+          setUserHeld((profile as Record<string, unknown>).credits_held as number ?? 0);
+        }
+      } catch { /* non-critical */ }
+    })();
+  }, []);
+
+  /* ── Live cost estimation — called when model or dataset size changes ── */
+  const fetchCostEstimate = useCallback(async (modelId: string, datasetSize?: number) => {
+    setCostLoading(true);
+    setInsufficientCredits(false);
+    try {
+      const data = await apiClient.post<CostEstimate>("/api/estimate-cost", {
+        base_model: modelId,
+        dataset_size: datasetSize ?? (datasetRowCount || 100),
+      });
+      setCostEstimate(data);
+      if (data.status === "ok" && data.estimated_credits) {
+        const available = userBalance - userHeld;
+        if (available < data.estimated_credits) {
+          setInsufficientCredits(true);
+        }
+      }
+    } catch {
+      setCostEstimate(null);
+    }
+    setCostLoading(false);
+  }, [datasetRowCount, userBalance, userHeld]);
+
+  /* ── Re-estimate when model selection changes on Step 5 ── */
+  useEffect(() => {
+    if (step === 5 && !launchedJobId) {
+      fetchCostEstimate(selectedModel);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedModel, step]);
 
   /* ── Build WizardContext from state ── */
   const buildWizardContext = useCallback((): WizardContext => {
@@ -465,13 +532,21 @@ export default function NewJobPage() {
     if (warnings.length > 0) {
       setValidationWarnings(warnings);
       console.warn("[Wizard] Pre-launch validation warnings:", warnings);
-      // Don't block — just warn (user can still launch)
+    }
+
+    // Dataset size cap enforcement
+    if (datasetRowCount > MAX_TRAINING_EXAMPLES) {
+      alert(`Your dataset has ${datasetRowCount.toLocaleString()} rows, but the maximum is ${MAX_TRAINING_EXAMPLES.toLocaleString()}. Please reduce your document size or edit your dataset.`);
+      return;
     }
 
     setLaunching(true);
     setGenerationStatus("Preparing...");
+    setInsufficientCredits(false);
+    setDowngradeSuggestions([]);
     try {
       let finalDatasetUrl = null;
+      let finalDatasetSize = datasetRowCount || 100;
 
       // Retrain mode: reuse existing dataset from R2 (no upload/generation needed)
       if (retrainDatasetUrl) {
@@ -491,6 +566,18 @@ export default function NewJobPage() {
 
           if (jsonlFile) {
             fileToUpload = jsonlFile;
+            // Count rows in the JSONL
+            const content = await jsonlFile.text();
+            const rowCount = content.trim().split("\n").filter(Boolean).length;
+            setDatasetRowCount(rowCount);
+            finalDatasetSize = rowCount;
+
+            // Check dataset size cap
+            if (rowCount > MAX_TRAINING_EXAMPLES) {
+              alert(`Your dataset has ${rowCount.toLocaleString()} rows, but the maximum is ${MAX_TRAINING_EXAMPLES.toLocaleString()}. Please reduce your dataset size.`);
+              setLaunching(false);
+              return;
+            }
           } else {
             setGenerationStatus("Synthesizing dataset with AI pipeline (this may take 30-60s for large documents)...");
             const ctx = buildWizardContext();
@@ -500,6 +587,17 @@ export default function NewJobPage() {
               wizardContext: ctx,
             });
             if (!genData.ok) throw new Error(genData.error || "Dataset generation failed");
+
+            // Count generated rows and enforce cap
+            const rowCount = genData.jsonl.trim().split("\n").filter(Boolean).length;
+            setDatasetRowCount(rowCount);
+            finalDatasetSize = rowCount;
+
+            if (rowCount > MAX_TRAINING_EXAMPLES) {
+              alert(`Generated dataset has ${rowCount.toLocaleString()} rows, exceeding the maximum of ${MAX_TRAINING_EXAMPLES.toLocaleString()}. Try using a shorter document.`);
+              setLaunching(false);
+              return;
+            }
 
             const blob = new Blob([genData.jsonl], { type: "application/jsonl" });
             const baseName = files[0]?.name?.replace(/\.[^/.]+$/, "") || "generated";
@@ -522,19 +620,54 @@ export default function NewJobPage() {
         }
       }
 
-      setGenerationStatus("Queueing training job...");
+      setGenerationStatus("Confirming credit hold & starting training...");
+      const estimatedCredits = costEstimate?.estimated_credits ?? config.estimatedCredits;
+
       const json = await apiClient.post<any>("/api/jobs", {
         name: jobName || "Untitled Job",
         baseModel: selectedModel,
         method: "lora",
         config: { epochs: config.epochs, learningRate: config.learningRate, batchSize: config.batchSize },
         datasetUrl: finalDatasetUrl,
-        estimatedCredits: config.estimatedCredits,
+        datasetSize: finalDatasetSize,
+        estimatedCredits,
       });
+
       if (json.ok) {
         setLaunchedJobId(json.jobId);
+        // Update local balance to reflect the hold
+        if (json.creditsHeld) {
+          setUserBalance((prev) => prev - json.creditsHeld);
+          setUserHeld((prev) => prev + json.creditsHeld);
+        }
         setStep(5);
-        // Trick: reuse step 5 for success — we use launchedJobId to detect success state
+      } else if (json.status === "insufficient_credits") {
+        // Insufficient credits — show downgrade suggestions
+        setInsufficientCredits(true);
+        setUserBalance(json.available_balance ?? userBalance);
+
+        // Fetch real cost estimates for suggestion models
+        if (json.suggestion_models?.length) {
+          try {
+            const batchData = await apiClient.post<any>("/api/estimate-cost/batch", {
+              models: json.suggestion_models.map((m: { id: string }) => m.id),
+              dataset_size: finalDatasetSize,
+            });
+            if (batchData.ok && batchData.estimates) {
+              const enriched = json.suggestion_models.map((m: { id: string; name: string; size: string; sizeNum: number }) => {
+                const est = batchData.estimates.find((e: Record<string, unknown>) => e.model_id === m.id);
+                return {
+                  ...m,
+                  estimated_credits: est?.estimated_credits,
+                  gpu_tier: est?.gpu_tier,
+                };
+              }).filter((m: { estimated_credits?: number }) =>
+                m.estimated_credits && m.estimated_credits <= (json.available_balance ?? userBalance)
+              );
+              setDowngradeSuggestions(enriched);
+            }
+          } catch { /* batch estimate failed — still show raw suggestions */ }
+        }
       } else {
         alert(json.error ?? "Failed to launch job");
       }
@@ -1239,23 +1372,100 @@ export default function NewJobPage() {
                 </div>
               </div>
 
-              {/* Cost estimate */}
+              {/* Cost estimate — live from Modal or AI config */}
               <div className={styles.estimateCard}>
-                <div className={styles.estimateRow}>
-                  <span className={styles.estimateLabel}>Estimated credits</span>
-                  <span className={styles.estimateValue}>~{config.estimatedCredits} credits</span>
-                </div>
-                <div className={styles.estimateRow}>
-                  <span className={styles.estimateLabel}>Estimated time</span>
-                  <span className={styles.estimateValue}>{config.estimatedTime}</span>
-                </div>
-                <div className={styles.estimateRow}>
-                  <span className={styles.estimateLabel}>Your balance after</span>
-                  <span className={styles.estimateValue} style={{ color: "var(--success)" }}>
-                    {100 - config.estimatedCredits} credits remaining
-                  </span>
-                </div>
+                {costLoading ? (
+                  <div style={{ textAlign: "center", padding: "12px 0", color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                    <span className="animate-spin" style={{ width: 14, height: 14, border: "2px solid rgba(255,255,255,0.1)", borderTopColor: "var(--accent-primary)", borderRadius: "50%", display: "inline-block", marginRight: 8 }} />
+                    Estimating cost...
+                  </div>
+                ) : (
+                  <>
+                    {costEstimate?.gpu_tier && (
+                      <div className={styles.estimateRow}>
+                        <span className={styles.estimateLabel}>GPU tier</span>
+                        <span className={styles.estimateValue}>
+                          <span className="badge badge-indigo" style={{ fontSize: "0.65rem" }}>{costEstimate.gpu_tier}</span>
+                          {costEstimate.use_qlora && <span className="badge badge-default" style={{ fontSize: "0.6rem", marginLeft: 4 }}>QLoRA</span>}
+                        </span>
+                      </div>
+                    )}
+                    <div className={styles.estimateRow}>
+                      <span className={styles.estimateLabel}>Estimated credits</span>
+                      <span className={styles.estimateValue}>~{costEstimate?.estimated_credits ?? config.estimatedCredits} credits</span>
+                    </div>
+                    <div className={styles.estimateRow}>
+                      <span className={styles.estimateLabel}>Estimated time</span>
+                      <span className={styles.estimateValue}>{config.estimatedTime}</span>
+                    </div>
+                    <div className={styles.estimateRow}>
+                      <span className={styles.estimateLabel}>Your balance</span>
+                      <span className={styles.estimateValue} style={{ fontWeight: 700 }}>{userBalance} credits</span>
+                    </div>
+                    <div className={styles.estimateRow}>
+                      <span className={styles.estimateLabel}>Balance after</span>
+                      <span className={styles.estimateValue} style={{ color: (userBalance - (costEstimate?.estimated_credits ?? config.estimatedCredits)) >= 0 ? "var(--success)" : "var(--warning)" }}>
+                        {Math.max(0, userBalance - (costEstimate?.estimated_credits ?? config.estimatedCredits))} credits remaining
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
+
+              {/* Insufficient credits panel with downgrade suggestions */}
+              {insufficientCredits && (
+                <div style={{
+                  background: "rgba(239, 68, 68, 0.08)",
+                  border: "1px solid rgba(239, 68, 68, 0.2)",
+                  borderRadius: 8, padding: "14px", marginTop: 12,
+                  fontSize: "0.8125rem",
+                }}>
+                  <div style={{ fontWeight: 600, color: "#ef4444", marginBottom: 8 }}>
+                    ⚠️ Insufficient credits
+                  </div>
+                  <p style={{ color: "var(--text-secondary)", margin: "0 0 10px", fontSize: "0.75rem" }}>
+                    You need ~{costEstimate?.estimated_credits ?? config.estimatedCredits} credits but only have {userBalance} available.
+                  </p>
+
+                  {downgradeSuggestions.length > 0 && (
+                    <>
+                      <div style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "0.75rem", marginBottom: 6 }}>
+                        Try a smaller model that fits your budget:
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {downgradeSuggestions.map((s) => (
+                          <button
+                            key={s.id}
+                            className={styles.modelOption}
+                            style={{ padding: "8px 12px", cursor: "pointer", textAlign: "left" }}
+                            onClick={() => {
+                              setSelectedModel(s.id);
+                              setInsufficientCredits(false);
+                              setDowngradeSuggestions([]);
+                            }}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <span style={{ fontWeight: 600, fontSize: "0.8125rem" }}>{s.name}</span>
+                              <span className="badge badge-success" style={{ fontSize: "0.6rem" }}>
+                                {s.estimated_credits ? `~${s.estimated_credits} credits` : s.size}
+                              </span>
+                            </div>
+                            {s.gpu_tier && (
+                              <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 2 }}>
+                                {s.size} · {s.gpu_tier} GPU
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  <Link href="/credits" style={{ display: "inline-block", marginTop: 10, fontSize: "0.75rem", color: "var(--accent-primary)" }}>
+                    Or add more credits →
+                  </Link>
+                </div>
+              )}
 
               {/* Validation warnings — catch field-mapping bugs pre-launch */}
               {validationWarnings.length > 0 && (
@@ -1283,14 +1493,14 @@ export default function NewJobPage() {
                 id="launch-job-btn"
                 className="btn btn-primary btn-lg"
                 onClick={handleLaunch}
-                disabled={launching}
+                disabled={launching || insufficientCredits || costLoading}
               >
                 {launching ? (
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span className="animate-spin" style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", display: "inline-block" }} />
                     {generationStatus || "Launching job..."}
                   </span>
-                ) : "Launch Fine-Tuning Job"}
+                ) : `Confirm & Start Training — ${costEstimate?.estimated_credits ?? config.estimatedCredits} credits`}
               </button>
               <button className="btn btn-ghost" onClick={() => setStep(4)}>← Back to Preview</button>
               {retrainSourceJobId && (

@@ -322,21 +322,110 @@ export function getModelsByCategory(category: ModelCategory | "all"): ModelInfo[
   return MODELS.filter((m) => m.category === category);
 }
 
-/** Get the recommended model for a use case based on simple heuristics */
+/** Get the recommended model based on document size, language needs, and budget.
+ *  This replaces the old hardcoded recommendation that always returned Llama 3.1 8B.
+ *
+ *  Decision logic:
+ *  1. Small document (< 5,000 chars) → lightweight model (cheapest that fits)
+ *  2. Medium document (5,000–50,000 chars) → mid-size model (good value)
+ *  3. Large document (> 50,000 chars) → full-size model (best quality)
+ *  4. Non-English detected → prefer multilingual models
+ *  5. Budget constraint → filter by maxCredits
+ *  6. Pulls from multiple families, not just one
+ */
 export function getRecommendedModel(opts?: {
+  documentSizeChars?: number;
+  documentLanguages?: string[];
   needsMultilingual?: boolean;
   needsCode?: boolean;
   needsReasoning?: boolean;
   budgetConstrained?: boolean;
   maxCredits?: number;
 }): ModelInfo {
+  // Specialty overrides — explicit category needs
   if (opts?.needsCode) return MODELS.find((m) => m.category === "code") ?? MODELS[0];
-  if (opts?.needsMultilingual) return MODELS.find((m) => m.category === "multilingual") ?? MODELS[0];
   if (opts?.needsReasoning) return MODELS.find((m) => m.id.includes("DeepSeek")) ?? MODELS[0];
-  if (opts?.budgetConstrained || (opts?.maxCredits && opts.maxCredits < 15)) {
-    return MODELS.find((m) => m.category === "lightweight" && m.credits.max <= (opts?.maxCredits ?? 15)) ?? MODELS[0];
+
+  // Language-aware selection
+  const needsMulti = opts?.needsMultilingual ||
+    (opts?.documentLanguages && opts.documentLanguages.some(
+      (l) => !["en", "english"].includes(l.toLowerCase())
+    ));
+
+  if (needsMulti) {
+    // Prefer Qwen for Arabic/Chinese, Phi-3.5 for general multilingual
+    const hasArabicOrChinese = opts?.documentLanguages?.some(
+      (l) => ["ar", "arabic", "zh", "chinese"].includes(l.toLowerCase())
+    );
+    if (hasArabicOrChinese) {
+      return MODELS.find((m) => m.id.includes("Qwen")) ?? MODELS[0];
+    }
+    return MODELS.find((m) => m.category === "multilingual") ??
+           MODELS.find((m) => m.id.includes("Phi-3.5")) ?? MODELS[0];
   }
-  return MODELS.find((m) => m.recommended) ?? MODELS[0];
+
+  // Hard budget constraint
+  if (opts?.budgetConstrained || (opts?.maxCredits !== undefined && opts.maxCredits < 15)) {
+    const affordable = MODELS
+      .filter((m) => m.credits.max <= (opts?.maxCredits ?? 15))
+      .sort((a, b) => b.quality - a.quality);
+    return affordable[0] ?? MODELS.find((m) => m.category === "lightweight") ?? MODELS[0];
+  }
+
+  // Document-size-aware selection — the core new logic
+  const docSize = opts?.documentSizeChars ?? 0;
+
+  if (docSize > 0 && docSize < 5_000) {
+    // Small document → lightweight model is the best value
+    // Pick highest quality among lightweight/budget models from different families
+    const lightweight = MODELS
+      .filter((m) => m.sizeNum <= 3.8)
+      .sort((a, b) => b.quality - a.quality);
+    return lightweight[0] ?? MODELS[0];
+  }
+
+  if (docSize >= 5_000 && docSize <= 50_000) {
+    // Medium document → mid-size model, good value
+    // Prefer 7B-class models: Mistral 7B, Qwen 7B, or Llama 3.2 3B
+    const midSize = MODELS
+      .filter((m) => m.sizeNum >= 3 && m.sizeNum <= 8)
+      .sort((a, b) => b.quality - a.quality);
+    return midSize[0] ?? MODELS[0];
+  }
+
+  if (docSize > 50_000) {
+    // Large document → full-size model for best quality
+    const fullSize = MODELS
+      .filter((m) => m.sizeNum >= 7 && m.sizeNum <= 10)
+      .sort((a, b) => b.quality - a.quality);
+    return fullSize[0] ?? MODELS[0];
+  }
+
+  // No document size info — default to best quality-to-cost ratio (8B class)
+  const bestValue = MODELS
+    .filter((m) => m.sizeNum >= 7 && m.sizeNum <= 9)
+    .sort((a, b) => b.quality - a.quality);
+  return bestValue[0] ?? MODELS[0];
+}
+
+/** Get a recommendation reason string for the UI */
+export function getRecommendationReason(model: ModelInfo, opts?: {
+  documentSizeChars?: number;
+  estimatedCredits?: number;
+}): string {
+  const docSize = opts?.documentSizeChars ?? 0;
+  const credits = opts?.estimatedCredits;
+
+  if (docSize > 0 && docSize < 5_000) {
+    return `Best value for a small document${credits ? ` — estimated ${credits} credits` : ""}`;
+  }
+  if (docSize >= 5_000 && docSize <= 50_000) {
+    return `Great balance of quality and cost for your document${credits ? ` — estimated ${credits} credits` : ""}`;
+  }
+  if (docSize > 50_000) {
+    return `Best quality for a large document${credits ? ` — estimated ${credits} credits` : ""}`;
+  }
+  return `Recommended for general use${credits ? ` — estimated ${credits} credits` : ""}`;
 }
 
 /** Build a summary string for use in AI prompts */

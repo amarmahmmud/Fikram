@@ -25,10 +25,14 @@ create table if not exists public.profiles (
   avatar_url  text,
   plan        text default 'free' check (plan in ('free','personal','pro','enterprise')),
   credits_balance integer default 100 not null,
+  credits_held    integer default 0 not null,
   created_at  timestamptz default now()
 );
 
 alter table public.profiles enable row level security;
+
+-- Add credits_held column if it doesn't exist (safe for existing deployments)
+alter table public.profiles add column if not exists credits_held integer default 0 not null;
 
 drop policy if exists "Users can view own profile"  on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
@@ -44,13 +48,14 @@ create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, email, full_name, avatar_url, credits_balance)
+  insert into public.profiles (id, email, full_name, avatar_url, credits_balance, credits_held)
   values (
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.raw_user_meta_data->>'avatar_url',
-    100
+    100,
+    0
   )
   on conflict (id) do nothing;
 
@@ -67,6 +72,7 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -137,7 +143,7 @@ create policy "Public can view published jobs"
 create table if not exists public.credit_transactions (
   id            uuid default gen_random_uuid() primary key,
   user_id       uuid references public.profiles(id) on delete cascade not null,
-  type          text check (type in ('signup_bonus','purchase','job_consumed','refund')),
+  type          text check (type in ('signup_bonus','purchase','job_consumed','refund','job_hold','job_refund')),
   label         text not null,
   amount        integer not null,
   balance_after integer not null,
