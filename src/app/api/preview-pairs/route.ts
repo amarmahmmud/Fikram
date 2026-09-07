@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { generateForChunk } from "@/lib/dataset-pipeline";
+import { generatePairsForChunk } from "@/lib/dataset-pipeline";
 import type { WizardContext } from "@/lib/wizard-types";
 import { buildContextBlock, EMPTY_WIZARD_CONTEXT } from "@/lib/wizard-types";
 
@@ -24,8 +24,9 @@ export async function POST(req: Request) {
     // Build the enriched context block and pass it as a string to generateForChunk
     const contextBlock = buildContextBlock(context);
 
-    // generateForChunk accepts a string as the contextBlock parameter (overloaded)
-    const pairs = await generateForChunk(chunk, contextBlock, 0, 1, contextBlock, "preview");
+    // generatePairsForChunk returns { pairs, report }
+    const result = await generatePairsForChunk(chunk, contextBlock, 0, 1);
+    const pairs = result.pairs;
 
     // Return only the first 5 pairs
     const preview = pairs.slice(0, 5);

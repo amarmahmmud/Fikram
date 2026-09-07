@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       .select("id")
       .eq("user_id", user.id)
       .eq("target_id", targetId)
-      .eq("target_type", targetType)
+      .eq("target_type", targetType as "expert" | "job")
       .maybeSingle();
 
     const isCurrentlyLiked = Boolean(existingLike);
@@ -109,7 +109,7 @@ export async function POST(req: Request) {
         .delete()
         .eq("user_id", user.id)
         .eq("target_id", targetId)
-        .eq("target_type", targetType);
+        .eq("target_type", targetType as "expert" | "job");
 
       if (deleteError) {
         console.error("[Like API] Delete error:", deleteError);
@@ -186,7 +186,7 @@ export async function DELETE(req: Request) {
       .delete()
       .eq("user_id", user.id)
       .eq("target_id", targetId)
-      .eq("target_type", targetType);
+      .eq("target_type", targetType as "expert" | "job");
 
     const rpcName = targetType === "expert" ? "decrement_expert_likes" : "decrement_job_likes";
     const rpcArg = targetType === "expert" ? { expert_id: targetId } : { job_id: targetId };

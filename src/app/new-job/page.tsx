@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
 import { MODELS } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
-import type { WizardContext, GoldExample } from "@/lib/wizard-types";
+import type { WizardContext, GoldExample, InterviewAnswerMap, WizardValidationWarning } from "@/lib/wizard-types";
+import { validateWizardContext } from "@/lib/wizard-types";
 
 /* ── Types ── */
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -17,6 +18,7 @@ interface ChatMessage {
 }
 
 interface AiQuestion {
+  /** Stable ID mapping this question to an identity field (persona, audience, style, format, language) */
   id: string;
   text: string;
   options: string[];
@@ -71,6 +73,7 @@ const BOUNDARY_PRESETS = [
 
 export default function NewJobPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(1);
 
   // ── Step 1: Upload & Sources ──
@@ -91,6 +94,8 @@ export default function NewJobPage() {
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [customInput, setCustomInput] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
+  // Keyed answer map: question ID → user's answer. Prevents positional mapping bugs.
+  const [answeredQuestions, setAnsweredQuestions] = useState<InterviewAnswerMap>({});
 
   // ── Step 3: Model Identity (Smart Summary Card) ──
   const [identity, setIdentity] = useState<AiIdentity | null>(null);
@@ -101,6 +106,7 @@ export default function NewJobPage() {
   const [boundaries, setBoundaries] = useState("");
   const [showBoundaries, setShowBoundaries] = useState(false);
   const [activeBoundaryPresets, setActiveBoundaryPresets] = useState<string[]>([]);
+  const [validationWarnings, setValidationWarnings] = useState<WizardValidationWarning[]>([]);
 
   // ── Step 4: Preview ──
   const [previewPairs, setPreviewPairs] = useState<PreviewPair[]>([]);
@@ -114,6 +120,11 @@ export default function NewJobPage() {
   const [launching, setLaunching] = useState(false);
   const [generationStatus, setGenerationStatus] = useState("");
   const [launchedJobId, setLaunchedJobId] = useState<string | null>(null);
+
+  // ── Retrain mode ──
+  const [retrainDatasetUrl, setRetrainDatasetUrl] = useState<string | null>(null);
+  const [retrainSourceJobId, setRetrainSourceJobId] = useState<string | null>(null);
+  const [retrainLoading, setRetrainLoading] = useState(false);
 
   /* Use AI config or defaults */
   const config: TrainingConfig = aiConfig ?? {
@@ -132,7 +143,8 @@ export default function NewJobPage() {
     ].filter(Boolean).join(". ");
 
     return {
-      goal: chatMessages.find((m) => m.role === "user")?.content || goalText,
+      // Use goalText directly — don't search chat messages by position
+      goal: goalText || chatMessages.find((m) => m.role === "user")?.content || "",
       persona: identity?.persona || "",
       audience: identity?.audience || "",
       style: identity?.style || "",
@@ -142,6 +154,57 @@ export default function NewJobPage() {
       documentSummary: documentText.slice(0, 3000),
     };
   }, [identity, goldExamples, activeBoundaryPresets, boundaries, chatMessages, goalText, documentText]);
+
+
+  /* ── Retrain: load original job config on mount ── */
+  useEffect(() => {
+    const retrainId = searchParams.get("retrain");
+    if (!retrainId) return;
+
+    setRetrainLoading(true);
+    setRetrainSourceJobId(retrainId);
+
+    (async () => {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { data: job } = await supabase
+          .from("jobs")
+          .select("*")
+          .eq("id", retrainId)
+          .single();
+
+        if (!job) {
+          console.error("[Retrain] Original job not found:", retrainId);
+          setRetrainLoading(false);
+          return;
+        }
+
+        // Pre-fill from original job
+        const origConfig = (job.config || {}) as Record<string, any>;
+        setRetrainDatasetUrl(job.dataset_url || null);
+        setSelectedModel(job.base_model || MODELS[0].id);
+        setJobName(`Retrain: ${job.name}`);
+        setAiConfig({
+          baseModel: job.base_model || MODELS[0].name,
+          method: (job.method || "lora").toUpperCase(),
+          epochs: origConfig.epochs ?? 3,
+          learningRate: origConfig.learningRate ?? 0.00002,
+          batchSize: origConfig.batchSize ?? 4,
+          warmupSteps: 10,
+          estimatedCredits: 28,
+          estimatedTime: "12–18 min",
+        });
+
+        // Start at Step 1 to allow full modification
+        setStep(1);
+      } catch (err) {
+        console.error("[Retrain] Failed to load original job:", err);
+      } finally {
+        setRetrainLoading(false);
+      }
+    })();
+  }, [searchParams]);
 
 
   /* ── File handling ── */
@@ -236,11 +299,12 @@ export default function NewJobPage() {
 
     const userMsg = goalText;
     setChatMessages((prev) => [...prev, { role: "user", content: userMsg }]);
-    setGoalText("");
+    // Don't clear goalText — we need it for buildWizardContext
 
     try {
       const json = await apiClient.post<any>("/api/wizard", {
         messages: [{ role: "user", content: userMsg }],
+        answeredQuestions: {},
         documentSummary: docSummary.slice(0, 3000),
       });
       if (json.ok && json.data?.type === "question") {
@@ -270,6 +334,14 @@ export default function NewJobPage() {
     const answerText = chosen.join(", ");
     const newMessages: ChatMessage[] = [...chatMessages, { role: "user", content: answerText }];
     setChatMessages(newMessages);
+
+    // Store the answer keyed by the current question's ID (never by position)
+    const updatedAnswers = { ...answeredQuestions };
+    if (currentQuestion?.id) {
+      updatedAnswers[currentQuestion.id as keyof InterviewAnswerMap] = answerText;
+      setAnsweredQuestions(updatedAnswers);
+    }
+
     setSelectedOptions([]);
     setCustomInput("");
     setAiLoading(true);
@@ -278,6 +350,7 @@ export default function NewJobPage() {
       const json = await apiClient.post<any>("/api/wizard", {
         messages: newMessages.map((m) => ({ role: m.role === "ai" ? "model" : "user", content: m.content })),
         documentSummary: documentText.slice(0, 3000),
+        answeredQuestions: updatedAnswers,
       });
 
       if (json.ok) {
@@ -342,6 +415,7 @@ export default function NewJobPage() {
         messages: chatMessages.map((m) => ({ role: m.role === "ai" ? "model" : "user", content: m.content })),
         documentSummary: documentText.slice(0, 3000),
         phase: "config",
+        answeredQuestions,
       });
 
       if (json.ok && json.data?.type === "config") {
@@ -385,51 +459,67 @@ export default function NewJobPage() {
 
   /* ── Launch real job ── */
   async function handleLaunch() {
+    // Pre-launch validation: catch field-mapping bugs before they corrupt training data
+    const ctx = buildWizardContext();
+    const warnings = validateWizardContext(ctx);
+    if (warnings.length > 0) {
+      setValidationWarnings(warnings);
+      console.warn("[Wizard] Pre-launch validation warnings:", warnings);
+      // Don't block — just warn (user can still launch)
+    }
+
     setLaunching(true);
     setGenerationStatus("Preparing...");
     try {
       let finalDatasetUrl = null;
-      const hasFiles = files.length > 0 || urls.some((u) => u.status === "done");
 
-      if (hasFiles) {
-        setGenerationStatus("Extracting text from all sources...");
-        const rawText = documentText || (await extractAllText());
+      // Retrain mode: reuse existing dataset from R2 (no upload/generation needed)
+      if (retrainDatasetUrl) {
+        setGenerationStatus("Reusing existing dataset from previous training run...");
+        finalDatasetUrl = retrainDatasetUrl;
+      } else {
+        const hasFiles = files.length > 0 || urls.some((u) => u.status === "done");
 
-        // Check if any file is already JSONL — skip generation
-        const jsonlFile = files.find((f) => f.name.toLowerCase().endsWith(".jsonl"));
+        if (hasFiles) {
+          setGenerationStatus("Extracting text from all sources...");
+          const rawText = documentText || (await extractAllText());
 
-        let fileToUpload: File;
+          // Check if any file is already JSONL — skip generation
+          const jsonlFile = files.find((f) => f.name.toLowerCase().endsWith(".jsonl"));
 
-        if (jsonlFile) {
-          fileToUpload = jsonlFile;
-        } else {
-          setGenerationStatus("Synthesizing dataset with AI pipeline (this may take 30-60s for large documents)...");
-          const ctx = buildWizardContext();
-          const genData = await apiClient.post<any>("/api/generate-dataset", {
-            text: rawText,
-            goal: ctx.goal,
-            wizardContext: ctx,
+          let fileToUpload: File;
+
+          if (jsonlFile) {
+            fileToUpload = jsonlFile;
+          } else {
+            setGenerationStatus("Synthesizing dataset with AI pipeline (this may take 30-60s for large documents)...");
+            const ctx = buildWizardContext();
+            const genData = await apiClient.post<any>("/api/generate-dataset", {
+              text: rawText,
+              goal: ctx.goal,
+              wizardContext: ctx,
+            });
+            if (!genData.ok) throw new Error(genData.error || "Dataset generation failed");
+
+            const blob = new Blob([genData.jsonl], { type: "application/jsonl" });
+            const baseName = files[0]?.name?.replace(/\.[^/.]+$/, "") || "generated";
+            fileToUpload = new File([blob], `${baseName}_dataset.jsonl`, { type: "application/jsonl" });
+          }
+
+          setGenerationStatus("Uploading dataset...");
+          const uploadData = await apiClient.post<any>("/api/upload", {
+            filename: fileToUpload.name,
+            contentType: fileToUpload.type,
           });
-          if (!genData.ok) throw new Error(genData.error || "Dataset generation failed");
 
-          const blob = new Blob([genData.jsonl], { type: "application/jsonl" });
-          const baseName = files[0]?.name?.replace(/\.[^/.]+$/, "") || "generated";
-          fileToUpload = new File([blob], `${baseName}_dataset.jsonl`, { type: "application/jsonl" });
+          if (!uploadData.ok) throw new Error(uploadData.error || "Failed to get upload URL");
+
+          await apiClient.put<any>(uploadData.uploadUrl, fileToUpload, {
+            headers: { "Content-Type": fileToUpload.type || "application/octet-stream" },
+          });
+
+          finalDatasetUrl = uploadData.downloadUrl;
         }
-
-        setGenerationStatus("Uploading dataset...");
-        const uploadData = await apiClient.post<any>("/api/upload", {
-          filename: fileToUpload.name,
-          contentType: fileToUpload.type,
-        });
-
-        if (!uploadData.ok) throw new Error(uploadData.error || "Failed to get upload URL");
-
-        await apiClient.put<any>(uploadData.uploadUrl, fileToUpload, {
-          headers: { "Content-Type": fileToUpload.type || "application/octet-stream" },
-        });
-
-        finalDatasetUrl = uploadData.downloadUrl;
       }
 
       setGenerationStatus("Queueing training job...");
@@ -510,6 +600,24 @@ export default function NewJobPage() {
               Upload your training documents and tell us what you want your model to do.
               You can also add web links for additional context.
             </p>
+
+            {/* Retrain dataset banner */}
+            {retrainDatasetUrl && files.length === 0 && (
+              <div style={{
+                background: "rgba(59, 130, 246, 0.08)", border: "1px solid rgba(59, 130, 246, 0.2)",
+                borderRadius: 8, padding: "12px 14px", marginBottom: 20, fontSize: "0.875rem",
+                display: "flex", alignItems: "flex-start", gap: 10
+              }}>
+                <div style={{ fontSize: "1.2rem", marginTop: -2 }}>🔄</div>
+                <div>
+                  <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>Reusing previous dataset</div>
+                  <div style={{ color: "var(--text-muted)", marginTop: 4 }}>
+                    We&apos;ll reuse the dataset from job <span className="font-mono">#{retrainSourceJobId?.substring(0, 8)}</span>. 
+                    Upload new files below if you want to replace it.
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Upload zone */}
             <div
@@ -1018,10 +1126,26 @@ export default function NewJobPage() {
         {/* ══════════════════════════════════════════════ */}
         {step === 5 && !launchedJobId && (
           <div className={styles.stepPanel}>
-            <h2 className={styles.stepTitle}>Review your training configuration</h2>
+            <h2 className={styles.stepTitle}>
+              {retrainSourceJobId ? "Retrain with updated parameters" : "Review your training configuration"}
+            </h2>
             <p className={styles.stepDesc}>
-              Our AI has auto-selected the optimal settings based on your answers. You can adjust before launching.
+              {retrainSourceJobId
+                ? "Same dataset, new training run. Adjust parameters below to improve model quality."
+                : "Our AI has auto-selected the optimal settings based on your answers. You can adjust before launching."
+              }
             </p>
+
+            {retrainSourceJobId && (
+              <div style={{
+                background: "rgba(59, 130, 246, 0.08)",
+                border: "1px solid rgba(59, 130, 246, 0.2)",
+                borderRadius: 8, padding: "10px 14px", marginBottom: 16,
+                fontSize: "0.75rem", color: "#60a5fa",
+              }}>
+                <strong>Retrain mode:</strong> Reusing dataset from job <span className="font-mono">#{retrainSourceJobId.substring(0, 8)}</span>. No re-upload or re-generation needed.
+              </div>
+            )}
 
             <div className={styles.configSection}>
               {/* Model selector */}
@@ -1091,7 +1215,7 @@ export default function NewJobPage() {
                     { label: "Learning Rate", value: config.learningRate },
                     { label: "Batch Size", value: config.batchSize },
                     { label: "Warmup Steps", value: config.warmupSteps },
-                    { label: "Dataset", value: files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "From description" },
+                    { label: "Dataset", value: retrainDatasetUrl ? "Reusing previous dataset" : files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "From description" },
                   ].map(({ label, value }) => (
                     <div key={label} className={styles.configParam}>
                       <div className={styles.configParamLabel}>{label}</div>
@@ -1132,6 +1256,26 @@ export default function NewJobPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Validation warnings — catch field-mapping bugs pre-launch */}
+              {validationWarnings.length > 0 && (
+                <div style={{
+                  background: "rgba(234, 179, 8, 0.08)",
+                  border: "1px solid rgba(234, 179, 8, 0.2)",
+                  borderRadius: 8, padding: "12px 14px", marginTop: 12,
+                  fontSize: "0.75rem", color: "#d97706",
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>⚠️ Identity field warnings:</div>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    {validationWarnings.map((w, i) => (
+                      <li key={i}><strong>{w.field}:</strong> {w.reason}</li>
+                    ))}
+                  </ul>
+                  <div style={{ marginTop: 6, fontStyle: "italic" }}>
+                    You can go back to Model Identity to fix these, or launch anyway.
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className={styles.stepActions}>
@@ -1148,7 +1292,10 @@ export default function NewJobPage() {
                   </span>
                 ) : "Launch Fine-Tuning Job"}
               </button>
-              <button className="btn btn-ghost" onClick={() => setStep(4)}>← Back</button>
+              <button className="btn btn-ghost" onClick={() => setStep(4)}>← Back to Preview</button>
+              {retrainSourceJobId && (
+                <button className="btn btn-ghost" onClick={() => router.push(`/jobs/${retrainSourceJobId}`)}>Cancel Retrain</button>
+              )}
             </div>
           </div>
         )}

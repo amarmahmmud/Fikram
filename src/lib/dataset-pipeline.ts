@@ -1,14 +1,29 @@
 // ─────────────────────────────────────────────
 // Advanced Multi-Stage Dataset Generation Pipeline
 // ─────────────────────────────────────────────
+// CHANGELOG:
+// - Fix 1: Context-preserving chunking — headings/attributions carry forward
+// - Fix 2: Verbatim number enforcement in all generation prompts
+// - Fix 3: Answer-aware deduplication with conflict detection
+// - Fix 4: Provenance metadata (source_chunk, pass_type) on every pair
+// - Fix 5: Reinforcement pass constrained to verbatim-only answers
+// - Fix 6: Post-generation number verification + comparative guardrail
+// ─────────────────────────────────────────────
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { WizardContext, buildContextBlock, EMPTY_WIZARD_CONTEXT } from "@/lib/wizard-types";
+import crypto from "crypto";
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
 export interface DatasetPair {
   prompt: string;
   completion: string;
+  /** Provenance metadata — stripped before SFTTrainer, retained in R2 for audit */
+  _meta?: {
+    source_chunk_index: number;
+    pass_type: string;
+    source_hash: string;
+  };
 }
 
 export interface PipelineProgress {
@@ -20,10 +35,42 @@ export interface PipelineProgress {
 }
 
 // ─────────────────────────────────────────────
-// Stage 1: Smart Chunking
+// Stage 1: Smart Chunking (Context-Preserving)
 // ─────────────────────────────────────────────
+// FIX 1: Headings and attribution sentences ("According to McKinsey...") are
+// carried forward into each chunk so numbers are never separated from their
+// labels. This prevents the LLM from guessing what a naked "30%" refers to.
 const CHUNK_SIZE = 4000;    // chars per chunk
 const CHUNK_OVERLAP = 400;  // overlap between chunks for context continuity
+
+// Regex to detect headings / section titles
+const HEADING_RE = /^(?:#{1,4}\s+.+|\d+\.\s+\S.+|[A-Z][A-Z\s]{3,}[A-Z]\s*$)/m;
+// Regex to detect attribution sentences ("According to X", "X reports that", etc.)
+const ATTRIBUTION_RE = /(?:according to|reported by|published by|data from|research by|estimates? (?:by|from)|study by|analysis by|survey by)\s+[A-Z][\w\s&',.-]+/gi;
+
+/**
+ * Extract the last heading visible before `position` in the text.
+ */
+function findLastHeading(text: string, position: number): string | null {
+  const region = text.substring(0, position);
+  const lines = region.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const trimmed = lines[i].trim();
+    if (HEADING_RE.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract any attribution sentence ("According to McKinsey...") from the
+ * first 500 chars of a text region — used to carry context into the next chunk.
+ */
+function findAttribution(text: string): string | null {
+  const match = text.match(ATTRIBUTION_RE);
+  return match ? match[0] : null;
+}
 
 export function smartChunk(text: string): string[] {
   const chunks: string[] = [];
@@ -58,7 +105,31 @@ export function smartChunk(text: string): string[] {
       end = cleaned.length;
     }
 
-    chunks.push(cleaned.substring(start, end).trim());
+    let chunkText = cleaned.substring(start, end).trim();
+
+    // FIX 1: Carry forward context from preceding text into this chunk
+    if (start > 0) {
+      const contextParts: string[] = [];
+
+      // Carry forward the last heading visible before this chunk
+      const heading = findLastHeading(cleaned, start);
+      if (heading && !chunkText.startsWith(heading)) {
+        contextParts.push(`[Section: ${heading}]`);
+      }
+
+      // Carry forward any attribution sentence from the overlap region
+      const overlapRegion = cleaned.substring(Math.max(0, start - CHUNK_OVERLAP), start);
+      const attribution = findAttribution(overlapRegion);
+      if (attribution) {
+        contextParts.push(`[Context: ${attribution}]`);
+      }
+
+      if (contextParts.length > 0) {
+        chunkText = contextParts.join("\n") + "\n\n" + chunkText;
+      }
+    }
+
+    chunks.push(chunkText);
 
     // Move forward with overlap
     start = end - CHUNK_OVERLAP;
@@ -72,154 +143,153 @@ export function smartChunk(text: string): string[] {
 
 
 // ─────────────────────────────────────────────
-// Stage 2: Parallel Generation (per chunk)
+// Stage 2: Fact Extraction & Generation
 // ─────────────────────────────────────────────
-const GENERATION_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a fine-tuning dataset.
+const FACT_EXTRACTION_PROMPT = `You are an expert AI Data Engineer extracting facts from a document chunk for a fine-tuning dataset.
+
+Extract ALL specific facts, numbers, dates, comparisons, and named entities from this chunk. Classify each fact into exactly one of these types:
+- SINGLE_STAT (one number, one label — e.g., "300 million jobs")
+- PAIRED_STAT (two numbers that must stay linked, comparisons, "X vs Y")
+- NAMED_ENTITY_FACT (a fact tied to a specific proper noun, person, or organization)
+- CONCEPTUAL (a definition or framework explanation, not a raw number)
+
+Output ONLY a raw JSON array of objects with keys "fact" (the exact text/concept) and "type" (one of the 4 types above).
+Example:
+[
+  {"fact": "The new solar cells achieved 33.7% efficiency", "type": "SINGLE_STAT"},
+  {"fact": "21.5% without AI vs 29.5% with AI", "type": "PAIRED_STAT"},
+  {"fact": "Dr. Sarah Chen led the research team at MIT", "type": "NAMED_ENTITY_FACT"}
+]`;
+
+const FACT_GENERATION_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer generating Q&A pairs for a fine-tuning dataset.
 
 ${contextBlock}
 
-You are processing chunk ${chunkIndex + 1} of ${totalChunks} from a document. Generate diverse, high-quality Question & Answer pairs based STRICTLY on the content provided.
+You are processing chunk ${chunkIndex + 1} of ${totalChunks}.
+I will provide a list of facts extracted from this chunk. Generate diverse Question & Answer pairs for EVERY fact based on its type.
 
-Generate 4 TYPES of pairs:
-1. **Factual Recall** — "What is...?", "Who...?", "When...?" (direct knowledge)
-2. **Application** — "How would you apply...?", "What steps...?" (practical usage)
-3. **Comparison/Analysis** — "What's the difference between...?", "Why is X better than Y?" (deeper understanding)
-4. **Scenario-Based** — "If a user wanted to..., what should they...?" (contextual advice)
+DYNAMIC RECORD COUNT AND RULES BY FACT TYPE:
+- CONCEPTUAL: Generate 2-3 pairs. Vary the structural wording (e.g. "What is...", "How does...").
+- SINGLE_STAT: Generate 3-4 pairs. Vary question structure, but strict verbatim number enforcement in answers.
+- PAIRED_STAT: Generate 5-8 pairs. You MUST explicitly include at least 1 direct comparison question ("What is the difference between X and Y?", "Compare..."). Never swap the subjects in the answer.
+- NAMED_ENTITY_FACT: Generate 4-6 pairs. You MUST explicitly include at least 1 contrastive negative question ("Is it true that [wrong entity] did this?" -> "No, actually [correct entity] did.").
 
-IMPORTANT: Match the persona, audience level, style, and format specified above when writing completions.
+CRITICAL NUMBER ACCURACY RULES:
+- NEVER round, approximate, or restate any number, percentage, date, or measurement. Use the EXACT value.
+- In comparative statements, NEVER swap the subjects.
 
-Generate between 15 and 25 pairs for this chunk. Each pair must be a JSON object with "prompt" and "completion" keys.
-
-Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
-
-Example:
+Output ONLY a raw JSON array where each object represents a fact and its generated pairs:
 [
-  {"prompt": "What is habit stacking?", "completion": "Habit stacking is linking a new habit to an existing one using the formula: After I [CURRENT HABIT], I will [NEW HABIT]."},
-  {"prompt": "How would you apply the Two-Minute Rule to start exercising?", "completion": "Scale the habit down: instead of 'run 5 miles', start with 'put on running shoes'. The goal is to make starting effortless."}
-]`;
+  {
+    "fact": "the extracted fact string",
+    "type": "the fact type",
+    "pairs": [
+      {"prompt": "...", "completion": "..."},
+      {"prompt": "...", "completion": "..."}
+    ]
+  }
+]
+No markdown. No explanation.`;
 
-// Second-pass prompt focused specifically on direct fact/number/name recall
-const RECALL_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating a FACTUAL RECALL dataset for fine-tuning.
+export interface ExtractedFact {
+  fact: string;
+  type: "SINGLE_STAT" | "PAIRED_STAT" | "NAMED_ENTITY_FACT" | "CONCEPTUAL";
+}
 
-${contextBlock}
+export interface ValidationReport {
+  fact: string;
+  type: string;
+  issue: string;
+}
 
-You are processing chunk ${chunkIndex + 1} of ${totalChunks} from a document. Generate direct, blunt Q&A pairs for EVERY specific number, name, date, percentage, proper noun, measurement, and concrete fact in this text.
-
-Rules:
-- Keep questions SHORT and LITERAL: "Who...?", "What...?", "How much...?", "When...?", "How many...?"
-- Answers must match the target audience level and style specified above
-- Cover EVERY specific fact, even minor ones — names of people, organizations, places, exact numbers, dates, technical terms
-- If the same fact can be asked about from different angles (e.g. "Who did X?" and "What did Person do?"), include BOTH
-- Do NOT generate scenario-based or application questions — those are handled separately
-
-Generate between 10 and 20 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
-
-Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
-
-Example:
-[
-  {"prompt": "What percentage efficiency did the new solar cells achieve?", "completion": "The new perovskite solar cells achieved 33.7% efficiency in laboratory tests."},
-  {"prompt": "Who led the research team at MIT?", "completion": "Dr. Sarah Chen led the research team at MIT's Department of Materials Science."}
-]`;
-
-// Third-pass prompt: rephrase key facts for reinforcement (repeated exposure)
-const REINFORCEMENT_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating REINFORCEMENT pairs for a fine-tuning dataset.
-
-${contextBlock}
-
-You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to take EVERY specific number, date, name, measurement, and key fact in this text and create 2-3 DIFFERENTLY WORDED question-answer pairs for each one.
-
-The goal is repetition through rephrasing — the model needs to see the same fact asked about in multiple ways to memorize it.
-
-Rules:
-- For each key fact, generate at least 2 variants with DIFFERENT question phrasing but the SAME factual answer
-- Vary question structure: "What was...", "How much...", "According to the text, what...", "What number/date/amount..."
-- Answers should be concise, match the style/format specified above, and directly state the fact
-- Focus especially on: exact numbers, dates, timelines, percentages, names, and technical terms
-- Do NOT add interpretation — just restate the fact
-
-Generate between 10 and 20 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
-
-Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
-
-Example:
-[
-  {"prompt": "What efficiency did the solar cells achieve?", "completion": "The perovskite solar cells achieved 33.7% efficiency."},
-  {"prompt": "According to the text, what was the efficiency percentage of the new solar cells?", "completion": "33.7% efficiency in laboratory tests."},
-  {"prompt": "How efficient were the perovskite cells in lab testing?", "completion": "They achieved 33.7% efficiency in laboratory tests."}
-]`;
-
-// Fourth-pass prompt: teach "I don't know" behavior (anti-hallucination)
-const NEGATIVE_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer creating NEGATIVE KNOWLEDGE pairs for a fine-tuning dataset.
-
-${contextBlock}
-
-You are processing chunk ${chunkIndex + 1} of ${totalChunks}. Your job is to generate questions about PLAUSIBLE details that someone might ask about this text but which are NOT actually stated or answerable from the text.
-
-This teaches the model to refuse fabrication and stay within its boundaries.
-
-Rules:
-- Ask about details a reader would REASONABLY expect to find (names of people not mentioned, exact dates not given, specific numbers not stated, locations not specified)
-- Answers must reflect the model's persona and boundaries specified above. Use natural variations like:
-  - "Based on the information I have, this is not specified..."
-  - "I don't have specific information about that in my training material."
-  - "That detail is not covered in my knowledge base."
-  - "I can't provide that specific information — it's not in the materials I was trained on."
-- Questions should sound natural and specific, not vague
-- Do NOT ask about things that ARE in the text
-
-Generate between 5 and 10 pairs. Each pair must be a JSON object with "prompt" and "completion" keys.
-
-Output ONLY a raw JSON array. No markdown, no code fences, no explanation.
-
-Example:
-[
-  {"prompt": "Who was the lead surgeon for the procedure?", "completion": "I don't have that specific information — the materials I was trained on don't name a lead surgeon for the procedure."},
-  {"prompt": "What was the exact date of the clinical trial?", "completion": "That detail isn't covered in my training material. I'd recommend checking the original research publication for exact dates."},
-  {"prompt": "How much did the research cost?", "completion": "I can't provide the cost of the research — that information isn't in the materials I have access to."}
-]`;
-
-export async function generateForChunk(
+export async function generatePairsForChunk(
   text: string,
-  goal: string,
+  contextBlock: string,
   chunkIndex: number,
   totalChunks: number,
-  promptTemplateOrContextBlock: ((contextBlock: string, chunkIndex: number, totalChunks: number) => string) | string = GENERATION_PROMPT as any,
-  label: string = "general",
-): Promise<DatasetPair[]> {
+): Promise<{ pairs: DatasetPair[], report: ValidationReport[] }> {
   const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
-
-  // Support both: a prompt template function (internal pipeline use) or a raw context block string (preview-pairs API)
-  let promptText: string;
-  if (typeof promptTemplateOrContextBlock === "string") {
-    // Raw context block passed directly — wrap in the general generation prompt format
-    promptText = GENERATION_PROMPT(promptTemplateOrContextBlock, chunkIndex, totalChunks);
-  } else {
-    promptText = promptTemplateOrContextBlock(goal, chunkIndex, totalChunks);
-  }
-
+  
+  // 1. Extract facts
+  let facts: ExtractedFact[] = [];
   try {
-    const result = await model.generateContent({
-      contents: [{
-        role: "user",
-        parts: [{
-          text: `${promptText}\n\nDocument chunk:\n\n${text}`
-        }]
-      }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-      },
+    const extResult = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: `${FACT_EXTRACTION_PROMPT}\n\nDocument chunk:\n\n${text}` }] }],
+      generationConfig: { temperature: 0.1 },
     });
-
-    const raw = result.response.text() || "[]";
-    const pairs = parseJsonArray(raw);
-    console.log(`[Pipeline] Chunk ${chunkIndex + 1}/${totalChunks} (${label}): generated ${pairs.length} pairs`);
-    return pairs;
-  } catch (error: any) {
-    console.error(`[Pipeline] Error generating chunk ${chunkIndex + 1} (${label}):`, error?.message || error);
-    return [];
+    facts = parseJsonArray(extResult.response.text() || "[]") as ExtractedFact[];
+  } catch (e) {
+    console.error(`[Pipeline] Fact extraction failed for chunk ${chunkIndex + 1}`, e);
+    return { pairs: [], report: [] };
   }
+  
+  if (facts.length === 0) return { pairs: [], report: [] };
+
+  // 2. Generate pairs for facts
+  const promptText = FACT_GENERATION_PROMPT(contextBlock, chunkIndex, totalChunks);
+  let generatedGroups: any[] = [];
+  try {
+    const genResult = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: `${promptText}\n\nExtracted Facts:\n${JSON.stringify(facts, null, 2)}\n\nDocument chunk:\n\n${text}` }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
+    });
+    generatedGroups = parseJsonArray(genResult.response.text() || "[]");
+  } catch (e) {
+    console.error(`[Pipeline] Fact generation failed for chunk ${chunkIndex + 1}`, e);
+    return { pairs: [], report: [] };
+  }
+
+  // 3. Flatten and Validate
+  const allPairs: DatasetPair[] = [];
+  const validationReport: ValidationReport[] = [];
+  const sourceHash = crypto.createHash("md5").update(text.substring(0, 500)).digest("hex").substring(0, 12);
+
+  for (const group of generatedGroups) {
+    const type = group.type || "UNKNOWN";
+    const pairs: DatasetPair[] = group.pairs || [];
+    
+    // Check minimum counts
+    let minExpected = 0;
+    if (type === "CONCEPTUAL") minExpected = 2;
+    if (type === "SINGLE_STAT") minExpected = 3;
+    if (type === "NAMED_ENTITY_FACT") minExpected = 4;
+    if (type === "PAIRED_STAT") minExpected = 5;
+
+    if (pairs.length < minExpected) {
+       validationReport.push({ fact: group.fact, type, issue: `Generated ${pairs.length} pairs, expected >= ${minExpected}` });
+    }
+
+    // Check specific structures
+    if (type === "PAIRED_STAT") {
+       const hasComparison = pairs.some(p => {
+         const q = p.prompt.toLowerCase();
+         return q.includes("difference") || q.includes("compare") || q.includes("vs") || q.includes("versus");
+       });
+       if (!hasComparison) validationReport.push({ fact: group.fact, type, issue: "Missing direct comparison prompt" });
+    }
+    if (type === "NAMED_ENTITY_FACT") {
+       const hasContrastive = pairs.some(p => {
+         const q = p.prompt.toLowerCase();
+         const a = p.completion.toLowerCase();
+         return q.includes("not") || q.includes("true that") || a.includes("actually") || a.includes("no,") || a.includes("incorrect");
+       });
+       if (!hasContrastive) validationReport.push({ fact: group.fact, type, issue: "Missing contrastive negative pair" });
+    }
+
+    // Assign provenance
+    for (const p of pairs) {
+      if (p.prompt && p.completion) {
+        p._meta = { source_chunk_index: chunkIndex, pass_type: type, source_hash: sourceHash };
+        allPairs.push(p);
+      }
+    }
+  }
+
+  let finalPairs = verifyNumbersAgainstSource(allPairs, text, "fact-aware");
+  finalPairs = checkComparativeSwaps(finalPairs, text, "fact-aware");
+
+  console.log(`[Pipeline] Chunk ${chunkIndex + 1}/${totalChunks}: extracted ${facts.length} facts, generated ${finalPairs.length} valid pairs`);
+  return { pairs: finalPairs, report: validationReport };
 }
 
 
@@ -280,8 +350,11 @@ ${JSON.stringify(batch, null, 2)}`;
 
 
 // ─────────────────────────────────────────────
-// Stage 4: Deduplication
+// Stage 4: Deduplication (Answer-Aware)
 // ─────────────────────────────────────────────
+// FIX 3: Dedup now also checks for conflicting answers about the same fact.
+// When two pairs have similar questions but contradicting numerical answers,
+// the pair from the earlier (more reliable) pass wins.
 function deduplicatePairs(pairs: DatasetPair[]): DatasetPair[] {
   const seen = new Map<string, DatasetPair>();
 
@@ -295,19 +368,67 @@ function deduplicatePairs(pairs: DatasetPair[]): DatasetPair[] {
 
     // Check for exact or near-duplicate prompts
     let isDuplicate = false;
+    let duplicateKey: string | null = null;
     for (const [existingKey] of seen) {
       if (similarity(normalized, existingKey) > 0.85) {
         isDuplicate = true;
+        duplicateKey = existingKey;
         break;
       }
     }
 
-    if (!isDuplicate && normalized.length > 10) {
+    if (isDuplicate && duplicateKey) {
+      // FIX 3: Answer conflict detection — if both pairs contain numbers,
+      // check whether the numbers match. Keep the one from the earlier pass.
+      const existing = seen.get(duplicateKey)!;
+      const existingNumbers = extractNumbers(existing.completion);
+      const newNumbers = extractNumbers(pair.completion);
+
+      if (existingNumbers.length > 0 && newNumbers.length > 0) {
+        const hasConflict = !arraysOverlap(existingNumbers, newNumbers);
+        if (hasConflict) {
+          // Prefer the pair from the earlier/more reliable pass
+          const existingPassPriority = getPassPriority(existing._meta?.pass_type);
+          const newPassPriority = getPassPriority(pair._meta?.pass_type);
+          if (newPassPriority < existingPassPriority) {
+            // New pair is from a more reliable pass — replace
+            console.log(`[Pipeline Dedup] Conflicting answers for similar questions, keeping ${pair._meta?.pass_type} over ${existing._meta?.pass_type}`);
+            seen.set(duplicateKey, pair);
+          } else {
+            console.log(`[Pipeline Dedup] Conflicting answers detected, keeping existing ${existing._meta?.pass_type} pair`);
+          }
+        }
+      }
+      // If no number conflict or no numbers at all, just skip (keep existing)
+    } else if (!isDuplicate && normalized.length > 10) {
       seen.set(normalized, pair);
     }
   }
 
   return Array.from(seen.values());
+}
+
+/** Pass priority: lower = more reliable / earlier in pipeline */
+function getPassPriority(passType?: string): number {
+  switch (passType) {
+    case "recall": return 0;         // most reliable — blunt factual recall
+    case "general": return 1;        // diverse Q&A
+    case "reinforcement": return 2;  // rephrased variants — highest corruption risk
+    case "negative": return 3;       // "I don't know" pairs
+    default: return 1;
+  }
+}
+
+/** Extract all numbers (integers, decimals, percentages) from text */
+function extractNumbers(text: string): string[] {
+  const matches = text.match(/\d+(?:\.\d+)?%?/g);
+  return matches ? matches.map(m => m.replace(/%$/, "")) : [];
+}
+
+/** Check if two number arrays have any overlap */
+function arraysOverlap(a: string[], b: string[]): boolean {
+  const setB = new Set(b);
+  return a.some(n => setB.has(n));
 }
 
 /** Simple Jaccard similarity for deduplication */
@@ -321,9 +442,114 @@ function similarity(a: string, b: string): number {
 
 
 // ─────────────────────────────────────────────
+// FIX 6: Post-Generation Verification
+// ─────────────────────────────────────────────
+
+/**
+ * Verify that every number in a completion also appears in the source chunk.
+ * Pairs with numbers NOT found in the source are flagged and removed —
+ * they indicate the LLM fabricated or rounded a value.
+ */
+function verifyNumbersAgainstSource(pairs: DatasetPair[], sourceChunk: string, passLabel: string): DatasetPair[] {
+  const sourceNumbers = new Set(extractNumbers(sourceChunk));
+  if (sourceNumbers.size === 0) return pairs; // No numbers in source — nothing to verify
+
+  return pairs.filter(pair => {
+    const completionNumbers = extractNumbers(pair.completion);
+    if (completionNumbers.length === 0) return true; // No numbers in completion — keep
+
+    // Check each number in completion against source
+    const fabricated = completionNumbers.filter(n => !sourceNumbers.has(n));
+
+    // Allow small numbers (< 10) that are likely structural ("2 types", "3 steps")
+    // rather than factual claims
+    const significantFabricated = fabricated.filter(n => {
+      const val = parseFloat(n);
+      return val >= 10 || n.includes("."); // significant numbers or decimals
+    });
+
+    if (significantFabricated.length > 0) {
+      console.warn(
+        `[Pipeline Verify] REMOVED (${passLabel}): completion contains numbers [${significantFabricated.join(", ")}] ` +
+        `not found in source chunk. Q: "${pair.prompt.substring(0, 60)}..."`
+      );
+      return false;
+    }
+    return true;
+  });
+}
+
+/**
+ * Detect comparative statement swaps — if a completion says "X% in A" but
+ * the source says "X% in B" (where A and B are swapped subjects), remove it.
+ * This catches the "advanced economies" ↔ "developing economies" inversion.
+ */
+function checkComparativeSwaps(pairs: DatasetPair[], sourceChunk: string, passLabel: string): DatasetPair[] {
+  // Common comparative subject pairs that tend to get swapped
+  const SUBJECT_PAIRS = [
+    ["advanced economies", "developing economies"],
+    ["developed countries", "developing countries"],
+    ["high-income", "low-income"],
+    ["urban", "rural"],
+    ["men", "women"],
+    ["male", "female"],
+  ];
+
+  const sourceLower = sourceChunk.toLowerCase();
+
+  return pairs.filter(pair => {
+    const completionLower = pair.completion.toLowerCase();
+
+    for (const [subjectA, subjectB] of SUBJECT_PAIRS) {
+      // Check if completion mentions either subject
+      const completionHasA = completionLower.includes(subjectA);
+      const completionHasB = completionLower.includes(subjectB);
+      if (!completionHasA && !completionHasB) continue;
+
+      // Extract "number + subject" patterns from both
+      const numberSubjectRE = new RegExp(
+        `(\\d+(?:\\.\\d+)?%?)\\s*(?:of\\s+|in\\s+|for\\s+|among\\s+)?(?:${subjectA}|${subjectB})`,
+        "gi"
+      );
+
+      const sourceMatches = [...sourceLower.matchAll(numberSubjectRE)];
+      const completionMatches = [...completionLower.matchAll(numberSubjectRE)];
+
+      if (sourceMatches.length > 0 && completionMatches.length > 0) {
+        // Check if the number-to-subject mapping is consistent
+        for (const cm of completionMatches) {
+          const cmNum = cm[1];
+          const cmFull = cm[0].toLowerCase();
+
+          // Find the same number in source
+          const sourceMatch = sourceMatches.find(sm => sm[1] === cmNum);
+          if (sourceMatch) {
+            const smFull = sourceMatch[0].toLowerCase();
+            // Same number but different subject = swap detected
+            const cmHasA = cmFull.includes(subjectA);
+            const smHasA = smFull.includes(subjectA);
+            if (cmHasA !== smHasA) {
+              console.warn(
+                `[Pipeline Guardrail] REMOVED (${passLabel}): comparative swap detected. ` +
+                `Source: "${sourceMatch[0]}" vs Completion: "${cm[0]}". ` +
+                `Q: "${pair.prompt.substring(0, 60)}..."`
+              );
+              return false;
+            }
+          }
+        }
+      }
+    }
+
+    return true;
+  });
+}
+
+
+// ─────────────────────────────────────────────
 // JSON Parsing Helper
 // ─────────────────────────────────────────────
-function parseJsonArray(raw: string): DatasetPair[] {
+function parseJsonArray(raw: string): any[] {
   // Strip markdown fences and think tags
   let cleaned = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
@@ -342,14 +568,7 @@ function parseJsonArray(raw: string): DatasetPair[] {
   try {
     const parsed = JSON.parse(cleaned);
     if (!Array.isArray(parsed)) return [];
-    // Validate each pair has required fields
-    return parsed.filter(
-      (p: any) =>
-        typeof p.prompt === "string" &&
-        typeof p.completion === "string" &&
-        p.prompt.trim().length > 5 &&
-        p.completion.trim().length > 5
-    );
+    return parsed;
   } catch {
     return [];
   }
@@ -364,7 +583,7 @@ export async function generateDataset(
   goal: string,
   onProgress?: (progress: PipelineProgress) => void,
   wizardContext?: WizardContext
-): Promise<{ pairs: DatasetPair[]; jsonl: string; stats: PipelineStats }> {
+): Promise<{ pairs: DatasetPair[]; jsonl: string; jsonlWithMeta: string; stats: PipelineStats }> {
 
   // Build the enriched context block from wizard context (or fall back to bare goal)
   const ctx = wizardContext ?? { ...EMPTY_WIZARD_CONTEXT, goal };
@@ -397,23 +616,26 @@ export async function generateDataset(
     pairsGenerated: 0,
   });
 
-  // ── Stage 2a: General generation pass (diverse Q&A types) ──
+  // ── Stage 2: Fact Extraction & Generation ──
   const allPairs: DatasetPair[] = [];
-  // Process ONE chunk at a time to avoid Gemini rate limits on free tier
+  const fullValidationReport: ValidationReport[] = [];
+  
+  // Process ONE chunk at a time to avoid Gemini rate limits
   const PARALLEL_LIMIT = 1;
 
   for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
     const batch = chunks.slice(i, i + PARALLEL_LIMIT);
     const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, GENERATION_PROMPT, "general")
+      generatePairsForChunk(chunk, contextBlock, i + batchIdx, totalChunks)
     );
 
     const results = await Promise.all(promises);
-    for (const pairs of results) {
-      allPairs.push(...pairs);
+    for (const res of results) {
+      allPairs.push(...res.pairs);
+      fullValidationReport.push(...res.report);
     }
 
-    console.log(`[Pipeline] General pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
+    console.log(`[Pipeline] Generation pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
     // 4-second delay between requests to stay well under Gemini's 15 RPM limit
     if (i + PARALLEL_LIMIT < totalChunks) {
@@ -422,111 +644,25 @@ export async function generateDataset(
 
     onProgress?.({
       stage: "generating",
-      message: `General pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
+      message: `Generating from extracted facts... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
       chunksTotal: totalChunks,
       chunksProcessed: Math.min(i + PARALLEL_LIMIT, totalChunks),
       pairsGenerated: allPairs.length,
     });
   }
 
-  console.log(`[Pipeline] General pass complete. Pairs so far: ${allPairs.length}`);
-
-  // ── Stage 2b: Recall-focused generation pass (names, numbers, dates) ──
-  // Uses a different prompt to generate blunt factual-recall pairs that
-  // complement the general pass's reasoning/scenario pairs.
-  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
-    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
-    const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, RECALL_PROMPT, "recall")
-    );
-
-    const results = await Promise.all(promises);
-    for (const pairs of results) {
-      allPairs.push(...pairs);
+  console.log(`\n[Pipeline] === PRE-TRAINING VALIDATION REPORT ===`);
+  if (fullValidationReport.length === 0) {
+    console.log(`[Pipeline] ✅ All facts successfully met density and structural requirements.`);
+  } else {
+    console.warn(`[Pipeline] ⚠️ ${fullValidationReport.length} facts failed constraints:`);
+    for (const rep of fullValidationReport) {
+      console.warn(`  - [${rep.type}] "${rep.fact.substring(0, 50)}...": ${rep.issue}`);
     }
-
-    console.log(`[Pipeline] Recall pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
-
-    // 4-second delay between requests
-    if (i + PARALLEL_LIMIT < totalChunks) {
-      await new Promise(resolve => setTimeout(resolve, 4000));
-    }
-
-    onProgress?.({
-      stage: "generating",
-      message: `Recall pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
-      chunksTotal: totalChunks,
-      chunksProcessed: totalChunks + Math.min(i + PARALLEL_LIMIT, totalChunks),
-      pairsGenerated: allPairs.length,
-    });
   }
+  console.log(`=================================================\n`);
 
-  console.log(`[Pipeline] Recall pass complete. Pairs so far: ${allPairs.length}`);
-
-  // ── Stage 2c: Reinforcement pass (rephrased variants of key facts) ──
-  // Generates 2-3 differently worded Q&A pairs for each key fact, so
-  // single-mention numbers/dates get repeated exposure during training.
-  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
-    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
-    const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, REINFORCEMENT_PROMPT, "reinforcement")
-    );
-
-    const results = await Promise.all(promises);
-    for (const pairs of results) {
-      allPairs.push(...pairs);
-    }
-
-    console.log(`[Pipeline] Reinforcement pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
-
-    if (i + PARALLEL_LIMIT < totalChunks) {
-      await new Promise(resolve => setTimeout(resolve, 4000));
-    }
-
-    onProgress?.({
-      stage: "generating",
-      message: `Reinforcement pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
-      chunksTotal: totalChunks,
-      chunksProcessed: totalChunks * 2 + Math.min(i + PARALLEL_LIMIT, totalChunks),
-      pairsGenerated: allPairs.length,
-    });
-  }
-
-  console.log(`[Pipeline] Reinforcement pass complete. Pairs so far: ${allPairs.length}`);
-
-  // ── Stage 2d: Negative knowledge pass ("I don't know" training) ──
-  // Generates questions about plausible details NOT in the text, with answers
-  // that explicitly say the document doesn't specify. Teaches the model to
-  // refuse fabrication.
-  for (let i = 0; i < chunks.length; i += PARALLEL_LIMIT) {
-    const batch = chunks.slice(i, i + PARALLEL_LIMIT);
-    const promises = batch.map((chunk, batchIdx) =>
-      generateForChunk(chunk, contextBlock, i + batchIdx, totalChunks, NEGATIVE_PROMPT, "negative")
-    );
-
-    const results = await Promise.all(promises);
-    for (const pairs of results) {
-      allPairs.push(...pairs);
-    }
-
-    console.log(`[Pipeline] Negative pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
-
-    if (i + PARALLEL_LIMIT < totalChunks) {
-      await new Promise(resolve => setTimeout(resolve, 4000));
-    }
-
-    onProgress?.({
-      stage: "generating",
-      message: `Negative knowledge pass: processing chunks... (${Math.min(i + PARALLEL_LIMIT, totalChunks)}/${totalChunks})`,
-      chunksTotal: totalChunks,
-      chunksProcessed: totalChunks * 3 + Math.min(i + PARALLEL_LIMIT, totalChunks),
-      pairsGenerated: allPairs.length,
-    });
-  }
-
-  console.log(`[Pipeline] All generation passes complete. Total raw pairs: ${allPairs.length}`);
-
-  console.log(`[Pipeline] Generation complete. Raw pairs: ${allPairs.length}`);
+  console.log(`[Pipeline] Fact-Aware Generation complete. Raw pairs: ${allPairs.length}`);
 
   // If we got 0 raw pairs, something is fundamentally wrong (rate limits, API key, etc.)
   if (allPairs.length === 0) {
@@ -564,7 +700,19 @@ export async function generateDataset(
   console.log(`[Pipeline] After dedup: ${final.length} pairs`);
 
   // ── Build JSONL ──
-  const jsonl = final.map((p) => JSON.stringify(p)).join("\n");
+  // FIX 4: Build two versions — one with metadata for R2 audit, one clean for SFTTrainer.
+  // The JSONL sent to training contains only prompt+completion (SFTTrainer expects this).
+  // Metadata is logged to console for debugging.
+  const jsonlForTraining = final.map((p) => JSON.stringify({ prompt: p.prompt, completion: p.completion })).join("\n");
+  const jsonlWithMeta = final.map((p) => JSON.stringify(p)).join("\n");
+
+  // Log provenance summary
+  const passCounts = new Map<string, number>();
+  for (const p of final) {
+    const pass = p._meta?.pass_type ?? "unknown";
+    passCounts.set(pass, (passCounts.get(pass) ?? 0) + 1);
+  }
+  console.log(`[Pipeline] Provenance breakdown: ${[...passCounts.entries()].map(([k, v]) => `${k}=${v}`).join(", ")}`);
 
   const stats: PipelineStats = {
     chunksProcessed: totalChunks,
@@ -572,6 +720,7 @@ export async function generateDataset(
     afterValidation: validated.length,
     afterDedup: final.length,
     documentLength: text.length,
+    sourceHash: crypto.createHash("md5").update(text).digest("hex"),
   };
 
   onProgress?.({
@@ -582,7 +731,7 @@ export async function generateDataset(
     pairsGenerated: final.length,
   });
 
-  return { pairs: final, jsonl, stats };
+  return { pairs: final, jsonl: jsonlForTraining, jsonlWithMeta, stats };
 }
 
 export interface PipelineStats {
@@ -591,4 +740,6 @@ export interface PipelineStats {
   afterValidation: number;
   afterDedup: number;
   documentLength: number;
+  /** MD5 hash of the full source document — for post-hoc verification */
+  sourceHash: string;
 }

@@ -53,10 +53,12 @@ export async function POST(req: Request) {
           base_model: baseModel,  // Pass the user's chosen model
           dataset_url: datasetUrl,
           webhook_url: webhookUrl,
-          num_train_epochs: config?.epochs ?? 1,
+          num_train_epochs: config?.epochs ?? 3,          // Bumped 1→3: single epoch is too few for 200-300 record datasets with dense stats
           learning_rate: config?.learningRate ?? 0.00005,
           ...(config?.maxSeqLength ? { max_seq_length: config.maxSeqLength } : {}),
-          max_steps: 200,  // Hard cap for cost control — enough for 100+ example datasets
+          max_steps: config?.maxSteps ?? 500,             // Bumped 200→500: allows 3 full epochs over ~250 records
+          lora_r: config?.loraR ?? 16,                    // Keep at 16: r=32 risks overfitting on <300 records (research consensus)
+          lora_alpha: config?.loraAlpha ?? 32,             // 2x rank = industry best practice for adapter influence
           // Pass R2 credentials so Modal can upload the trained adapter
           r2_endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
           r2_access_key: process.env.R2_ACCESS_KEY_ID,

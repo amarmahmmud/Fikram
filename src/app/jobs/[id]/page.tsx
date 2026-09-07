@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
 import { apiClient } from "@/lib/apiClient";
-import { Globe } from "lucide-react";
+import { Globe, RotateCcw } from "lucide-react";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -190,6 +190,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           <div className={styles.headerActions}>
             {isCompleted && (
               <>
+                <Link
+                  href={`/new-job?retrain=${job.id}`}
+                  className="btn btn-sm btn-secondary"
+                  style={{ gap: 6 }}
+                >
+                  <RotateCcw size={14} />
+                  Retrain
+                </Link>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => setPublishModalOpen(true)}
@@ -205,6 +213,16 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   ▷ Test in Playground
                 </Link>
               </>
+            )}
+            {isFailed && job.dataset_url && (
+              <Link
+                href={`/new-job?retrain=${job.id}`}
+                className="btn btn-sm btn-primary"
+                style={{ gap: 6 }}
+              >
+                <RotateCcw size={14} />
+                Retry Training
+              </Link>
             )}
             {job.dataset_url && (
               <a href={job.dataset_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
@@ -303,6 +321,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                     style={{ textAlign: "center" }}
                   >
                     ▷ Test in Playground
+                  </Link>
+                )}
+
+                {(isCompleted || (isFailed && job.dataset_url)) && (
+                  <Link
+                    href={`/new-job?retrain=${job.id}`}
+                    className="btn btn-secondary w-full"
+                    style={{ textAlign: "center", gap: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
+                  >
+                    <RotateCcw size={14} />
+                    {isFailed ? "Retry with Same Dataset" : "Retrain with New Parameters"}
                   </Link>
                 )}
 

@@ -1,0 +1,442 @@
+[
+  {
+    "index": 0,
+    "prompt": "What percentage of U.S. work hours does McKinsey estimate generative AI could automate by 2030?",
+    "completion": "According to McKinsey Global Institute, generative AI could automate activities equivalent to 29.5% of current U.S. work hours by 2030, an increase from the pre-generative AI baseline estimate of 21.5%."
+  },
+  {
+    "index": 158,
+    "prompt": "How do McKinsey's actual expected work-hour automation projections by 2030 compare to the total technical potential?",
+    "completion": "McKinsey projects that generative AI could push automatable work-hours in the U.S. to 29.5% (or up to 30% across the economy) by 2030. However, the broader technical automation potential reaches 60–70% of activities when combined with pre-generative automation, illustrating a gap between technical feasibility and actual economic adoption."
+  },
+  {
+    "index": 1,
+    "prompt": "What are the key findings from Goldman Sachs regarding global job exposure to AI automation?",
+    "completion": "Goldman Sachs estimates that roughly two-thirds of U.S. and European jobs are exposed to some degree of AI automation, representing the equivalent of 300 million full-time jobs exposed globally."
+  },
+  {
+    "index": 150,
+    "prompt": "According to Goldman Sachs research from 2023, what scale of global employment is exposed to AI, and which sectors are flagged as most exposed?",
+    "completion": "Goldman Sachs estimated that Generative AI could expose the equivalent of 300 million full-time jobs globally to automation, substituting up to a quarter of current work tasks. Legal and administrative roles were flagged as the most exposed."
+  },
+  {
+    "index": 199,
+    "prompt": "How many global full-time jobs are exposed to AI automation according to Goldman Sachs?",
+    "completion": "Goldman Sachs estimates that the equivalent of 300 million full-time jobs globally are exposed to AI automation."
+  },
+  {
+    "index": 2,
+    "prompt": "According to the IMF, how does AI exposure differ between global employment and advanced economies?",
+    "completion": "The IMF finds that 40% of global employment is exposed to AI, but that exposure rises significantly to 60% when looking specifically at advanced economies."
+  },
+  {
+    "index": 149,
+    "prompt": "What is the global employment exposure to AI according to the IMF, and why does it differ between advanced and developing economies?",
+    "completion": "The IMF estimates that roughly 40% of global employment is exposed to AI. Exposure rises to about 60% in advanced economies compared to roughly 30% in developing economies like India, primarily reflecting differences in the share of the workforce engaged in agriculture."
+  },
+  {
+    "index": 201,
+    "prompt": "What percentage of global employment does the IMF find to be exposed to AI?",
+    "completion": "The IMF finds that 40% of global employment is exposed to AI."
+  },
+  {
+    "index": 4,
+    "prompt": "What are the World Economic Forum's projections regarding job displacement, job creation, and core skill requirements by 2030?",
+    "completion": "The WEF projects 92 million jobs will be displaced and 170 million created by 2030—yielding a net gain of 78 million jobs. However, this comes with immense market churn and a requirement that workers relearn 39% of their core skills."
+  },
+  {
+    "index": 146,
+    "prompt": "What did the World Economic Forum's Future of Jobs Report 2025 project regarding global job displacement, creation, and skill longevity?",
+    "completion": "The WEF Future of Jobs Report 2025 projected that 92 million jobs will be displaced while 170 million are created, yielding a net gain of 78 million jobs by 2030. However, 39% of core workforce skills are expected to become outdated by 2030, and 59% of the global workforce will require reskilling."
+  },
+  {
+    "index": 205,
+    "prompt": "How many jobs does the World Economic Forum project will be displaced by 2030?",
+    "completion": "The World Economic Forum's 2025 Future of Jobs Report projects 92 million jobs will be displaced by 2030."
+  },
+  {
+    "index": 206,
+    "prompt": "What is the net job creation projected by the World Economic Forum by 2030?",
+    "completion": "The World Economic Forum projects a net gain of 78 million jobs by 2030 (170 million created minus 92 million displaced)."
+  },
+  {
+    "index": 148,
+    "prompt": "Which specific occupations were highlighted by the U.S. Bureau of Labor Statistics as facing notable declines due to AI and automated systems?",
+    "completion": "The U.S. Bureau of Labor Statistics explicitly cited office and administrative support occupations as declining. Cashiers are projected to lose the largest absolute number of positions (over 350,000), while word processors and typists represent the fastest-shrinking occupation by percentage."
+  },
+  {
+    "index": 106,
+    "prompt": "Why do major labor market studies conclude that AI causes task substitution rather than total occupation elimination?",
+    "completion": "Institutional studies (McKinsey, WEF, Goldman Sachs, IMF, OpenAI) emphasize that jobs are bundles of diverse tasks. AI targets specific routine or repetitive tasks within a role, altering the work mix (task substitution) rather than wiping out entire occupational classifications."
+  },
+  {
+    "index": 175,
+    "prompt": "Why are advanced models like GPT-4, Claude, and Gemini considered the primary technical drivers behind recent institutional labor exposure reports?",
+    "completion": "These model generations extended capabilities beyond short-form drafting into long-context reasoning, multi-step research, and autonomous execution, forming the technical foundation for task-exposure estimates produced by institutions like OpenAI/Penn, McKinsey, and Goldman Sachs."
+  },
+  {
+    "index": 198,
+    "prompt": "What was McKinsey's pre-generative-AI baseline estimate for U.S. work hour automation?",
+    "completion": "The pre-generative-AI baseline estimated by McKinsey Global Institute was 21.5% of U.S. work hours."
+  },
+  {
+    "index": 228,
+    "prompt": "Which research organizations' findings are cited regarding task exposure versus occupational elimination?",
+    "completion": "The research findings cited are from McKinsey, OpenAI/Penn, and Goldman Sachs."
+  },
+  {
+    "index": 98,
+    "prompt": "What is the World Economic Forum's (WEF) 2025 finding regarding the 'skills half-life' by 2030?",
+    "completion": "The WEF 2025 report identifies a 39% 'skills half-life,' meaning that 39% of core job skills are expected to become outdated by 2030, signaling rapid skill evolution rather than total occupational elimination."
+  },
+  {
+    "index": 112,
+    "prompt": "What specific occupations are flagged by the WEF and BLS in this text as facing outright category decline?",
+    "completion": "The occupations explicitly flagged for outright category decline are typists, switchboard operators, data-entry clerks, and telemarketers. These roles are characterized by narrow, clerical workflows that were already shrinking prior to the emergence of ChatGPT due to earlier software automation waves."
+  },
+  {
+    "index": 124,
+    "prompt": "What is the difference between job category evolution and job category extinction according to WEF and BLS data?",
+    "completion": "Job evolution occurs when the underlying tools change but the core role adapts by shifting toward higher-level judgment and strategic tasks. Job extinction occurs in narrow, highly clerical roles where task execution is entirely automated and no human judgment or relationship layer is required to complete the process."
+  },
+  {
+    "index": 7,
+    "prompt": "How do overall job loss projections compare to job creation projections in major institutional labor forecasts?",
+    "completion": "Institutional forecasts do not predict net mass unemployment as a baseline. For instance, the World Economic Forum projects a net positive gain of 78 million jobs by 2030. Disruption manifests as high task-level churn and reskilling requirements rather than pure job count reduction."
+  },
+  {
+    "index": 9,
+    "prompt": "How should a job seeker adapt their skill development strategy based on the World Economic Forum's reskilling projections?",
+    "completion": "Given that 39% of core skills will need to be relearned by 2030, job seekers should prioritize continuous adaptability over static expertise. Build direct proficiency with generative and predictive AI tools in your field (moving from AI-naive to AI-augmented) while sharpening non-codifiable human skills such as complex stakeholder management, strategic judgment, and oversight."
+  },
+  {
+    "index": 207,
+    "prompt": "What percentage of core skills must be relearned by 2030 according to the World Economic Forum?",
+    "completion": "The World Economic Forum projects that 39% of core skills will need to be relearned by 2030."
+  },
+  {
+    "index": 6,
+    "prompt": "What is the primary source of career risk for workers who retain the exact same job title through 2030?",
+    "completion": "The primary risk is task-level obsolescence and a widening productivity gap between AI-augmented workers and AI-naive workers within the same role. Even if a job title remains intact, the daily task structure and expected output baseline will change dramatically."
+  },
+  {
+    "index": 55,
+    "prompt": "What is the key difference in risk level and timeline between Junior Developers and Senior Developers?",
+    "completion": "Junior developers face **High risk (Now–2027)** due to heavy exposure in routine coding tasks like unit tests and boilerplate code. Senior/staff developers face **Low–Medium risk (2027–2030)** because their primary value rests in high-judgment areas like system architecture, cross-team strategy, and AI-agent supervision."
+  },
+  {
+    "index": 67,
+    "prompt": "How does the AI risk exposure of K-12 teachers differ from subject-specific tutors?",
+    "completion": "• K-12 Teachers (Low Risk, Beyond 2030): While lesson planning and grading can be automated, the core functions—classroom management, physical supervision, mentorship, and emotional development—require human presence.\n• Subject-Specific Tutors (Medium–High Risk, Now–2028): Basic explanation and practice problems are easily offloaded to AI platforms. Tutors must transition toward student motivation coaching and tailored learning-plan design to maintain value."
+  },
+  {
+    "index": 72,
+    "prompt": "How does the risk profile and evolution path of a Nurse compare to that of a Pharmacist?",
+    "completion": "• Nurses (Low Risk, Beyond 2030): Routine documentation and vitals logging will automate, but direct physical care remains inherently human and difficult to automate.\n• Pharmacists (Medium Risk, 2026–2030): Dispensing checks and drug-interaction verification are highly algorithmic. Pharmacists face higher task disruption and must evolve into clinical consultants and medication therapy managers."
+  },
+  {
+    "index": 73,
+    "prompt": "Why are Litigators and Trial Lawyers evaluated at Low Risk for AI automation compared to Legal Researchers?",
+    "completion": "Legal research and memo drafting rely heavily on static text parsing ('language-in, language-out'), making research roles High Risk (Now–2028). Litigators (Low Risk, Beyond 2030) depend on physical courtroom advocacy, real-time jury persuasion, spontaneous cross-examination, and high-stakes interpersonal negotiation, which current AI models cannot replicate."
+  },
+  {
+    "index": 76,
+    "prompt": "I work as a retail pharmacist spending most of my day checking drug interactions and verification. What is my exposure, and what steps should I take?",
+    "completion": "• Risk Profile: Medium Risk (2026–2030 timeline) as software automates dispensing verification and interaction checks.\n• Actionable Steps:\n  1. Integrate automated verification software to speed up administrative workflow.\n  2. Pivot clinical focus toward direct patient consultations, chronic disease management, and outcome-focused medication therapy management (MTM)."
+  },
+  {
+    "index": 78,
+    "prompt": "What tasks in mental health counseling are suitable for AI automation, and why does the overall role remain low risk?",
+    "completion": "• Automatable Tasks: Intake notes, session scheduling, and basic psychoeducation material generation.\n• Why Role Risk is Low (Beyond 2030): The therapeutic relationship—trust, empathy, emotional attunement, and human presence—is the core engine of positive clinical outcomes and remains one of the least automatable functions in the workforce."
+  },
+  {
+    "index": 105,
+    "prompt": "What is the difference in AI risk exposure between Tier-1 call center agents and Tier-2/3 support specialists?",
+    "completion": "Tier-1 agents face Very High risk (Now–2026) due to predictable FAQ and routine transactional tasks. Tier-2/3 specialists face Medium risk (2027–2030) because while troubleshooting scripts and ticket triage will automate, complex technical diagnosis and critical customer relationship recovery still require human intervention."
+  },
+  {
+    "index": 131,
+    "prompt": "According to the resistance factors framework, which physical trades are expected to remain among the most durable against AI disruption through 2030?",
+    "completion": "Skilled trades requiring physical dexterity, mobility, and adaptability to unstructured environments—such as plumbing, electrical work, elder care, and construction—are expected to remain among the most durable, AI-resistant careers."
+  },
+  {
+    "index": 163,
+    "prompt": "What score range on the personal AI exposure rubric corresponds to an 'AI-Proof' rating, and what does it signify for a worker?",
+    "completion": "A score of 0–25 indicates an 'AI-Proof' rating. This signifies that your job is safe for the foreseeable future, with AI functioning as a peripheral tool rather than a core threat through at least 2030."
+  },
+  {
+    "index": 192,
+    "prompt": "How do viral media automation headlines differ from the actual economic factors mediating AI adoption through 2030?",
+    "completion": "Viral headlines often project immediate, sweeping job elimination. In contrast, real-world AI adoption through 2030 is gradual, uneven, and heavily constrained by institutional factors such as regulation, legal liability, trust barriers, adoption costs, and hardware limitations."
+  },
+  {
+    "index": 197,
+    "prompt": "What timeframe does The Complete AI Job Replacement Intelligence Report cover?",
+    "completion": "The report covers the timeframe from 2024 to 2030."
+  },
+  {
+    "index": 247,
+    "prompt": "What core legal functions remain unautomated for litigators beyond 2030?",
+    "completion": "Courtroom advocacy, jury persuasion, and complex negotiation remain firmly human functions for litigators."
+  },
+  {
+    "index": 248,
+    "prompt": "What is the timeline and risk level for therapists and counselors?",
+    "completion": "Therapists and counselors face a Low risk level with an exposure timeline Beyond 2030, as the therapeutic relationship itself is the least automatable service in healthcare."
+  },
+  {
+    "index": 122,
+    "prompt": "Why do economic institutions like the IMF view Generative AI as structurally different from previous technological waves like spreadsheets or factory automation?",
+    "completion": "Prior general-purpose technologies primarily automated physical or routine arithmetic tasks, naturally reserving cognitive and language judgment for human workers. Generative AI is the first technology to directly automate cognitive and language tasks, meaning historical patterns of slow labor displacement may not repeat on the same timeline or with the same safety nets."
+  },
+  {
+    "index": 157,
+    "prompt": "What is the difference between AI-complemented workers and AI-substituted workers according to the IMF?",
+    "completion": "AI-complemented workers leverage AI tools to increase their productivity and output value, gaining structural economic advantages. AI-substituted workers perform tasks that AI can handle autonomously, facing job displacement or wage suppression. The IMF warns this dynamic creates a widening income-inequality effect."
+  },
+  {
+    "index": 202,
+    "prompt": "According to the IMF, what percentage of employment in advanced economies is exposed to AI?",
+    "completion": "The IMF finds that 60% of employment in advanced economies is exposed to AI."
+  },
+  {
+    "index": 8,
+    "prompt": "How can an individual worker apply task decomposition to evaluate their personal exposure to AI automation?",
+    "completion": "To evaluate exposure using task decomposition:\n1. Audit your daily role and list your core recurring tasks individually rather than treating your job as a single static title.\n2. Categorize each task as either routine/codifiable (high exposure) or judgment-heavy/unstructured (low exposure).\n3. Calculate the percentage of your weekly hours spent on codifiable tasks.\n4. Focus your upskilling efforts on expanding the high-judgment, uncodifiable portion of your workload."
+  },
+  {
+    "index": 20,
+    "prompt": "How should a software developer evaluate their personal task exposure in light of recent autonomous coding agent capabilities?",
+    "completion": "Conduct a task-level audit of your workday:\n1. High Exposure Tasks: Writing boilerplate code, setting up basic project scaffolding, and resolving well-scoped, isolated bugs (tasks where AI agents achieve 70–77% autonomous success).\n2. Actionable Augmentation Strategy: Transition your focus up-stack toward system architecture, security auditing, multi-system integrations, and translating complex stakeholder requirements into actionable agent prompts."
+  },
+  {
+    "index": 21,
+    "prompt": "How can a professional translator adapt their career strategy given current capabilities in neural machine translation (NMT)?",
+    "completion": "Because NMT combined with LLM post-editing provides publication-quality translation for high-volume, non-literary business text, simple first-pass translation has high exposure.\n\nStrategy for Augmentation:\n- Reposition your service model around specialized post-editing, brand-voice alignment, culturally nuanced localization, and high-stakes legal or literary accuracy where context and nuanced human judgment are critical."
+  },
+  {
+    "index": 25,
+    "prompt": "Why is static image generation considered high-exposure for concept art creation but lower-exposure for overall brand direction?",
+    "completion": "Static image tools (Midjourney, DALL-E, Adobe Firefly) can rapidly execute visual assets from prompts, placing raw concept art and stock photography at high risk of displacement. However, overall brand direction requires synthesizing market positioning, client consensus, long-term campaign cohesion, and cross-channel strategy—tasks that extend beyond static asset generation."
+  },
+  {
+    "index": 26,
+    "prompt": "Compare the exposure risk of a data entry specialist against that of a data quality auditor.",
+    "completion": "Task Exposure Comparison:\n- Data Entry Specialist (High Risk): Responsible for extracting, entering, and reconciling structured forms—tasks that OCR and LLM pipelines handle faster and with comparable or superior accuracy.\n- Data Quality Auditor (Lower Risk): Responsible for setting data governance policy, handling automated pipeline edge cases, verifying compliance, and investigating complex anomalies."
+  },
+  {
+    "index": 28,
+    "prompt": "If a job seeker's daily responsibilities consist primarily of drafting routine memos, summarizing meetings, and managing basic correspondence, how should they score their career exposure?",
+    "completion": "Exposure Score: High Exposure (80%+ of core tasks automated or significantly assisted by AI).\n\nActionable Pivot Plan:\n1. Integrate LLMs immediately to execute first-pass drafts and summaries in a fraction of the time.\n2. Reallocate saved bandwidth to cross-departmental project management, operational problem-solving, and strategic communication that requires organizational context."
+  },
+  {
+    "index": 29,
+    "prompt": "If an entry-level software tester spends most of their day writing standard unit tests and well-scoped bug fixes, what risk-mitigation steps should they take?",
+    "completion": "Exposure Assessment: High exposure, given that agentic tools solve 70–77% of well-scoped code tasks autonomously.\n\nRecommended Action Plan:\n1. Master AI coding assistants (Cursor, Copilot agent mode) to automate your standard test writing.\n2. Develop expertise in end-to-end system architecture testing, security vulnerability assessment, and complex integration edge cases where automated agents struggle."
+  },
+  {
+    "index": 31,
+    "prompt": "What is the 'last mile problem' in AI labor disruption?",
+    "completion": "The 'last mile problem' refers to the gap between high task-level AI exposure (often 40–80%) and low actual occupation elimination. Because most jobs consist of a complex mix of tasks, automating routine elements does not eliminate the role entirely. Instead, AI automates specific sub-tasks, allowing fewer employees to handle higher workloads while the remaining unautomatable 'last mile' tasks—such as accountability, complex judgment, and client relationship management—keep the core human role intact."
+  },
+  {
+    "index": 36,
+    "prompt": "How can a knowledge worker apply the 'last mile' framework to conduct a personal task-exposure audit?",
+    "completion": "To audit your personal exposure:\n1. **Task Breakdown**: List your daily tasks and categorize them into automatable duties (e.g., drafting memos, summarizing data) versus unautomatable duties (e.g., client trust-building, strategic decision-making, taking professional responsibility).\n2. **Calculate Exposure Ratio**: Identify what percentage of your time is spent on 'last mile' tasks.\n3. **Augmentation Strategy**: Actively delegate routine tasks to AI tools while expanding your ownership of accountability, relationship management, and complex problem-solving to secure your role."
+  },
+  {
+    "index": 40,
+    "prompt": "What is the difference between task exposure percentage and occupational elimination rate?",
+    "completion": "Task exposure percentage measures the proportion of specific job duties AI can perform (e.g., 40–80% for many knowledge roles). Occupational elimination rate measures the actual percentage of jobs removed from the economy. The exposure rate is significantly higher than the elimination rate because roles contain heterogeneous tasks, and unbundling the remaining human-centric responsibilities into separate jobs is usually impractical."
+  },
+  {
+    "index": 44,
+    "prompt": "If a job seeker is evaluating two career paths—routine financial drafting versus complex M&A advisory—how should they analyze their long-term AI exposure?",
+    "completion": "The job seeker should favor complex M&A advisory. Routine financial drafting consists primarily of predictable summarization and document assembly, making it highly exposed to task automation. Conversely, M&A advisory relies heavily on multi-party negotiation, managing incomplete information, strategic relationship capital, and high-stakes decision-making under ambiguity—all areas where AI serves merely as a support tool rather than a replacement."
+  },
+  {
+    "index": 49,
+    "prompt": "What automatable tasks are identified for Junior/entry-level developers, and what role do they evolve into?",
+    "completion": "Junior/entry-level developers face task exposure in boilerplate code, unit tests, bug fixes, and documentation. The role evolves into an 'AI orchestrator' who reviews, integrates, and architects code rather than hand-writing every line."
+  },
+  {
+    "index": 52,
+    "prompt": "How would a Junior Developer apply an augmentation strategy to reduce their risk profile from High to manageable?",
+    "completion": "To reduce career exposure, transition from hand-writing code to becoming an 'AI orchestrator':\n1. **Shift Focus:** Delegate boilerplate code, unit testing, and basic bug fixes to autonomous AI coding tools.\n2. **Develop High-Level Skills:** Focus on reviewing AI-generated code, system integration, and software architecture.\n3. **Upskill in Oversight:** Position yourself as a manager of agentic workflow sessions rather than a purely manual code producer."
+  },
+  {
+    "index": 56,
+    "prompt": "How do the task exposure profiles and risk timelines of Execution Traders compare to Financial Advisors?",
+    "completion": "- **Traders (execution):** **High risk (Already underway)**. Manual order execution has largely been automated by algorithms, shifting the role to strategy design and risk oversight.\n- **Financial Advisors:** **Low–Medium risk (2028–2032)**. Routine portfolio rebalancing is automated, but the core role remains protected by human-centric tasks like behavioral coaching, trust-building, and complex estate/tax planning."
+  },
+  {
+    "index": 58,
+    "prompt": "Compare the automation profiles and evolutionary paths of Auditors versus Bookkeepers.",
+    "completion": "- **Bookkeepers/Junior Accountants:** **Very High risk (Now–2027)**. Heavy exposure to repetitive tasks (reconciliation, categorization) forces an evolution into advisory accounting and controller-level judgment.\n- **Auditors:** **Medium risk (2026–2029)**. Exposure is focused on sampling, anomaly detection, and documentation review, pushing the role to evolve into fraud investigation judgment and complex regulatory interpretation."
+  },
+  {
+    "index": 61,
+    "prompt": "How should a mid-level Auditor construct a personal task-exposure rubric to evaluate their day-to-day risk?",
+    "completion": "To evaluate your exposure, assess your weekly task distribution:\n- **High Exposure (Automated):** Percentage of time spent on standard sampling, basic anomaly detection, and routine documentation review.\n- **Low Exposure (Protected):** Percentage of time spent on non-standard regulatory interpretation, qualitative fraud investigation judgment, and client risk consultations.\n\n**Actionable Goal:** Actively minimize time spent on high-exposure administrative tasks by using AI audit tools, while expanding time allocated to high-judgment audit strategy."
+  },
+  {
+    "index": 62,
+    "prompt": "A financial advisor is worried that AI portfolio tools will render their job obsolete. What advice helps them remain resilient?",
+    "completion": "Financial advisors face a relatively low exposure timeline (**Low–Medium risk, 2028–2032**). AI will handle routine tasks like portfolio rebalancing and baseline financial plans. To maximize career resilience, position yourself around key non-automatable human skills:\n1. **Behavioral Coaching:** Guiding clients through emotional decision-making during market volatility.\n2. **Trust & Relationship Management:** Serving as a trusted human fiduciary.\n3. **Complex Problem Solving:** Tailoring multi-generational estate planning, trust structures, and nuanced tax strategies."
+  },
+  {
+    "index": 68,
+    "prompt": "As a paralegal, how should I restructure my daily tasks to defend against high AI automation risk?",
+    "completion": "To mitigate risk as routine legal research and document review become automated:\n1. Task Exposure Shift: Offload basic discovery review and research summary drafts to AI tools.\n2. Skill Augmentation: Develop higher-level competencies in case strategy support, client relationship liaison, and courtroom/logistical operations.\n3. Position as an AI Operator: Master legal-tech discovery platforms to audit and verify AI output efficiently."
+  },
+  {
+    "index": 74,
+    "prompt": "I am a financial advisor concerned about robo-advisors and portfolio rebalancing tools. How should I position my practice?",
+    "completion": "• Risk Level: Low–Medium (2028–2032 horizon).\n• Task Exposure: Automate portfolio rebalancing, basic asset allocation, and routine financial planning.\n• Value Shift: Transition your offering toward behavioral coaching, emotional guidance during market downturns, complex estate/tax planning, and intergenerational trust-building."
+  },
+  {
+    "index": 77,
+    "prompt": "I am a compliance officer handling routine regulatory monitoring and filings. How will AI impact my role?",
+    "completion": "• Risk Level: Medium (2026–2029 timeline).\n• Automatable Exposure: Routine compliance monitoring, anomaly flagging, and standard regulatory filings.\n• Strategic Evolution: Upskill in high-level regulatory interpretation, complex enforcement strategy, ethical AI governance, and nuanced judgment calls where legal precedents are ambiguous."
+  },
+  {
+    "index": 80,
+    "prompt": "Which tasks within curriculum design are identified as having high exposure to AI automation?",
+    "completion": "In curriculum design, first-draft content generation and alignment to educational standards are identified as highly automatable tasks, carrying a medium overall role risk with an estimated timeline of 2026–2029."
+  },
+  {
+    "index": 82,
+    "prompt": "What specific routine tasks are high exposure for Sales Development Representatives (SDRs)?",
+    "completion": "For Sales Development Representatives, routine lead prospecting, automated first-touch outreach messaging, and initial prospect qualification represent high-exposure tasks subject to rapid AI automation between now and 2027."
+  },
+  {
+    "index": 88,
+    "prompt": "What accounts for the difference in risk exposure and timeline between Sales Development Representatives (SDRs) and Account Executives (AEs)?",
+    "completion": "SDRs face High Risk (Now–2027) because prospecting and initial outreach rely on standardized data matching and predictable communication. Account Executives face Low–Medium Risk (2028–2031) because their core value centers on high-trust relationship building, nuanced political negotiation within buyer organizations, and complex deal closing."
+  },
+  {
+    "index": 90,
+    "prompt": "How does the task exposure profile of a commodity content writer differ from an investigative journalist?",
+    "completion": "Commodity content writing involves synthesizing existing web data into structured formats (listicles, basic SEO descriptions), making it highly exposed to LLM automation. Investigative reporting relies on unearthing non-public data, conducting live interviews, exercising editorial judgment, and offering distinct authorial voice—tasks resistant to algorithmic replacement."
+  },
+  {
+    "index": 96,
+    "prompt": "What core customer service tasks make Tier-1 call center agents face a Very High AI risk profile between now and 2026?",
+    "completion": "Tier-1 call center agents face high exposure because their primary tasks—such as standard FAQ resolution, checking order status, and performing password resets—are highly structured and easily automated by conversational AI."
+  },
+  {
+    "index": 117,
+    "prompt": "How can an individual worker audit their role to determine if AI will make them '10x more productive' versus 'obsolete'?",
+    "completion": "To audit your career risk, calculate what percentage of your core job value comes from throughput on well-specified tasks versus judgment, accountability, and relationship management:\n\n1. High Throughput Ratio: If your role consists predominantly of routine execution without a decision-making layer, exposure to automation and obsolescence is extremely high.\n2. High Judgment Ratio: If your role relies on directing tools, verifying edge cases, taking accountability, or managing human stakeholders, AI acts as a productivity multiplier (10x enablement)."
+  },
+  {
+    "index": 119,
+    "prompt": "What steps should a job seeker in a high-exposure clerical role take to re-position their career profile?",
+    "completion": "If your primary work involves routine throughput:\n\n1. Deconstruct your daily workload to isolate any underlying tasks involving complex decision-making, exception handling, or client relationships.\n2. Upskill in AI output oversight, learning how to prompt, audit, and validate AI systems relevant to your field.\n3. Reframe your resume around judgment, stakeholder communication, and quality assurance rather than operational volume."
+  },
+  {
+    "index": 123,
+    "prompt": "How does the AI risk exposure of a senior software engineer compare to that of a routine data-entry clerk?",
+    "completion": "A senior software engineer experiences low obsolescence risk and high 10x productivity potential because their value comes from architectural judgment, system oversight, and reviewing complex code. A data-entry clerk faces high obsolescence risk because their entire value proposition is raw throughput on structured tasks, which can be completely automated without requiring a human review layer."
+  },
+  {
+    "index": 125,
+    "prompt": "If a healthcare professional is worried about AI replacing medical diagnostics, how should they position their long-term career exposure using the Centaur Model?",
+    "completion": "The healthcare professional should embrace AI diagnostic tools as a productivity booster while emphasizing human-only domains: taking ultimate legal and ethical accountability, navigating complex tail-case exceptions where AI error rates rise, and providing direct patient empathy and treatment planning."
+  },
+  {
+    "index": 126,
+    "prompt": "If a financial analyst wants to build a personal resilience strategy against AI automation, what auditing framework should they use?",
+    "completion": "The analyst should execute a task exposure audit:\n\n1. Divide tasks into quantitative throughput (e.g., basic financial modeling, data collation) and strategic judgment (e.g., market risk interpretation, client advisory).\n2. Offload quantitative throughput to AI analytical tools.\n3. Reallocate freed-up time toward high-touch client interactions, advisory relationships, and complex deal structuring that require human accountability."
+  },
+  {
+    "index": 135,
+    "prompt": "How should a job seeker evaluate the physical-world exposure of a trade or technical career?",
+    "completion": "Assess your target role against three physical friction criteria: 1) Environment Variability: Does the work occur in unpredictable, non-standardized locations? 2) Motor Dexterity: Does it require fine tactile feedback and complex manual manipulation? 3) Contextual Mobility: Does it require navigating unstructured spaces? Higher scores in these criteria indicate stronger resistance to robotic replacement."
+  },
+  {
+    "index": 137,
+    "prompt": "How can a worker use Total Cost of Ownership (TCO) analysis to gauge their job's economic exposure to AI?",
+    "completion": "Compare your annual compensation and efficiency against the full financial footprint of implementing an AI replacement: compute infrastructure, specialized integration software, maintenance contracts, error mitigation, and human oversight costs. If your role involves high adaptability at a moderate wage, the high TCO of automation makes full human replacement economically impractical for employers."
+  },
+  {
+    "index": 143,
+    "prompt": "A software engineer wants to audit their career exposure to AI automation. What steps should they take based on automation friction factors?",
+    "completion": "1) Task Audit: Divide your tasks into routine code generation versus system architecture, security compliance, and stakeholder communication. 2) Liability Positioning: Emphasize your role in security audits and code safety sign-offs where legal and operational accountability is essential. 3) TCO Focus: Shift toward integration engineering—configuring, deploying, and monitoring complex system interactions where AI management costs are high."
+  },
+  {
+    "index": 144,
+    "prompt": "If a business owner wants to fully replace their customer support department with autonomous AI, what trust and cost risks should they evaluate first?",
+    "completion": "1) Trust Risks: Evaluate consumer resistance and potential churn caused by customer frustration over a lack of human empathy or escalation options. 2) Cost Overhead: Calculate hidden TCO costs, including model monitoring, prompt engineering updates, system maintenance, and handling complex edge cases that require manual intervention. 3) Liability Exposure: Identify financial risks if the autonomous agent provides incorrect advice, policy breaches, or binding misrepresentations."
+  },
+  {
+    "index": 147,
+    "prompt": "According to the OpenAI and University of Pennsylvania study 'GPTs are GPTs,' which worker skills show a negative association with AI exposure?",
+    "completion": "Science and critical-thinking skills show a negative association with AI exposure. In contrast, programming and writing skills display a strong positive association with task exposure to GPT-class models."
+  },
+  {
+    "index": 152,
+    "prompt": "How would you apply the findings of the OpenAI/UPenn study to assess an individual worker's task exposure profile?",
+    "completion": "Review the worker's core daily tasks against skill indicators: if their daily output centers heavily on routine writing or basic programming, mark their exposure risk as high (over 50% of tasks affected). To lower risk, guide them to integrate tasks emphasizing critical thinking, empirical science, and high-ambiguity decision making."
+  },
+  {
+    "index": 159,
+    "prompt": "If an administrative assistant wants to perform a personal exposure assessment based on BLS projections, what steps should they take?",
+    "completion": "First, evaluate daily tasks against high-exposure categories like document processing, basic scheduling, and manual data entry. Second, quantify the percentage of time spent on these routine tasks. Third, systematically shift focus toward high-touch human responsibilities, such as managing complex client relationships and resolving ambiguous operational issues."
+  },
+  {
+    "index": 160,
+    "prompt": "If a job seeker is deciding between entry-level software execution and skilled physical trades, how should they evaluate exposure risk?",
+    "completion": "Entry-level programming shows high exposure to GPT-class models because code execution follows structured logic. Conversely, physical trades offer durability because physical dexterity in unstructured settings requires complex hardware that lags cognitive AI. The job seeker should weigh entry-level digital automation risk against the physical demands of skilled trades."
+  },
+  {
+    "index": 162,
+    "prompt": "If a worker in an advanced economy faces a 60% regional AI exposure baseline, how should they evaluate their individual vulnerability?",
+    "completion": "The worker should analyze their personal task breakdown rather than aggregate stats. If their primary value relies on routine administrative execution, exposure is high. If their work requires licensure, cross-domain synthesis, or building relationship capital, their individual risk remains low regardless of the overall economy baseline."
+  },
+  {
+    "index": 169,
+    "prompt": "What immediate strategic action is required if an employee's risk exposure score falls into the Critical Risk (86–100) range?",
+    "completion": "A score of 86–100 indicates active displacement is occurring right now. You should pivot immediately toward an adjacent professional role that carries a materially lower risk score by leveraging your transferable skill set."
+  },
+  {
+    "index": 179,
+    "prompt": "A worker calculates their personal total exposure score to be 62/100. What timeline and career adjustments should they plan for?",
+    "completion": "A score of 62 places the role in the Medium Risk category (51–70), indicating significant automation within 3–5 years. The worker should begin immediately auditing their weekly responsibilities, reducing time spent on routine data handling or technical drafting, and actively reallocating working hours toward judgment-based decisions, client relationships, and complex problem-solving."
+  },
+  {
+    "index": 186,
+    "prompt": "How can an individual worker apply the report's 'throughput versus judgment' framework to evaluate their role's exposure to AI?",
+    "completion": "To apply this framework, audit your daily workload by breaking tasks down into throughput (language-heavy, template-driven, repetitive execution) versus judgment (relationship-building, complex decision-making, physical dexterity). Calculate your task exposure ratio, then create an action plan to systematically shift your working hours toward high-judgment responsibilities."
+  },
+  {
+    "index": 188,
+    "prompt": "What concrete strategy should workers in language-heavy, template-driven roles use to protect their long-term employability?",
+    "completion": "Perform a task exposure breakdown to isolate tasks that follow standard templates or language patterns. Shift your personal focus toward high-trust, relationship-driven, or high-judgment oversight roles that involve managing liability, trust, and strategic decision-making, which software automation cannot easily replace."
+  },
+  {
+    "index": 194,
+    "prompt": "If an entertainment or creative worker wants to construct a personal risk mitigation rubric, what steps should they take given current industry trends?",
+    "completion": "Construct a scoring rubric assessing three factors: 1) Percentage of daily tasks that rely on predictable templates, 2) Level of physical or relationship dexterity required, and 3) Direct reliance on high-level judgment. Reduce exposure by integrating AI tools to complete baseline throughput faster while redirecting saved time into high-judgment creative strategy and direct stakeholder management."
+  },
+  {
+    "index": 229,
+    "prompt": "What percentage range of task exposure was measured for a large share of occupations across major studies?",
+    "completion": "Task exposure was measured in the 40–80% range for a large share of occupations."
+  },
+  {
+    "index": 239,
+    "prompt": "Why does the healthcare sector consistently rank as one of the least-exposed sectors to AI automation?",
+    "completion": "Healthcare ranks low in exposure due to regulatory licensure requirements, malpractice liability structures, and strong patient preferences for human care in life-and-death decisions."
+  },
+  {
+    "index": 240,
+    "prompt": "What is the estimated AI exposure timeline and risk level for contract reviewers?",
+    "completion": "Contract reviewers face a Very High risk level with an exposure timeline of Now–2027."
+  },
+  {
+    "index": 87,
+    "prompt": "Why do Bureau of Labor Statistics (BLS) growth projections for graphic designers remain slightly positive even as entry-level production roles decline?",
+    "completion": "This structural divergence occurs because aggregate occupational headcounts can display modest positive growth while the internal task composition changes radically. Entry-level production work (resizing, basic layouts) collapses due to automation, while demand shifts toward higher-level roles managing multi-modal AI tools, strategic design, and brand direction."
+  }
+]
