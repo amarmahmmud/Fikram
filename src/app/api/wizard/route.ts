@@ -69,7 +69,7 @@ PHASE 2 — TRAINING CONFIG (after identity)
 
 After the user confirms their model identity (or if the conversation has 6+ user messages),
 output a final config JSON:
-{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.00002,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config including why this model is the best fit"}
+{"type":"config","summary":"One sentence summary","recommendedModel":"meta-llama/Llama-3.1-8B-Instruct","method":"lora","epochs":3,"learningRate":0.0001,"batchSize":4,"estimatedCredits":28,"estimatedTime":"12-18 min","reasoning":"Why you chose this config including why this model is the best fit"}
 
 CRITICAL RULES:
 - Output ONLY raw JSON — no markdown fences, no explanation text, nothing else
@@ -345,7 +345,7 @@ export async function POST(req: Request) {
           recommendedModel: recommended.id,
           method: "lora",
           epochs: 3,
-          learningRate: 0.00002,
+          learningRate: 0.0001,
           batchSize: 4,
           estimatedCredits: recommended.credits.min,
           estimatedTime: `${recommended.speed === "fast" ? "5-15" : "10-25"} min`,
@@ -384,7 +384,7 @@ export async function POST(req: Request) {
         recommendedModel: recommended.id,
         method: "lora",
         epochs: 3,
-        learningRate: 0.00002,
+        learningRate: 0.0001,
         batchSize: 4,
         estimatedCredits: recommended.credits.min,
         estimatedTime: `${recommended.speed === "fast" ? "5-15" : "10-25"} min`,

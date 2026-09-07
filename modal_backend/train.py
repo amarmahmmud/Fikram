@@ -371,19 +371,36 @@ def compute_training_schedule(dataset_size: int, batch_size: int, grad_accum: in
     """Scale epochs/steps to dataset size instead of using fixed constants.
     Small datasets need more passes to learn anything at all; large
     datasets need fewer epochs but enough steps to complete at least one
-    full pass, bounded by MAX_STEPS_CEILING regardless of size."""
+    full pass, bounded by MAX_STEPS_CEILING regardless of size.
+
+    Applies principled optimization dynamics for ANY model family (1B to 34B):
+    - AdamW second-moment variance (beta2=0.999) needs ~50-60 steps minimum to stabilize.
+    - Small models (<=3B) are protected from overfitting by capping epochs at 6.
+    - Uses ceiling division so partial batches are not dropped from step budget.
+    """
     if dataset_size <= 50:
         epochs = 5
-    elif dataset_size <= 200:
+    elif dataset_size <= 150:
+        epochs = 4
+    elif dataset_size <= 500:
         epochs = 3
-    elif dataset_size <= 1000:
+    elif dataset_size <= 1500:
         epochs = 2
     else:
         epochs = 1
 
     effective_batch = max(1, batch_size * grad_accum)
-    steps_per_epoch = max(1, dataset_size // effective_batch)
-    max_steps = min(steps_per_epoch * epochs, MAX_STEPS_CEILING)
+    steps_per_epoch = max(1, (dataset_size + effective_batch - 1) // effective_batch)
+    calculated_steps = steps_per_epoch * epochs
+
+    # Universal step floor for AdamW moment stabilization without overfitting
+    MIN_STEPS_FLOOR = 60
+    if calculated_steps < MIN_STEPS_FLOOR and dataset_size > 10:
+        needed_epochs = min(6, (MIN_STEPS_FLOOR + steps_per_epoch - 1) // steps_per_epoch)
+        epochs = max(epochs, needed_epochs)
+        calculated_steps = steps_per_epoch * epochs
+
+    max_steps = min(max(calculated_steps, min(MIN_STEPS_FLOOR, dataset_size)), MAX_STEPS_CEILING)
     return epochs, max_steps
 
 
@@ -730,21 +747,27 @@ def train_model(
         except Exception:
             optimizer_name = "adamw_torch"
 
+        # For LoRA / QLoRA, full fine-tuning learning rates (< 5e-5) cause severe underfitting
+        # because only 0.1%-0.5% of parameters are trainable. A learning rate of 1e-4 to 2e-4 is
+        # standard across all model families (Llama, Gemma, Qwen, Mistral, Phi).
+        effective_lr = max(learning_rate, 0.0001) if learning_rate < 5e-5 else learning_rate
+        warmup_steps = max(2, int(max_steps * 0.06))
+
         def build_sft_config(batch_size, accum_steps):
             return SFTConfig(
                 per_device_train_batch_size=batch_size,
                 gradient_accumulation_steps=accum_steps,
                 gradient_checkpointing=True,
-                warmup_steps=3,
+                warmup_steps=warmup_steps,
                 num_train_epochs=num_train_epochs,
                 max_steps=max_steps,
-                learning_rate=learning_rate,
+                learning_rate=effective_lr,
                 fp16=not torch.cuda.is_bf16_supported(),
                 bf16=torch.cuda.is_bf16_supported(),
                 logging_steps=1,
                 optim=optimizer_name,
                 weight_decay=0.01,
-                lr_scheduler_type="linear",
+                lr_scheduler_type="cosine",
                 max_grad_norm=0.3,
                 seed=3407,
                 output_dir="/tmp/training_output",

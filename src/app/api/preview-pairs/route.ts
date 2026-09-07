@@ -24,8 +24,8 @@ export async function POST(req: Request) {
     // Build the enriched context block and pass it as a string to generateForChunk
     const contextBlock = buildContextBlock(context);
 
-    // generatePairsForChunk returns { pairs, report }
-    const result = await generatePairsForChunk(chunk, contextBlock, 0, 1);
+    // generatePairsForChunk returns { pairs, report }. For preview, process top 4 facts (fast)
+    const result = await generatePairsForChunk(chunk, contextBlock, 0, 1, 4);
     const pairs = result.pairs;
 
     // Return only the first 5 pairs

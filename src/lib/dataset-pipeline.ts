@@ -146,17 +146,22 @@ export function smartChunk(text: string): string[] {
 const FACT_EXTRACTION_PROMPT = `You are an expert AI Data Engineer extracting facts from a document chunk for a fine-tuning dataset.
 
 Extract ALL specific facts, numbers, dates, comparisons, and named entities from this chunk. Classify each fact into exactly one of these types:
-- SINGLE_STAT (one number, one label — e.g., "300 million jobs")
-- PAIRED_STAT (two numbers that must stay linked, comparisons, "X vs Y")
-- NAMED_ENTITY_FACT (a fact tied to a specific proper noun, person, or organization)
-- CONCEPTUAL (a definition or framework explanation, not a raw number)
+- SINGLE_STAT (one number, one label, AND its source organization/study — e.g., "Goldman Sachs estimates 300 million full-time jobs exposed globally")
+- PAIRED_STAT (two numbers that must stay linked, comparisons, "X vs Y" with their entity — e.g., "IMF finds 40% global employment exposed, rising to 60% in advanced economies vs 30% in developing economies")
+- NAMED_ENTITY_FACT (a fact tied to a specific tool, person, benchmark, or organization — e.g., "SWE-bench Verified shows leading coding agents like Devin and Claude Code solving 70-77% of GitHub issues in 2025-2026 vs under 14% in early 2024")
+- CONCEPTUAL (a definition, framework explanation, or structural mechanism)
 
-Output ONLY a raw JSON array of objects with keys "fact" (the exact text/concept) and "type" (one of the 4 types above).
+CRITICAL EXTRACTION RULES:
+1. ALWAYS BIND STATS TO THEIR SOURCE ENTITY: Never extract a naked number like "300 million jobs" without attributing it to "Goldman Sachs". Never extract "70-77%" without "SWE-bench Verified" and the agent names ("Devin", "Claude Code").
+2. NEVER DECOUPLE COMPARISONS: If the text says "60% in advanced economies vs 30% in developing economies", keep both sides in the same fact string!
+3. CAPTURE ALL HEADLINE METRICS: Do not skip institutional estimates (Goldman Sachs, IMF, McKinsey, WEF, BLS, OpenAI, benchmark scores).
+
+Output ONLY a raw JSON array of objects with keys "fact" (the full attributed fact string) and "type" (one of the 4 types above).
 Example:
 [
-  {"fact": "The new solar cells achieved 33.7% efficiency", "type": "SINGLE_STAT"},
-  {"fact": "21.5% without AI vs 29.5% with AI", "type": "PAIRED_STAT"},
-  {"fact": "Dr. Sarah Chen led the research team at MIT", "type": "NAMED_ENTITY_FACT"}
+  {"fact": "Goldman Sachs estimates 300 million full-time jobs exposed to automation globally", "type": "SINGLE_STAT"},
+  {"fact": "McKinsey estimates 29.5% of U.S. work hours automatable by 2030 vs 21.5% pre-generative-AI baseline", "type": "PAIRED_STAT"},
+  {"fact": "SWE-bench Verified shows Devin and Claude Code solving 70-77% of issues in 2025-2026 vs under 14% in early 2024", "type": "NAMED_ENTITY_FACT"}
 ]`;
 
 const FACT_GENERATION_PROMPT = (contextBlock: string, chunkIndex: number, totalChunks: number) => `You are an expert AI Data Engineer generating Q&A pairs for a fine-tuning dataset.
@@ -164,16 +169,16 @@ const FACT_GENERATION_PROMPT = (contextBlock: string, chunkIndex: number, totalC
 ${contextBlock}
 
 You are processing chunk ${chunkIndex + 1} of ${totalChunks}.
-I will provide a list of facts extracted from this chunk. Generate diverse Question & Answer pairs for EVERY fact based on its type.
+For each fact provided below, generate 2-3 diverse Question & Answer pairs.
 
-DYNAMIC RECORD COUNT AND RULES BY FACT TYPE:
-- CONCEPTUAL: Generate 2-3 pairs. Vary the structural wording (e.g. "What is...", "How does...").
-- SINGLE_STAT: Generate 3-4 pairs. Vary question structure, but strict verbatim number enforcement in answers.
-- PAIRED_STAT: Generate 5-8 pairs. You MUST explicitly include at least 1 direct comparison question ("What is the difference between X and Y?", "Compare..."). Never swap the subjects in the answer.
-- NAMED_ENTITY_FACT: Generate 4-6 pairs. You MUST explicitly include at least 1 contrastive negative question ("Is it true that [wrong entity] did this?" -> "No, actually [correct entity] did.").
+RULES BY FACT TYPE:
+- SINGLE_STAT: Generate 2-3 pairs. Always test both the exact metric value and the attributing source organization. Strict verbatim number enforcement.
+- PAIRED_STAT: Generate 2-3 pairs. You MUST explicitly include at least 1 direct comparison question ("What is the difference between X and Y?", "Compare X to Y"). Never swap the subjects or numbers.
+- NAMED_ENTITY_FACT: Generate 2-3 pairs. Test the specific entity/tool name (e.g. Devin, Claude Code, SWE-bench Verified) and its specific milestone, score, or role.
+- CONCEPTUAL: Generate 2 pairs with clear, substantive answers explaining the mechanism or framework.
 
 CRITICAL NUMBER ACCURACY RULES:
-- NEVER round, approximate, or restate any number, percentage, date, or measurement. Use the EXACT value.
+- NEVER round, approximate, or restate any number, percentage, date, or measurement. Use the EXACT value from the fact.
 - In comparative statements, NEVER swap the subjects.
 
 Output ONLY a raw JSON array where each object represents a fact and its generated pairs:
@@ -205,6 +210,7 @@ export async function generatePairsForChunk(
   contextBlock: string,
   chunkIndex: number,
   totalChunks: number,
+  maxFacts?: number,
 ): Promise<{ pairs: DatasetPair[], report: ValidationReport[] }> {
   // 1. Extract facts
   let facts: ExtractedFact[] = [];
@@ -221,24 +227,37 @@ export async function generatePairsForChunk(
   
   if (facts.length === 0) return { pairs: [], report: [] };
 
-  // 2. Generate pairs for facts
-  // Cap to top 5 key facts per chunk to prevent 60s+ timeouts and JSON token truncation
-  const targetFacts = facts.slice(0, 5);
+  // If maxFacts is specified (e.g. preview mode), limit facts; otherwise process ALL facts
+  const factsToProcess = typeof maxFacts === "number" && maxFacts > 0 ? facts.slice(0, maxFacts) : facts;
+
+  // 2. Generate pairs for facts using sub-batching (3-4 facts per sub-batch)
+  // This prevents prompt token explosion, timeouts, and JSON truncation while capturing 100% of facts
+  const SUB_BATCH_SIZE = 4;
   const promptText = FACT_GENERATION_PROMPT(contextBlock, chunkIndex, totalChunks);
   let generatedGroups: any[] = [];
-  try {
-    const genResult = await generateWithModelFallback(
-      `${promptText}\n\nExtracted Facts:\n${JSON.stringify(targetFacts, null, 2)}\n\nDocument chunk:\n\n${text}`,
-      { generationConfig: { temperature: 0.3, maxOutputTokens: 4096 } }
-    );
-    const rawText = genResult.response.text() || "[]";
-    generatedGroups = parseJsonArray(rawText);
-    if (generatedGroups.length === 0) {
-      console.warn(`[Pipeline] Warning: parseJsonArray returned 0 groups from raw text length ${rawText.length}`);
+
+  for (let b = 0; b < factsToProcess.length; b += SUB_BATCH_SIZE) {
+    const factBatch = factsToProcess.slice(b, b + SUB_BATCH_SIZE);
+    try {
+      const genResult = await generateWithModelFallback(
+        `${promptText}\n\nExtracted Facts (Batch ${Math.floor(b / SUB_BATCH_SIZE) + 1} of ${Math.ceil(factsToProcess.length / SUB_BATCH_SIZE)}):\n${JSON.stringify(factBatch, null, 2)}\n\nDocument chunk:\n\n${text}`,
+        { generationConfig: { temperature: 0.3, maxOutputTokens: 4096 } }
+      );
+      const rawText = genResult.response.text() || "[]";
+      const groups = parseJsonArray(rawText);
+      if (groups.length > 0) {
+        generatedGroups.push(...groups);
+      } else {
+        console.warn(`[Pipeline] Warning: sub-batch ${Math.floor(b / SUB_BATCH_SIZE) + 1} produced 0 groups (raw length: ${rawText.length})`);
+      }
+    } catch (e) {
+      console.error(`[Pipeline] Fact generation failed for chunk ${chunkIndex + 1} batch ${Math.floor(b / SUB_BATCH_SIZE) + 1}`, e);
     }
-  } catch (e) {
-    console.error(`[Pipeline] Fact generation failed for chunk ${chunkIndex + 1}`, e);
-    return { pairs: [], report: [] };
+
+    // Pace sub-batches to stay safely within rate limits
+    if (b + SUB_BATCH_SIZE < factsToProcess.length) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
   }
 
   // 3. Flatten and Validate

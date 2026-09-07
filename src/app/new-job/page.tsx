@@ -143,7 +143,7 @@ export default function NewJobPage() {
   const config: TrainingConfig = aiConfig ?? {
     baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct",
     method: "LoRA (auto-selected)",
-    epochs: 3, learningRate: 0.00002, batchSize: 4, warmupSteps: 10,
+    epochs: 3, learningRate: 0.0001, batchSize: 4, warmupSteps: 10,
     estimatedCredits: costEstimate?.estimated_credits ?? 28,
     estimatedTime: costEstimate?.estimated_training_seconds
       ? `${Math.ceil(costEstimate.estimated_training_seconds / 60)} min`
@@ -256,7 +256,7 @@ export default function NewJobPage() {
           baseModel: job.base_model || MODELS[0].name,
           method: (job.method || "lora").toUpperCase(),
           epochs: origConfig.epochs ?? 3,
-          learningRate: origConfig.learningRate ?? 0.00002,
+          learningRate: origConfig.learningRate ?? 0.0001,
           batchSize: origConfig.batchSize ?? 4,
           warmupSteps: 10,
           estimatedCredits: 28,
@@ -436,7 +436,7 @@ export default function NewJobPage() {
             baseModel: cfg.recommendedModel ?? MODELS[0].name,
             method: cfg.method ?? "LoRA",
             epochs: cfg.epochs ?? 3,
-            learningRate: cfg.learningRate ?? 0.00002,
+            learningRate: cfg.learningRate ?? 0.0001,
             batchSize: cfg.batchSize ?? 4,
             warmupSteps: 10,
             estimatedCredits: cfg.estimatedCredits ?? 28,
@@ -491,7 +491,7 @@ export default function NewJobPage() {
           baseModel: cfg.recommendedModel ?? MODELS[0].name,
           method: cfg.method ?? "LoRA",
           epochs: cfg.epochs ?? 3,
-          learningRate: cfg.learningRate ?? 0.00002,
+          learningRate: cfg.learningRate ?? 0.0001,
           batchSize: cfg.batchSize ?? 4,
           warmupSteps: 10,
           estimatedCredits: cfg.estimatedCredits ?? 28,

@@ -174,7 +174,7 @@ export async function POST(req: Request) {
           dataset_url: datasetUrl,
           dataset_size: datasetSize ?? 100,
           webhook_url: webhookUrl,
-          learning_rate: config?.learningRate ?? 0.00005,
+          learning_rate: config?.learningRate && config.learningRate >= 0.00005 ? config.learningRate : 0.0001,
           ...(config?.maxSeqLength ? { max_seq_length: config.maxSeqLength } : {}),
           lora_r: config?.loraR ?? 16,
           lora_alpha: config?.loraAlpha ?? 32,

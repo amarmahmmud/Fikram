@@ -1,9 +1,10 @@
 import { GoogleGenerativeAI, GenerateContentRequest } from "@google/generative-ai";
 
 export const RESILIENT_GEMINI_MODELS = [
-  "gemini-3.6-flash",
-  "gemini-3.5-flash",
+  "gemini-3.7-flash",
+  "gemini-3-flash-preview",
   "gemini-3.1-flash-lite",
+  "gemini-flash-latest",
 ];
 
 export interface ResilientGenerateOptions {
@@ -79,10 +80,13 @@ export async function generateWithModelFallback(
           msg.includes("Resource has been exhausted");
 
         if (isTransient) {
+          const delay = (status === 429 || msg.includes("429") || msg.includes("Resource has been exhausted"))
+            ? attempt * 2500
+            : attempt * 1000;
           console.warn(
-            `[Gemini Fallback] Model ${modelName} hit high demand (status ${status}, attempt ${attempt}/${maxRetries}). Retrying in ${attempt * 1000}ms...`
+            `[Gemini Fallback] Model ${modelName} hit transient issue (status ${status}, attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
           );
-          await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+          await new Promise((resolve) => setTimeout(resolve, delay));
         } else {
           console.warn(`[Gemini Fallback] Model ${modelName} failed with error: ${msg}. Trying next candidate model...`);
           break; // Don't retry same model if it's not transient, try next model
