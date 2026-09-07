@@ -208,7 +208,7 @@ export async function generatePairsForChunk(
   chunkIndex: number,
   totalChunks: number,
 ): Promise<{ pairs: DatasetPair[], report: ValidationReport[] }> {
-  const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
   
   // 1. Extract facts
   let facts: ExtractedFact[] = [];
@@ -299,7 +299,7 @@ export async function generatePairsForChunk(
 async function validateAndScore(pairs: DatasetPair[], goal: string): Promise<DatasetPair[]> {
   if (pairs.length === 0) return [];
 
-  const model = genAI.getGenerativeModel({ model: "gemini-3.6-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
   // Process in batches to stay within token limits
   const BATCH_SIZE = 50;
