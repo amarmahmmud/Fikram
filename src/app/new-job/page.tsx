@@ -139,15 +139,18 @@ export default function NewJobPage() {
   }>>([]);
   const [datasetRowCount, setDatasetRowCount] = useState<number>(0);
 
-  /* Use AI config or live cost estimate, falling back to defaults */
-  const config: TrainingConfig = aiConfig ?? {
-    baseModel: MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct",
-    method: "LoRA (auto-selected)",
-    epochs: 3, learningRate: 0.0001, batchSize: 4, warmupSteps: 10,
-    estimatedCredits: costEstimate?.estimated_credits ?? 28,
+  /* Use live model-aware cost estimate, falling back to AI config or architecture defaults */
+  const config: TrainingConfig = {
+    baseModel: aiConfig?.baseModel ?? (MODELS.find((m) => m.id === selectedModel)?.name ?? "Llama 3.1 8B Instruct"),
+    method: costEstimate?.method || aiConfig?.method || (costEstimate?.use_qlora ? "QLoRA (4-bit)" : "LoRA (16-bit)"),
+    epochs: costEstimate?.num_train_epochs ?? aiConfig?.epochs ?? 3,
+    learningRate: costEstimate?.learning_rate ?? aiConfig?.learningRate ?? 0.0001,
+    batchSize: costEstimate?.batch_size ?? aiConfig?.batchSize ?? 2,
+    warmupSteps: costEstimate?.warmup_steps ?? aiConfig?.warmupSteps ?? 4,
+    estimatedCredits: costEstimate?.estimated_credits ?? aiConfig?.estimatedCredits ?? 28,
     estimatedTime: costEstimate?.estimated_training_seconds
       ? `${Math.ceil(costEstimate.estimated_training_seconds / 60)} min`
-      : "12–18 min",
+      : aiConfig?.estimatedTime ?? "12–18 min",
   };
 
   /* ── Fetch user balance on mount ── */
@@ -626,8 +629,14 @@ export default function NewJobPage() {
       const json = await apiClient.post<any>("/api/jobs", {
         name: jobName || "Untitled Job",
         baseModel: selectedModel,
-        method: "lora",
-        config: { epochs: config.epochs, learningRate: config.learningRate, batchSize: config.batchSize },
+        method: costEstimate?.use_qlora ? "qlora" : "lora",
+        config: {
+          epochs: costEstimate?.num_train_epochs ?? config.epochs,
+          learningRate: costEstimate?.learning_rate ?? config.learningRate,
+          batchSize: costEstimate?.batch_size ?? config.batchSize,
+          maxSteps: costEstimate?.max_steps,
+          warmupSteps: costEstimate?.warmup_steps ?? config.warmupSteps,
+        },
         datasetUrl: finalDatasetUrl,
         datasetSize: finalDatasetSize,
         estimatedCredits,
@@ -1340,15 +1349,30 @@ export default function NewJobPage() {
                 return null;
               })()}
               <div className={styles.configGroup}>
-                <div className={styles.configLabel}>Training Parameters</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div className={styles.configLabel} style={{ margin: 0 }}>Training Parameters</div>
+                  <span style={{
+                    fontSize: "0.72rem",
+                    padding: "3px 8px",
+                    borderRadius: 6,
+                    background: "rgba(59, 130, 246, 0.12)",
+                    border: "1px solid rgba(59, 130, 246, 0.25)",
+                    color: "#3b82f6",
+                    fontWeight: 600,
+                    letterSpacing: "0.02em",
+                  }}>
+                    Auto-tuned for {MODELS.find((m) => m.id === selectedModel)?.name ?? "selected model"}
+                  </span>
+                </div>
                 <div className={styles.configGrid}>
                   {[
-                    { label: "Method", value: config.method },
-                    { label: "Epochs", value: config.epochs },
-                    { label: "Learning Rate", value: config.learningRate },
-                    { label: "Batch Size", value: config.batchSize },
-                    { label: "Warmup Steps", value: config.warmupSteps },
-                    { label: "Dataset", value: retrainDatasetUrl ? "Reusing previous dataset" : files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "From description" },
+                    { label: "Method", value: costEstimate?.method || config.method },
+                    { label: "Epochs", value: costEstimate?.num_train_epochs ?? config.epochs },
+                    { label: "Learning Rate", value: costEstimate?.learning_rate ?? config.learningRate },
+                    { label: "Batch Size", value: `${costEstimate?.batch_size ?? config.batchSize} (Effective: ${costEstimate?.effective_batch_size ?? 8})` },
+                    { label: "Warmup Steps", value: `${costEstimate?.warmup_steps ?? config.warmupSteps} steps` },
+                    { label: "Total Steps", value: `${costEstimate?.max_steps ?? "—"} steps (AdamW)` },
+                    { label: "Dataset", value: retrainDatasetUrl ? "Reusing previous dataset" : datasetRowCount > 0 ? `${datasetRowCount} pairs` : files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "From description" },
                   ].map(({ label, value }) => (
                     <div key={label} className={styles.configParam}>
                       <div className={styles.configParamLabel}>{label}</div>

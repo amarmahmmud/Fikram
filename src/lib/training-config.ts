@@ -25,8 +25,12 @@ export interface CostEstimate {
   resolved_model?: string;
   param_count_billion?: number;
   use_qlora?: boolean;
+  method?: string;
   batch_size?: number;
   grad_accum?: number;
+  effective_batch_size?: number;
+  learning_rate?: number;
+  warmup_steps?: number;
   gpu_tier?: string;
   modal_gpu?: string;
   estimated_vram_gb?: number;

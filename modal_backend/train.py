@@ -456,13 +456,37 @@ def build_training_plan(base_model: str, dataset_size: int, lora_r: int, max_seq
     raw_cost_usd = estimated_hours * tier["hourly_cost_usd"]
     estimated_credits = raw_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD
 
+    family_name, _ = detect_model_family(base_model, getattr(cfg, "model_type", ""))
+    params_b = param_count / 1e9
+
+    # Principled, universal LoRA/QLoRA learning rate tuning:
+    # 1. Gemma family: 1e-4 (Gemma 2 soft-capping and sensitive post-norm)
+    # 2. Small models (<=3.5B): 2e-4 (higher plasticity and fewer adapter params)
+    # 3. Medium models (4B-10B, e.g. Llama 3.1 8B): 1.5e-4
+    # 4. Large models (>10B): 8e-5 (prevents representation drift and instability)
+    if family_name == "gemma":
+        optimal_lr = 0.0001
+    elif params_b <= 3.5:
+        optimal_lr = 0.0002
+    elif params_b <= 10.0:
+        optimal_lr = 0.00015
+    else:
+        optimal_lr = 0.00008
+
+    warmup_steps = max(2, int(max_steps * 0.06))
+    method_name = "QLoRA (4-bit)" if use_qlora else "LoRA (16-bit)"
+
     return {
         "status": "ok",
         "resolved_model": resolved_model,
         "param_count_billion": round(param_count / 1e9, 2),
         "use_qlora": use_qlora,
+        "method": method_name,
         "batch_size": batch_size,
         "grad_accum": grad_accum,
+        "effective_batch_size": batch_size * grad_accum,
+        "learning_rate": optimal_lr,
+        "warmup_steps": warmup_steps,
         "gpu_tier": tier["name"],
         "modal_gpu": tier["modal_gpu"],
         "estimated_vram_gb": round(vram["estimated_total_with_margin_gb"], 1),
@@ -911,7 +935,7 @@ def start_training(item: dict):
     webhook_url = item.get("webhook_url")
     base_model = item.get("base_model", "meta-llama/Llama-3.1-8B-Instruct")
     dataset_size = int(item.get("dataset_size", 100))
-    learning_rate = item.get("learning_rate", 0.0002)
+    raw_learning_rate = item.get("learning_rate")
     max_seq_length = item.get("max_seq_length", 1024)
     lora_r = item.get("lora_r", 16)
     lora_alpha = item.get("lora_alpha", 16)
@@ -928,6 +952,9 @@ def start_training(item: dict):
         plan = build_training_plan(base_model, dataset_size, lora_r, max_seq_length)
     except Exception as e:
         return {"status": "failed", "error": f"Could not plan job: {e}"}
+
+    # Use auto-tuned model learning rate unless explicitly customized above threshold
+    learning_rate = raw_learning_rate if (raw_learning_rate and raw_learning_rate >= 5e-5) else plan.get("learning_rate", 0.0001)
 
     if plan["status"] != "ok":
         return plan  # e.g. {"status": "unsupported", "reason": "model_too_large", ...}
