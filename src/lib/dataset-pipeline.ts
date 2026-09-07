@@ -9,11 +9,9 @@
 // - Fix 5: Reinforcement pass constrained to verbatim-only answers
 // - Fix 6: Post-generation number verification + comparative guardrail
 // ─────────────────────────────────────────────
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { WizardContext, buildContextBlock, EMPTY_WIZARD_CONTEXT } from "@/lib/wizard-types";
+import { generateWithModelFallback } from "@/lib/gemini";
 import crypto from "crypto";
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
 
 export interface DatasetPair {
   prompt: string;
@@ -208,15 +206,13 @@ export async function generatePairsForChunk(
   chunkIndex: number,
   totalChunks: number,
 ): Promise<{ pairs: DatasetPair[], report: ValidationReport[] }> {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-  
   // 1. Extract facts
   let facts: ExtractedFact[] = [];
   try {
-    const extResult = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: `${FACT_EXTRACTION_PROMPT}\n\nDocument chunk:\n\n${text}` }] }],
-      generationConfig: { temperature: 0.1 },
-    });
+    const extResult = await generateWithModelFallback(
+      `${FACT_EXTRACTION_PROMPT}\n\nDocument chunk:\n\n${text}`,
+      { generationConfig: { temperature: 0.1 } }
+    );
     facts = parseJsonArray(extResult.response.text() || "[]") as ExtractedFact[];
   } catch (e) {
     console.error(`[Pipeline] Fact extraction failed for chunk ${chunkIndex + 1}`, e);
@@ -226,14 +222,20 @@ export async function generatePairsForChunk(
   if (facts.length === 0) return { pairs: [], report: [] };
 
   // 2. Generate pairs for facts
+  // Cap to top 5 key facts per chunk to prevent 60s+ timeouts and JSON token truncation
+  const targetFacts = facts.slice(0, 5);
   const promptText = FACT_GENERATION_PROMPT(contextBlock, chunkIndex, totalChunks);
   let generatedGroups: any[] = [];
   try {
-    const genResult = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: `${promptText}\n\nExtracted Facts:\n${JSON.stringify(facts, null, 2)}\n\nDocument chunk:\n\n${text}` }] }],
-      generationConfig: { temperature: 0.3, maxOutputTokens: 8192 },
-    });
-    generatedGroups = parseJsonArray(genResult.response.text() || "[]");
+    const genResult = await generateWithModelFallback(
+      `${promptText}\n\nExtracted Facts:\n${JSON.stringify(targetFacts, null, 2)}\n\nDocument chunk:\n\n${text}`,
+      { generationConfig: { temperature: 0.3, maxOutputTokens: 4096 } }
+    );
+    const rawText = genResult.response.text() || "[]";
+    generatedGroups = parseJsonArray(rawText);
+    if (generatedGroups.length === 0) {
+      console.warn(`[Pipeline] Warning: parseJsonArray returned 0 groups from raw text length ${rawText.length}`);
+    }
   } catch (e) {
     console.error(`[Pipeline] Fact generation failed for chunk ${chunkIndex + 1}`, e);
     return { pairs: [], report: [] };
@@ -299,9 +301,6 @@ export async function generatePairsForChunk(
 async function validateAndScore(pairs: DatasetPair[], goal: string): Promise<DatasetPair[]> {
   if (pairs.length === 0) return [];
 
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-  // Process in batches to stay within token limits
   const BATCH_SIZE = 50;
   const validatedPairs: DatasetPair[] = [];
 
@@ -329,13 +328,15 @@ Pairs to review:
 ${JSON.stringify(batch, null, 2)}`;
 
     try {
-      const result = await model.generateContent({
-        contents: [{ role: "user", parts: [{ text: validationPrompt }] }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 8192,
-        },
-      });
+      const result = await generateWithModelFallback(
+        validationPrompt,
+        {
+          generationConfig: {
+            temperature: 0.1,
+            maxOutputTokens: 8192,
+          },
+        }
+      );
 
       const validated = parseJsonArray(result.response.text() || "[]");
       validatedPairs.push(...validated);
@@ -549,6 +550,46 @@ function checkComparativeSwaps(pairs: DatasetPair[], sourceChunk: string, passLa
 // ─────────────────────────────────────────────
 // JSON Parsing Helper
 // ─────────────────────────────────────────────
+function extractObjectsFromText(text: string): any[] {
+  const results: any[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (!inString) {
+      if (char === "{") {
+        if (depth === 0) start = i;
+        depth++;
+      } else if (char === "}") {
+        depth--;
+        if (depth === 0 && start !== -1) {
+          const candidate = text.substring(start, i + 1);
+          try {
+            results.push(JSON.parse(candidate));
+          } catch {}
+          start = -1;
+        }
+      }
+    }
+  }
+  return results;
+}
+
 function parseJsonArray(raw: string): any[] {
   // Strip markdown fences and think tags
   let cleaned = raw
@@ -557,21 +598,34 @@ function parseJsonArray(raw: string): any[] {
     .replace(/```/gi, "")
     .trim();
 
-  // Extract JSON array
   const startIdx = cleaned.indexOf("[");
-  const endIdx = cleaned.lastIndexOf("]");
-  if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
-    return [];
+  if (startIdx === -1) {
+    return extractObjectsFromText(cleaned);
   }
-  cleaned = cleaned.substring(startIdx, endIdx + 1);
 
-  try {
-    const parsed = JSON.parse(cleaned);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
+  const arraySubstring = cleaned.substring(startIdx);
+  const endIdx = arraySubstring.lastIndexOf("]");
+
+  if (endIdx !== -1) {
+    const candidate = arraySubstring.substring(0, endIdx + 1);
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
   }
+
+  // Attempt to salvage truncated array by closing it at the last complete object
+  const lastBrace = arraySubstring.lastIndexOf("}");
+  if (lastBrace !== -1) {
+    const truncatedCandidate = arraySubstring.substring(0, lastBrace + 1) + "]";
+    try {
+      const fixed = truncatedCandidate.replace(/,\s*\]$/, "]");
+      const parsed = JSON.parse(fixed);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {}
+  }
+
+  return extractObjectsFromText(cleaned);
 }
 
 

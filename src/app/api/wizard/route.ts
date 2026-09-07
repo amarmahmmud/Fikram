@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { SchemaType } from "@google/generative-ai";
 import { getModelCatalogPrompt, getRecommendedModel, MODELS } from "@/lib/models";
 import { WIZARD_QUESTION_IDS, type InterviewAnswerMap } from "@/lib/wizard-types";
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
+import { generateWithModelFallback } from "@/lib/gemini";
 
 // ─────────────────────────────────────────────
 // Phase 1: Identity Interview — document-aware Q&A that builds a WizardContext
@@ -263,11 +262,6 @@ export async function POST(req: Request) {
       const shouldOutputIdentity = phase !== "config" && userMsgCount >= 4;
       const shouldOutputConfig = phase === "config";
 
-      const model = genAI.getGenerativeModel({
-        model: "gemini-3.6-flash",
-        systemInstruction: buildSystemPrompt(documentSummary),
-      });
-
       // Use structured output when we know what type to expect,
       // fall back to free-form JSON for the question/identity ambiguity phase
       const generationConfig: Record<string, unknown> = {
@@ -281,10 +275,15 @@ export async function POST(req: Request) {
         generationConfig.responseSchema = IDENTITY_SCHEMA;
       }
 
-      const result = await model.generateContent({
-        contents: geminiMessages,
-        generationConfig,
-      });
+      const result = await generateWithModelFallback(
+        {
+          contents: geminiMessages,
+          generationConfig,
+        },
+        {
+          systemInstruction: buildSystemPrompt(documentSummary),
+        }
+      );
 
       const text = result.response.text()?.trim() ?? "";
       console.log("[Wizard] Gemini raw response:", text.substring(0, 300));
