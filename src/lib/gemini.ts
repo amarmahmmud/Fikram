@@ -2,7 +2,9 @@ import { GoogleGenAI } from "@google/genai";
 
 export const RESILIENT_GEMINI_MODELS = [
   "gemini-2.5-flash",
+  "gemini-2.0-flash",
   "gemini-1.5-flash",
+  "gemini-3.6-flash",
   "gemini-3-flash-preview",
 ];
 
@@ -29,28 +31,51 @@ function normalizeContents(contentsOrRequest: any): any {
   return contentsOrRequest;
 }
 
+import path from "path";
+import fs from "fs";
+
+function setupGoogleCredentials(): boolean {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    if (!path.isAbsolute(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = path.resolve(
+        process.cwd(),
+        process.env.GOOGLE_APPLICATION_CREDENTIALS
+      );
+    }
+    return fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+  }
+
+  const defaultKeyPath = path.resolve(process.cwd(), "gcp-key.json");
+  if (fs.existsSync(defaultKeyPath)) {
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultKeyPath;
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Returns an initialized GoogleGenAI client configured for Vertex AI Enterprise
- * if GOOGLE_GENAI_USE_ENTERPRISE or GOOGLE_CLOUD_PROJECT is set,
+ * if a service account key or GOOGLE_GENAI_USE_ENTERPRISE is present,
  * otherwise falling back to standard API key mode.
  */
 function getGenAIClient(): GoogleGenAI {
-  const apiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-  const project = process.env.GOOGLE_CLOUD_PROJECT;
+  const hasServiceAccount = setupGoogleCredentials();
+  const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
   const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-  const useEnterprise = process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true" || !!project;
+  const useEnterprise = (process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true" || hasServiceAccount) && !!project;
 
-  if (useEnterprise && project) {
+  if (useEnterprise) {
     return new GoogleGenAI({
       vertexai: true,
       project: project,
       location: location,
-      apiKey: apiKey,
     });
   }
 
+  const apiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("Neither GOOGLE_CLOUD_API_KEY nor GOOGLE_GEMINI_API_KEY is set in environment.");
+    throw new Error("Neither Google Service Account key nor Gemini API key is configured in environment.");
   }
 
   return new GoogleGenAI({ apiKey });
@@ -90,7 +115,7 @@ export async function generateWithModelFallback(
           config: Object.keys(config).length > 0 ? config : undefined,
         });
 
-        const textOutput = result.text || "";
+        const textOutput = (typeof result.text === "function" ? result.text() : result.text) || "";
 
         // Return an adapter object preserving .response.text() compatibility for existing callers
         return {
