@@ -41,7 +41,7 @@ export async function POST(req: Request) {
             base_model,
             dataset_size: dataset_size ?? 100,
             lora_r: lora_r ?? 16,
-            max_seq_length: max_seq_length ?? 1024,
+            max_seq_length: max_seq_length ?? 2048,
           }),
         });
         const data = await res.json();

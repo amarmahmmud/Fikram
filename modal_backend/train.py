@@ -509,7 +509,7 @@ def estimate_cost(item: dict):
     base_model = item.get("base_model")
     dataset_size = int(item.get("dataset_size", 100))
     lora_r = int(item.get("lora_r", 16))
-    max_seq_length = int(item.get("max_seq_length", 1024))
+    max_seq_length = int(item.get("max_seq_length", 2048))
 
     if not base_model:
         return {"status": "failed", "error": "Missing base_model"}
