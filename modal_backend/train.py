@@ -393,14 +393,20 @@ def compute_training_schedule(dataset_size: int, batch_size: int, grad_accum: in
     steps_per_epoch = max(1, (dataset_size + effective_batch - 1) // effective_batch)
     calculated_steps = steps_per_epoch * epochs
 
-    # Universal step floor for AdamW moment stabilization without overfitting
-    MIN_STEPS_FLOOR = 60
+    # Universal step floor: ensures enough gradient updates for AdamW moment
+    # stabilization AND for the adapter to learn fact-dense patterns. With LoRA
+    # (0.1-0.5% trainable params), 150 steps on a small dataset does NOT risk
+    # severe overfitting the way full fine-tuning would. Research suggests
+    # 3-10 epochs for 50-100 example LoRA fine-tuning; max_steps=150 with
+    # steps_per_epoch=10-15 means ~10-15 passes, which is the upper end but
+    # necessary for fact retention.
+    MIN_STEPS_FLOOR = 150
     if calculated_steps < MIN_STEPS_FLOOR and dataset_size > 10:
-        needed_epochs = min(6, (MIN_STEPS_FLOOR + steps_per_epoch - 1) // steps_per_epoch)
+        needed_epochs = min(10, (MIN_STEPS_FLOOR + steps_per_epoch - 1) // steps_per_epoch)
         epochs = max(epochs, needed_epochs)
         calculated_steps = steps_per_epoch * epochs
 
-    max_steps = min(max(calculated_steps, min(MIN_STEPS_FLOOR, dataset_size)), MAX_STEPS_CEILING)
+    max_steps = min(max(calculated_steps, MIN_STEPS_FLOOR), MAX_STEPS_CEILING)
     return epochs, max_steps
 
 
