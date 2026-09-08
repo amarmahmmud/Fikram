@@ -23,9 +23,9 @@ export async function generateWithModelFallback(
   contentsOrRequest: GenerateContentRequest | string | Array<any>,
   options: ResilientGenerateOptions = {}
 ) {
-  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
+  const apiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GOOGLE_GEMINI_API_KEY is not set in environment.");
+    throw new Error("Neither GOOGLE_CLOUD_API_KEY nor GOOGLE_GEMINI_API_KEY is set in environment.");
   }
 
   const client = new GoogleGenerativeAI(apiKey);

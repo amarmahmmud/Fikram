@@ -22,8 +22,9 @@ export async function GET() {
 
   // 2. Check Gemini
   try {
+    const gemKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
     const gemRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GOOGLE_GEMINI_API_KEY}`
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${gemKey}`
     );
     results.gemini = gemRes.ok
       ? { ok: true, detail: "Connected" }

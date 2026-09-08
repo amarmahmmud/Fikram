@@ -21,7 +21,8 @@ import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API_KEY!);
+const googleApiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+const genAI = new GoogleGenerativeAI(googleApiKey || "");
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Embedding ────────────────────────────────────────────────────────────────
