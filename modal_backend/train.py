@@ -550,7 +550,7 @@ def train_model(
     # truncation of longer training completions
     max_seq_length: int = 2048,
     lora_r: int = 16,
-    lora_alpha: int = 16,
+    lora_alpha: int = 32,
     # ── Planned values, computed by build_training_plan() BEFORE this job
     # was spawned, and shown to the user as the price they confirmed. This
     # function re-derives them independently as a safety check, but the

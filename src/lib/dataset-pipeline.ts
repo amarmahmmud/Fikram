@@ -179,6 +179,11 @@ export function buildSystemPrompt(ctx: WizardContext): string {
   if (ctx.boundaries) {
     parts.push(`Boundaries: ${ctx.boundaries}.`);
   }
+
+  // Depth, phrasing variety, and self-awareness instructions
+  parts.push(`When answering, always provide context and reasoning — never give bare one-sentence facts. Structure answers as: direct answer, then explanation or mechanism, then implication or example.`);
+  parts.push(`Vary your phrasing naturally. Do not repeatedly use the same attribution phrases like "according to the report".`);
+  parts.push(`When asked about limitations or staleness of your knowledge, be specific about which claims are time-sensitive and why, rather than giving generic disclaimers.`);
   parts.push(`Answer based strictly on your training knowledge. If a question falls outside your expertise or training data, clearly state that you don't have that information rather than guessing.`);
 
   return parts.join(" ");
@@ -220,7 +225,18 @@ RULES BY FACT TYPE:
 - SINGLE_STAT: Generate 2-3 pairs. Always test both the exact metric value and the attributing source organization. Strict verbatim number enforcement.
 - PAIRED_STAT: Generate 2-3 pairs. You MUST explicitly include at least 1 direct comparison question ("What is the difference between X and Y?", "Compare X to Y"). Never swap the subjects or numbers.
 - NAMED_ENTITY_FACT: Generate 2-3 pairs. Test the specific entity/tool name (e.g. Devin, Claude Code, SWE-bench Verified) and its specific milestone, score, or role.
-- CONCEPTUAL: Generate 2 pairs with clear, substantive answers explaining the mechanism or framework.
+- CONCEPTUAL: Generate 2 pairs with DETAILED, multi-sentence answers (3-5 sentences minimum). Each answer must: (a) State the core concept or mechanism, (b) Explain WHY it matters or HOW it works, (c) Give a concrete example or implication from the document.
+
+ANSWER DEPTH RULES (apply to ALL fact types):
+- Every answer MUST be 3-5 sentences minimum. One-sentence answers are REJECTED.
+- Structure: Lead with the direct answer → Explain the mechanism/reasoning → Add context, example, or implication.
+- Example of GOOD depth: "McKinsey estimates 29.5% of U.S. work hours are automatable by 2030, up from a 21.5% pre-generative-AI baseline. This 8-percentage-point increase is driven specifically by generative AI's ability to handle natural language tasks that were previously automation-resistant, such as drafting reports, summarizing research, and responding to customer inquiries. The distinction matters because it shows generative AI doesn't just accelerate existing automation — it opens entirely new categories of work to machine processing."
+- Example of BAD depth (REJECTED): "McKinsey estimates 29.5% of work hours are automatable, up from 21.5%."
+
+ATTRIBUTION PHRASING RULES:
+- NEVER repeat the same attribution phrase more than twice across all pairs.
+- Vary between: "The report finds...", "Based on the analysis...", "The data shows...", "Research indicates...", "The findings suggest...", "Evidence demonstrates...", or simply state facts directly without attribution.
+- At least 30% of answers should state facts DIRECTLY without any "according to" framing.
 
 CRITICAL NUMBER ACCURACY RULES:
 - NEVER round, approximate, or restate any number, percentage, date, or measurement. Use the EXACT value from the fact.
@@ -392,8 +408,8 @@ const VAGUE_QUESTION_PATTERNS = [
 function validateAndScoreLocal(pairs: DatasetPair[]): DatasetPair[] {
   if (pairs.length === 0) return [];
 
-  const MIN_ANSWER_WORDS = 10;
-  const MAX_ANSWER_WORDS = 300;
+  const MIN_ANSWER_WORDS = 25;
+  const MAX_ANSWER_WORDS = 400;
   const MIN_QUESTION_WORDS = 5;
 
   return pairs.filter(pair => {
@@ -752,6 +768,70 @@ async function generateContrastivePairs(
 
 
 // ─────────────────────────────────────────────
+// Meta-Cognitive / Self-Reflection Pair Generation
+// ─────────────────────────────────────────────
+// Generates pairs that teach the model to reason about its own knowledge:
+// - Flag time-sensitive claims and explain why they might age
+// - Express calibrated confidence (high for data, lower for predictions)
+// - Reason specifically about what the document covers vs. can't predict
+// These are the "self-awareness" pairs that prevent vague generic disclaimers.
+const META_COGNITIVE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating META-COGNITIVE training pairs.
+
+${contextBlock}
+
+Your job is to generate Q&A pairs that teach the model to reason honestly and SPECIFICALLY about the limitations, confidence levels, and time-sensitivity of its own training knowledge.
+
+Document content (summary):
+${documentChunks}
+
+Generate 8-12 meta-cognitive Q&A pairs covering these categories:
+
+1. TIME-SENSITIVITY (3-4 pairs): Questions about which claims might become outdated. Answers must name SPECIFIC claims from the document and explain WHY they are time-sensitive.
+   Example: Q: "Which of your estimates are most likely to change over time?"
+   A: "The timeline projections are the most time-sensitive elements in my training data. For example, the estimate that junior developers face high risk between 2026-2029 assumes current AI capability trajectories — if foundational model capabilities plateau or accelerate beyond current scaling laws, these windows could shift by 2-4 years in either direction. The institutional statistics like Goldman Sachs' 300 million jobs estimate and McKinsey's 29.5% automation figure reflect point-in-time research snapshots that will be revised as new labor market data emerges. In contrast, the task-level analysis framework itself (decomposing jobs into automatable vs. non-automatable components) is more durable methodology that won't change as quickly."
+
+2. CONFIDENCE CALIBRATION (2-3 pairs): Questions about how confident the model is in different types of claims. Answers must distinguish between high-confidence facts (documented statistics) and lower-confidence elements (predictions, timelines).
+   Example: Q: "How confident are you in the risk classifications for different occupations?"
+   A: "My confidence varies by the type of claim. I have high confidence in the documented institutional statistics — these are published research figures from Goldman Sachs, McKinsey, IMF, and OpenAI/Penn that I can cite precisely. I have moderate confidence in the task-level risk classifications, since they are based on systematic analysis of job components against current AI capabilities. However, I have lower confidence in the specific timeline windows (e.g., '2026-2029' or '2031-2036'), because these depend on technology adoption rates, regulatory responses, and economic conditions that are inherently unpredictable."
+
+3. SCOPE AWARENESS (2-3 pairs): Questions that probe what the document CAN vs. CANNOT answer. Answers must be specific, not generic disclaimers.
+
+4. METHODOLOGY TRANSPARENCY (1-2 pairs): Questions about how the analysis was conducted or what framework it uses.
+
+CRITICAL RULES:
+- Answers MUST reference SPECIFIC facts, numbers, or claims from the document — never give vague generic responses like "some information may become outdated"
+- Every answer must be 4-6 sentences with real substance
+- Vary attribution phrasing — do not use "according to the report" more than once
+
+Output ONLY a raw JSON array of objects with "prompt" and "completion" keys. No markdown.`;
+
+async function generateMetaCognitivePairs(
+  contextBlock: string,
+  chunks: string[],
+): Promise<DatasetPair[]> {
+  // Use first ~10000 chars of document for meta-cognitive analysis
+  const docSample = chunks.slice(0, 3).join("\n\n---\n\n").substring(0, 10000);
+  try {
+    const result = await generateWithModelFallback(
+      META_COGNITIVE_GENERATION_PROMPT(contextBlock, docSample),
+      { generationConfig: { temperature: 0.4, maxOutputTokens: 8192 } }
+    );
+    const raw = parseJsonArray(result.response.text() || "[]");
+    return raw
+      .filter((p: any) => p.prompt && p.completion)
+      .map((p: any) => ({
+        prompt: p.prompt,
+        completion: p.completion,
+        _meta: { source_chunk_index: -1, pass_type: "meta_cognitive", source_hash: "meta_cognitive" },
+      }));
+  } catch (e) {
+    console.error("[Pipeline] Meta-cognitive pair generation failed:", e);
+    return [];
+  }
+}
+
+
+// ─────────────────────────────────────────────
 // JSON Parsing Helper
 // ─────────────────────────────────────────────
 function extractObjectsFromText(text: string): any[] {
@@ -958,10 +1038,10 @@ export async function generateDataset(
   const final = deduplicatePairs(validated);
   console.log(`[Pipeline] After dedup: ${final.length} pairs`);
 
-  // ── Stage 5: Generate Boundary (Refusal) Pairs ──
+  // ── Stage 5: Generate Boundary, Contrastive, and Meta-Cognitive Pairs ──
   onProgress?.({
     stage: "validating",
-    message: `Generating boundary and contrastive pairs...`,
+    message: `Generating boundary, contrastive, and meta-cognitive pairs...`,
     chunksTotal: totalChunks,
     chunksProcessed: totalChunks,
     pairsGenerated: final.length,
@@ -971,15 +1051,16 @@ export async function generateDataset(
   const docSummaryForBoundary = ctx.documentSummary
     || chunks.slice(0, 3).map(c => c.substring(0, 300)).join(" ");
 
-  const [boundaryPairs, contrastivePairs] = await Promise.all([
+  const [boundaryPairs, contrastivePairs, metaCognitivePairs] = await Promise.all([
     generateBoundaryPairs(contextBlock, docSummaryForBoundary),
     generateContrastivePairs(contextBlock, chunks),
+    generateMetaCognitivePairs(contextBlock, chunks),
   ]);
 
-  console.log(`[Pipeline] Boundary pairs: ${boundaryPairs.length}, Contrastive pairs: ${contrastivePairs.length}`);
+  console.log(`[Pipeline] Boundary pairs: ${boundaryPairs.length}, Contrastive pairs: ${contrastivePairs.length}, Meta-cognitive pairs: ${metaCognitivePairs.length}`);
 
   // Merge all pair types
-  const allFinalPairs = [...final, ...boundaryPairs, ...contrastivePairs];
+  const allFinalPairs = [...final, ...boundaryPairs, ...contrastivePairs, ...metaCognitivePairs];
 
   // Inject system_prompt into every pair
   for (const pair of allFinalPairs) {
@@ -1012,6 +1093,7 @@ export async function generateDataset(
     afterDedup: final.length,
     boundaryPairs: boundaryPairs.length,
     contrastivePairs: contrastivePairs.length,
+    metaCognitivePairs: metaCognitivePairs.length,
     finalTotal: allFinalPairs.length,
     documentLength: text.length,
     sourceHash: crypto.createHash("md5").update(text).digest("hex"),
@@ -1019,7 +1101,7 @@ export async function generateDataset(
 
   onProgress?.({
     stage: "complete",
-    message: `Done! Generated ${allFinalPairs.length} high-quality pairs (${final.length} factual + ${boundaryPairs.length} boundary + ${contrastivePairs.length} contrastive)`,
+    message: `Done! Generated ${allFinalPairs.length} high-quality pairs (${final.length} factual + ${boundaryPairs.length} boundary + ${contrastivePairs.length} contrastive + ${metaCognitivePairs.length} meta-cognitive)`,
     chunksTotal: totalChunks,
     chunksProcessed: totalChunks,
     pairsGenerated: allFinalPairs.length,
@@ -1035,6 +1117,7 @@ export interface PipelineStats {
   afterDedup: number;
   boundaryPairs: number;
   contrastivePairs: number;
+  metaCognitivePairs: number;
   finalTotal: number;
   documentLength: number;
   /** MD5 hash of the full source document — for post-hoc verification */
