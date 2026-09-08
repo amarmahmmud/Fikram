@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, baseModel, method, config, datasetUrl, estimatedCredits, datasetSize } = body;
+  const { name, baseModel, method, config, datasetUrl, estimatedCredits, datasetSize, systemPrompt } = body;
 
   // ── Step 1: Fetch user profile with current balance ──
   const { data: profile } = await supabase
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
           base_model: baseModel,
           dataset_size: datasetSize ?? 100,
           lora_r: config?.loraR ?? 16,
-          max_seq_length: config?.maxSeqLength ?? 1024,
+          max_seq_length: config?.maxSeqLength ?? 2048,
         }),
       });
       liveEstimate = await estRes.json();
@@ -175,6 +175,7 @@ export async function POST(req: Request) {
           dataset_size: datasetSize ?? 100,
           webhook_url: webhookUrl,
           learning_rate: config?.learningRate && config.learningRate >= 0.00005 ? config.learningRate : 0.0001,
+          system_prompt: systemPrompt || "",
           ...(config?.maxSeqLength ? { max_seq_length: config.maxSeqLength } : {}),
           lora_r: config?.loraR ?? 16,
           lora_alpha: config?.loraAlpha ?? 32,

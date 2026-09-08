@@ -15,7 +15,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No text provided" }, { status: 400 });
     }
 
-    const { jsonl, stats } = await generateDataset(
+    const { jsonl, stats, systemPrompt } = await generateDataset(
       text,
       goal || wizardContext?.goal || "",
       undefined,
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       ok: true,
       jsonl,
       stats,
+      systemPrompt,
     });
   } catch (error: any) {
     console.error("Dataset Generation Error:", error?.message ?? error);

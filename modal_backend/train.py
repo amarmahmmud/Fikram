@@ -538,8 +538,11 @@ def train_model(
     dataset_url: str,
     webhook_url: str,
     base_model: str = "meta-llama/Llama-3.1-8B-Instruct",
+    system_prompt: str = "",
     learning_rate: float = 5e-5,
-    max_seq_length: int = 1024,
+    # Default max_seq_length increased from 1024 to 2048 to prevent
+    # truncation of longer training completions
+    max_seq_length: int = 2048,
     lora_r: int = 16,
     lora_alpha: int = 16,
     # ── Planned values, computed by build_training_plan() BEFORE this job
@@ -749,14 +752,20 @@ def train_model(
         def format_example(example):
             prompt = example.get("prompt", "")
             completion = example.get("completion", "")
+            # System prompt priority: per-row > job-level > none
+            row_system = example.get("system_prompt", "") or system_prompt
             if _has_template:
-                msgs = [{"role": "user", "content": prompt}, {"role": "assistant", "content": completion}]
+                msgs = []
+                if row_system and _system_ok:
+                    msgs.append({"role": "system", "content": row_system})
+                msgs.append({"role": "user", "content": prompt})
+                msgs.append({"role": "assistant", "content": completion})
                 try:
                     text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
                 except Exception:
-                    text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+                    text = f"### System:\n{row_system}\n\n### User:\n{prompt}\n\n### Assistant:\n{completion}" if row_system else f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
             else:
-                text = f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
+                text = f"### System:\n{row_system}\n\n### User:\n{prompt}\n\n### Assistant:\n{completion}" if row_system else f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
             return {"text": text}
 
         formatted_dataset = dataset.map(format_example)
@@ -936,7 +945,8 @@ def start_training(item: dict):
     base_model = item.get("base_model", "meta-llama/Llama-3.1-8B-Instruct")
     dataset_size = int(item.get("dataset_size", 100))
     raw_learning_rate = item.get("learning_rate")
-    max_seq_length = item.get("max_seq_length", 1024)
+    max_seq_length = item.get("max_seq_length", 2048)
+    system_prompt = item.get("system_prompt", "")
     lora_r = item.get("lora_r", 16)
     lora_alpha = item.get("lora_alpha", 16)
     confirmed_credit_hold = item.get("confirmed_credit_hold", 0.0)
@@ -979,6 +989,7 @@ def start_training(item: dict):
         dataset_url=dataset_url,
         webhook_url=webhook_url,
         base_model=base_model,
+        system_prompt=system_prompt,
         learning_rate=learning_rate,
         max_seq_length=max_seq_length,
         lora_r=lora_r,

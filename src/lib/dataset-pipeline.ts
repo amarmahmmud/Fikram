@@ -16,6 +16,8 @@ import crypto from "crypto";
 export interface DatasetPair {
   prompt: string;
   completion: string;
+  /** System prompt baked into every training row — teaches the model identity + boundaries */
+  system_prompt?: string;
   /** Provenance metadata — stripped before SFTTrainer, retained in R2 for audit */
   _meta?: {
     source_chunk_index: number;
@@ -137,6 +139,49 @@ export function smartChunk(text: string): string[] {
   }
 
   return chunks.filter((c) => c.length > 100); // drop tiny chunks
+}
+
+
+// ─────────────────────────────────────────────
+// System Prompt Builder
+// ─────────────────────────────────────────────
+// Constructs a training-time system prompt from wizard context.
+// This is baked into EVERY training pair so the model learns its identity
+// and boundaries, preventing base-model bleed-through on out-of-scope questions.
+export function buildSystemPrompt(ctx: WizardContext): string {
+  const parts: string[] = [];
+
+  if (ctx.persona) {
+    parts.push(`You are ${ctx.persona}.`);
+  } else if (ctx.goal) {
+    parts.push(`You are a specialized AI assistant.`);
+  } else {
+    parts.push(`You are a knowledgeable AI assistant trained on specific source material.`);
+  }
+
+  if (ctx.goal) {
+    parts.push(`Your purpose: ${ctx.goal}.`);
+  }
+
+  if (ctx.audience) {
+    parts.push(`Your audience: ${ctx.audience}.`);
+  }
+
+  if (ctx.style) {
+    parts.push(`Communication style: ${ctx.style}.`);
+  }
+
+  if (ctx.format) {
+    parts.push(`Answer format: ${ctx.format}.`);
+  }
+
+  // Critical boundary instruction — prevents hallucination
+  if (ctx.boundaries) {
+    parts.push(`Boundaries: ${ctx.boundaries}.`);
+  }
+  parts.push(`Answer based strictly on your training knowledge. If a question falls outside your expertise or training data, clearly state that you don't have that information rather than guessing.`);
+
+  return parts.join(" ");
 }
 
 
@@ -597,6 +642,116 @@ function checkComparativeSwaps(pairs: DatasetPair[], sourceChunk: string, passLa
 
 
 // ─────────────────────────────────────────────
+// Boundary / Refusal Pair Generation
+// ─────────────────────────────────────────────
+// Generates ~5-10% of total pairs as "I don't know" responses.
+// These teach the model to refuse confidently when asked about
+// topics not covered in the source document.
+const BOUNDARY_GENERATION_PROMPT = (contextBlock: string, documentSummary: string) => `You are an expert AI Data Engineer generating BOUNDARY training pairs.
+
+${contextBlock}
+
+The model is trained ONLY on a specific document. Your job is to generate questions that someone might plausibly ask but that the document does NOT cover, along with polite, honest refusal answers.
+
+Here is a brief summary of what the document DOES cover:
+${documentSummary}
+
+Generate 8-12 boundary Q&A pairs. Each pair should:
+1. Ask a plausible question RELATED to the document's general topic but NOT answered in the document
+2. Provide an honest answer that says the document doesn't cover this, and briefly explains what the document DOES cover instead
+
+Examples of good boundary pairs:
+- Q: "What is the exact unemployment rate projection for 2030?" → A: "The document does not provide specific unemployment rate projections. It focuses on task-level automation exposure percentages rather than aggregate unemployment forecasts."
+- Q: "Which specific companies have announced AI-related layoffs?" → A: "The document does not track individual company layoff announcements. It analyzes institutional research findings from organizations like McKinsey, Goldman Sachs, and the IMF about broad labor market exposure."
+
+CRITICAL RULES:
+- The refusal must be SPECIFIC about what IS and ISN'T in the document
+- Never say "I'm just an AI" — say "The document does not cover..." or "This falls outside the scope of my training data"
+- Vary the phrasing of refusals (don't repeat the same template)
+
+Output ONLY a raw JSON array of objects with "prompt" and "completion" keys. No markdown.`;
+
+async function generateBoundaryPairs(
+  contextBlock: string,
+  documentSummary: string,
+): Promise<DatasetPair[]> {
+  try {
+    const result = await generateWithModelFallback(
+      BOUNDARY_GENERATION_PROMPT(contextBlock, documentSummary),
+      { generationConfig: { temperature: 0.4, maxOutputTokens: 4096 } }
+    );
+    const raw = parseJsonArray(result.response.text() || "[]");
+    return raw
+      .filter((p: any) => p.prompt && p.completion)
+      .map((p: any) => ({
+        prompt: p.prompt,
+        completion: p.completion,
+        _meta: { source_chunk_index: -1, pass_type: "boundary", source_hash: "boundary" },
+      }));
+  } catch (e) {
+    console.error("[Pipeline] Boundary pair generation failed:", e);
+    return [];
+  }
+}
+
+
+// ─────────────────────────────────────────────
+// Contrastive Pair Generation
+// ─────────────────────────────────────────────
+// Generates pairs that explicitly counter common base-model biases.
+// E.g., "Litigators are LOW risk despite being in the legal field"
+// These override the base model's priors on counterintuitive facts.
+const CONTRASTIVE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating CONTRASTIVE training pairs.
+
+${contextBlock}
+
+Your job is to find facts in the document that might SURPRISE someone or CONTRADICT common assumptions, and generate Q&A pairs that explicitly reinforce the correct (document-based) answer.
+
+Document content:
+${documentChunks}
+
+Generate 6-10 contrastive Q&A pairs. Focus on:
+1. Classifications that contradict intuition (e.g., a role people assume is high-risk but is actually low-risk, or vice versa)
+2. Numbers that are counterintuitive (e.g., net job GAIN despite automation fears)
+3. Distinctions that are easy to confuse (e.g., two similar-sounding metrics that mean different things)
+
+Each answer MUST:
+- Explicitly state the correct classification/number from the document
+- Briefly explain WHY it's counterintuitive or different from what people might assume
+- Use the EXACT numbers and classifications from the document
+
+Example:
+{"prompt": "Is being a litigator a high-risk profession for AI automation?", "completion": "No. Despite being in the legal field, litigators and trial lawyers are classified as LOW risk (beyond 2030). This is because their core work — physical courtroom advocacy, real-time jury persuasion, spontaneous cross-examination, and high-stakes interpersonal negotiation — cannot be replicated by current AI. This is a common misconception: while legal research roles are high-risk, litigation itself is fundamentally different."}
+
+Output ONLY a raw JSON array of objects with "prompt" and "completion" keys. No markdown.`;
+
+async function generateContrastivePairs(
+  contextBlock: string,
+  chunks: string[],
+): Promise<DatasetPair[]> {
+  // Use first ~12000 chars of document for contrastive analysis
+  const docSample = chunks.slice(0, 4).join("\n\n---\n\n").substring(0, 12000);
+  try {
+    const result = await generateWithModelFallback(
+      CONTRASTIVE_GENERATION_PROMPT(contextBlock, docSample),
+      { generationConfig: { temperature: 0.3, maxOutputTokens: 4096 } }
+    );
+    const raw = parseJsonArray(result.response.text() || "[]");
+    return raw
+      .filter((p: any) => p.prompt && p.completion)
+      .map((p: any) => ({
+        prompt: p.prompt,
+        completion: p.completion,
+        _meta: { source_chunk_index: -1, pass_type: "contrastive", source_hash: "contrastive" },
+      }));
+  } catch (e) {
+    console.error("[Pipeline] Contrastive pair generation failed:", e);
+    return [];
+  }
+}
+
+
+// ─────────────────────────────────────────────
 // JSON Parsing Helper
 // ─────────────────────────────────────────────
 function extractObjectsFromText(text: string): any[] {
@@ -686,12 +841,13 @@ export async function generateDataset(
   goal: string,
   onProgress?: (progress: PipelineProgress) => void,
   wizardContext?: WizardContext
-): Promise<{ pairs: DatasetPair[]; jsonl: string; jsonlWithMeta: string; stats: PipelineStats }> {
+): Promise<{ pairs: DatasetPair[]; jsonl: string; jsonlWithMeta: string; stats: PipelineStats; systemPrompt: string }> {
 
   // Build the enriched context block from wizard context (or fall back to bare goal)
   const ctx = wizardContext ?? { ...EMPTY_WIZARD_CONTEXT, goal };
   if (!ctx.goal && goal) ctx.goal = goal;
   const contextBlock = buildContextBlock(ctx);
+  const systemPrompt = buildSystemPrompt(ctx);
 
   // ── Stage 1: Chunk ──
   onProgress?.({
@@ -802,16 +958,48 @@ export async function generateDataset(
   const final = deduplicatePairs(validated);
   console.log(`[Pipeline] After dedup: ${final.length} pairs`);
 
+  // ── Stage 5: Generate Boundary (Refusal) Pairs ──
+  onProgress?.({
+    stage: "validating",
+    message: `Generating boundary and contrastive pairs...`,
+    chunksTotal: totalChunks,
+    chunksProcessed: totalChunks,
+    pairsGenerated: final.length,
+  });
+
+  // Build a document summary for boundary generation from the first few chunks
+  const docSummaryForBoundary = ctx.documentSummary
+    || chunks.slice(0, 3).map(c => c.substring(0, 300)).join(" ");
+
+  const [boundaryPairs, contrastivePairs] = await Promise.all([
+    generateBoundaryPairs(contextBlock, docSummaryForBoundary),
+    generateContrastivePairs(contextBlock, chunks),
+  ]);
+
+  console.log(`[Pipeline] Boundary pairs: ${boundaryPairs.length}, Contrastive pairs: ${contrastivePairs.length}`);
+
+  // Merge all pair types
+  const allFinalPairs = [...final, ...boundaryPairs, ...contrastivePairs];
+
+  // Inject system_prompt into every pair
+  for (const pair of allFinalPairs) {
+    pair.system_prompt = systemPrompt;
+  }
+
   // ── Build JSONL ──
   // FIX 4: Build two versions — one with metadata for R2 audit, one clean for SFTTrainer.
-  // The JSONL sent to training contains only prompt+completion (SFTTrainer expects this).
+  // The JSONL sent to training contains prompt+completion+system_prompt (SFTTrainer expects this).
   // Metadata is logged to console for debugging.
-  const jsonlForTraining = final.map((p) => JSON.stringify({ prompt: p.prompt, completion: p.completion })).join("\n");
-  const jsonlWithMeta = final.map((p) => JSON.stringify(p)).join("\n");
+  const jsonlForTraining = allFinalPairs.map((p) => JSON.stringify({
+    prompt: p.prompt,
+    completion: p.completion,
+    ...(p.system_prompt ? { system_prompt: p.system_prompt } : {}),
+  })).join("\n");
+  const jsonlWithMeta = allFinalPairs.map((p) => JSON.stringify(p)).join("\n");
 
   // Log provenance summary
   const passCounts = new Map<string, number>();
-  for (const p of final) {
+  for (const p of allFinalPairs) {
     const pass = p._meta?.pass_type ?? "unknown";
     passCounts.set(pass, (passCounts.get(pass) ?? 0) + 1);
   }
@@ -822,19 +1010,22 @@ export async function generateDataset(
     rawPairsGenerated: allPairs.length,
     afterValidation: validated.length,
     afterDedup: final.length,
+    boundaryPairs: boundaryPairs.length,
+    contrastivePairs: contrastivePairs.length,
+    finalTotal: allFinalPairs.length,
     documentLength: text.length,
     sourceHash: crypto.createHash("md5").update(text).digest("hex"),
   };
 
   onProgress?.({
     stage: "complete",
-    message: `Done! Generated ${final.length} high-quality pairs`,
+    message: `Done! Generated ${allFinalPairs.length} high-quality pairs (${final.length} factual + ${boundaryPairs.length} boundary + ${contrastivePairs.length} contrastive)`,
     chunksTotal: totalChunks,
     chunksProcessed: totalChunks,
-    pairsGenerated: final.length,
+    pairsGenerated: allFinalPairs.length,
   });
 
-  return { pairs: final, jsonl: jsonlForTraining, jsonlWithMeta, stats };
+  return { pairs: allFinalPairs, jsonl: jsonlForTraining, jsonlWithMeta, stats, systemPrompt };
 }
 
 export interface PipelineStats {
@@ -842,6 +1033,9 @@ export interface PipelineStats {
   rawPairsGenerated: number;
   afterValidation: number;
   afterDedup: number;
+  boundaryPairs: number;
+  contrastivePairs: number;
+  finalTotal: number;
   documentLength: number;
   /** MD5 hash of the full source document — for post-hoc verification */
   sourceHash: string;
