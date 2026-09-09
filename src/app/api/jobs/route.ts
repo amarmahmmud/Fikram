@@ -133,6 +133,7 @@ export async function POST(req: Request) {
       gpu_tier: liveEstimate?.gpu_tier || "L4",
       use_qlora: liveEstimate?.use_qlora || false,
       param_count_billion: liveEstimate?.param_count_billion,
+      estimated_training_seconds: liveEstimate?.estimated_training_seconds,
     },
     dataset_url:    datasetUrl || null,
     credits_used:   0,

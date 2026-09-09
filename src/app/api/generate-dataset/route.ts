@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       };
 
       try {
-        const { jsonl, stats, systemPrompt } = await generateDataset(
+        const { jsonl, evalJsonl, stats, systemPrompt } = await generateDataset(
           text,
           goal || wizardContext?.goal || "",
           onProgress,
@@ -77,6 +77,7 @@ export async function POST(req: Request) {
             type: "complete",
             ok: true,
             jsonl,
+            evalJsonl,
             stats,
             systemPrompt,
           });

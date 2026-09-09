@@ -81,6 +81,8 @@ async function main() {
   const standard = pairs.find(p => p._meta?.pass_type !== "boundary" && p._meta?.pass_type !== "contrastive");
   const boundary = pairs.find(p => p._meta?.pass_type === "boundary");
   const contrastive = pairs.find(p => p._meta?.pass_type === "contrastive");
+  const appliedExample = pairs.find(p => p._meta?.pass_type === "applied_example");
+  const formatVariants = pairs.filter(p => p._meta?.pass_type === "format_variant");
 
   console.log(`\n--- Sample Records ---`);
   if (standard) {
@@ -94,6 +96,16 @@ async function main() {
   if (contrastive) {
     console.log("\n[CONTRASTIVE PAIR]");
     console.log(JSON.stringify({ prompt: contrastive.prompt, completion: contrastive.completion.substring(0, 250), system_prompt: contrastive.system_prompt?.substring(0, 120) }, null, 2));
+  }
+  if (appliedExample) {
+    console.log("\n[APPLIED EXAMPLE PAIR]");
+    console.log(JSON.stringify({ prompt: appliedExample.prompt, completion: appliedExample.completion, system_prompt: appliedExample.system_prompt?.substring(0, 120) }, null, 2));
+  }
+  if (formatVariants.length > 0) {
+    console.log("\n[FORMAT VARIANT PAIRS]");
+    for (let i = 0; i < Math.min(3, formatVariants.length); i++) {
+        console.log(JSON.stringify({ prompt: formatVariants[i].prompt, completion: formatVariants[i].completion }, null, 2));
+    }
   }
 
   const outPath = path.resolve(process.cwd(), "training-data/regenerated-dataset.jsonl");

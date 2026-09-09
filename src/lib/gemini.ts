@@ -115,7 +115,9 @@ export async function generateWithModelFallback(
           config: Object.keys(config).length > 0 ? config : undefined,
         });
 
-        const textOutput = (typeof result.text === "function" ? result.text() : result.text) || "";
+        // result.text may be a getter (string) or a function depending on the SDK version
+        const rawText = result.text;
+        const textOutput = (typeof rawText === "function" ? (rawText as () => string)() : rawText) || "";
 
         // Return an adapter object preserving .response.text() compatibility for existing callers
         return {

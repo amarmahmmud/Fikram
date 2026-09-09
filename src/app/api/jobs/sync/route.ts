@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { execSync } from "child_process";
+import path from "path";
 
 const s3 = new S3Client({
   region: "auto",
@@ -10,9 +12,6 @@ const s3 = new S3Client({
     secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
   },
 });
-
-// Maximum allowed time for a fine-tuning job before declaring it failed (20 minutes)
-const MAX_JOB_DURATION_MS = 20 * 60 * 1000;
 
 async function checkJobR2(jobId: string): Promise<boolean> {
   const adapterPrefix = `adapters/${jobId}`;
@@ -29,6 +28,82 @@ async function checkJobR2(jobId: string): Promise<boolean> {
   }
 }
 
+function checkModalStatus(replicateId: string): { status: string; result?: any; error?: string } | null {
+  try {
+    const scriptPath = path.resolve(process.cwd(), "scripts/check_modal_status.py");
+    const output = execSync(`python "${scriptPath}" "${replicateId}"`).toString().trim();
+    return JSON.parse(output);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Syncs a single job, returns true if updated
+async function syncJobRecord(j: any, supabase: any): Promise<boolean> {
+  if (j.status === "completed" || j.status === "failed" || j.status === "cancelled") {
+    return false;
+  }
+
+  const hasAdapter = await checkJobR2(j.id);
+  const startTime = new Date(j.started_at || j.created_at).getTime();
+  
+  // Dynamic timeout based on estimated training seconds + 3x multiplier
+  const estSecs = (j.config as any)?.estimated_training_seconds;
+  const maxDurationMs = estSecs ? (estSecs * 3 * 1000) : (20 * 60 * 1000);
+  // Ensure at least 20 minutes
+  const isStale = Date.now() - startTime > Math.max(maxDurationMs, 20 * 60 * 1000);
+
+  if (hasAdapter) {
+    await supabase.from("jobs").update({
+      status: "completed",
+      result_url: `adapters/${j.id}`,
+      completed_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+    }).eq("id", j.id);
+    return true;
+  } else if (isStale) {
+    let finalStatus = "failed";
+    let logsAppend = "\n[System] Training execution failed or timed out without adapter.";
+    
+    // Check Modal directly before failing
+    if (j.replicate_id) {
+      const modalCheck = checkModalStatus(j.replicate_id);
+      if (modalCheck?.status === "completed") {
+        finalStatus = "completed";
+        // Trigger eval async since webhook might have been missed
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/jobs/${j.id}/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trigger: "sync_fallback" })
+        }).catch(() => {});
+      } else if (modalCheck?.status === "running") {
+        // Modal is still actually running, so don't fail it yet!
+        return false;
+      } else if (modalCheck?.status === "failed" || modalCheck?.status === "error") {
+        logsAppend = `\n[System] Modal execution failed: ${modalCheck.error || "Unknown error"}`;
+      }
+    }
+
+    if (finalStatus === "completed") {
+      await supabase.from("jobs").update({
+        status: "completed",
+        result_url: `adapters/${j.id}`,
+        completed_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+      }).eq("id", j.id);
+    } else {
+      await supabase.from("jobs").update({
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+        logs: (j.logs || "") + logsAppend,
+      }).eq("id", j.id);
+    }
+    return true;
+  }
+  return false;
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -39,7 +114,6 @@ export async function GET(req: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     if (!jobId) {
-      // Sync all user's running / pending jobs
       const { data: activeJobs } = await supabase
         .from("jobs")
         .select("*")
@@ -52,36 +126,10 @@ export async function GET(req: Request) {
 
       let updatedCount = 0;
       for (const j of activeJobs) {
-        const hasAdapter = await checkJobR2(j.id);
-        const startTime = new Date(j.started_at || j.created_at).getTime();
-        const isStale = Date.now() - startTime > MAX_JOB_DURATION_MS;
-
-        if (hasAdapter) {
-          await supabase
-            .from("jobs")
-            .update({
-              status: "completed",
-              result_url: `adapters/${j.id}`,
-              completed_at: new Date().toISOString(),
-              finished_at: new Date().toISOString(),
-            })
-            .eq("id", j.id);
-          updatedCount++;
-        } else if (isStale) {
-          // Honest status: GPU job stopped or failed to produce an adapter within 20 minutes
-          await supabase
-            .from("jobs")
-            .update({
-              status: "failed",
-              completed_at: new Date().toISOString(),
-              finished_at: new Date().toISOString(),
-              logs: (j.logs || "") + "\n[System] Training execution failed or timed out without adapter.",
-            })
-            .eq("id", j.id);
+        if (await syncJobRecord(j, supabase)) {
           updatedCount++;
         }
       }
-
       return NextResponse.json({ ok: true, synced: updatedCount });
     }
 
@@ -94,102 +142,49 @@ export async function GET(req: Request) {
 
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    // If job is already in a final state, return as is
-    if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-      return NextResponse.json({ ok: true, job });
-    }
-
-    // Check Cloudflare R2 for the completed adapter
-    const hasAdapter = await checkJobR2(jobId);
-
-    if (hasAdapter) {
-      console.log(`[Sync] Found adapter in R2 for job ${jobId}. Updating to completed.`);
-      const { data: updatedJob } = await supabase
-        .from("jobs")
-        .update({
-          status: "completed",
-          result_url: `adapters/${jobId}`,
-          completed_at: new Date().toISOString(),
-          finished_at: new Date().toISOString(),
-        })
-        .eq("id", jobId)
-        .select()
-        .single();
-
-      return NextResponse.json({ ok: true, job: updatedJob || job });
-    }
-
-    // Check if the job has been running too long without producing an adapter
-    const startTime = new Date(job.started_at || job.created_at).getTime();
-    const elapsedMs = Date.now() - startTime;
-
-    if (elapsedMs > MAX_JOB_DURATION_MS) {
-      console.warn(`[Sync] Job ${jobId} exceeded ${MAX_JOB_DURATION_MS / 60000}m without adapter. Marking as failed.`);
-      const { data: failedJob } = await supabase
-        .from("jobs")
-        .update({
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          finished_at: new Date().toISOString(),
-          logs: (job.logs || "") + "\n[System] Job failed: GPU worker did not complete within the maximum allowed time.",
-        })
-        .eq("id", jobId)
-        .select()
-        .single();
-
-      return NextResponse.json({ ok: true, job: failedJob || job });
-    }
-
-    return NextResponse.json({ ok: true, job });
+    const wasUpdated = await syncJobRecord(job, supabase);
+    
+    // Fetch fresh job if it was updated
+    const { data: freshJob } = await supabase.from("jobs").select("*").eq("id", jobId).single();
+    return NextResponse.json({ ok: true, job: freshJob || job });
   } catch (err: any) {
     console.error("Job sync error:", err);
     return NextResponse.json({ error: err.message || "Failed to sync" }, { status: 500 });
   }
 }
 
-// POST endpoint to manually fail, cancel, or force-sync a job
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { jobId, action } = body;
-
+    const { action, jobId } = await req.json();
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!jobId) return NextResponse.json({ error: "Job ID required" }, { status: 400 });
 
-    if (!jobId) {
-      return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
-    }
-
-    const { data: job } = await supabase
-      .from("jobs")
-      .select("*")
-      .eq("id", jobId)
-      .eq("user_id", user.id)
-      .single();
-
+    const { data: job } = await supabase.from("jobs").select("*").eq("id", jobId).eq("user_id", user.id).single();
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-    const newStatus = action === "cancel" ? "cancelled" : "failed";
-    const { data: updatedJob, error } = await supabase
-      .from("jobs")
-      .update({
-        status: newStatus,
+    if (action === "force_fail") {
+      const { data: updated } = await supabase.from("jobs").update({
+        status: "failed",
         completed_at: new Date().toISOString(),
         finished_at: new Date().toISOString(),
-        logs: (job.logs || "") + `\n[System] Job marked as ${newStatus} by user.`,
-      })
-      .eq("id", jobId)
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+        logs: (job.logs || "") + "\n[System] Job forcefully failed by user.",
+      }).eq("id", jobId).select().single();
+      return NextResponse.json({ ok: true, job: updated });
+    } else if (action === "cancel") {
+      const { data: updated } = await supabase.from("jobs").update({
+        status: "cancelled",
+        completed_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+        logs: (job.logs || "") + "\n[System] Job cancelled by user.",
+      }).eq("id", jobId).select().single();
+      return NextResponse.json({ ok: true, job: updated });
     }
 
-    return NextResponse.json({ ok: true, job: updatedJob });
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (err: any) {
-    console.error("Manual job update error:", err);
-    return NextResponse.json({ error: err.message || "Failed to update job" }, { status: 500 });
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

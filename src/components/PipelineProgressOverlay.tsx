@@ -14,6 +14,7 @@ export interface PipelineEvent {
   // Complete event fields
   ok?: boolean;
   jsonl?: string;
+  evalJsonl?: string;
   stats?: Record<string, unknown>;
   systemPrompt?: string;
   // Error event fields
@@ -22,7 +23,7 @@ export interface PipelineEvent {
 
 interface PipelineProgressOverlayProps {
   visible: boolean;
-  onComplete: (data: { jsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => void;
+  onComplete: (data: { jsonl: string; evalJsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => void;
   onError: (error: string) => void;
   latestEvent: PipelineEvent | null;
 }
@@ -127,6 +128,7 @@ export default function PipelineProgressOverlay({
       setTimeout(() => {
         onComplete({
           jsonl: latestEvent.jsonl || "",
+          evalJsonl: latestEvent.evalJsonl || "",
           stats: latestEvent.stats || {},
           systemPrompt: latestEvent.systemPrompt || "",
         });

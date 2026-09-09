@@ -113,6 +113,24 @@ export async function POST(req: Request) {
 
       console.log(`[Webhook] Job ${job_id} completed. Charged: ${actualCreditsCharged}, Refunded: ${excessRefund}`);
 
+      // ── Trigger post-training LLM-as-a-Judge evaluation (non-blocking) ──
+      // If this fails, the job is still "completed" — evaluation is optional.
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+        const evalUrl = `${appUrl}/api/jobs/${job_id}/evaluate`;
+        // Fire-and-forget: don't await the eval — it can take minutes
+        fetch(evalUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trigger: "webhook" }),
+        }).catch(err => {
+          console.warn(`[Webhook] Non-blocking eval trigger failed for ${job_id}:`, err);
+        });
+        console.log(`[Webhook] Triggered async evaluation for job ${job_id}`);
+      } catch (evalErr) {
+        console.warn(`[Webhook] Failed to trigger evaluation for ${job_id}:`, evalErr);
+      }
+
     } else {
       // ── FAILURE: Charge flat fee only, refund the rest ──
       const flatFee = Math.min(credits_to_charge ?? 25, creditsHeld);

@@ -832,6 +832,117 @@ async function generateMetaCognitivePairs(
 
 
 // ─────────────────────────────────────────────
+// Applied Example Pair Generation (Gap 1)
+// ─────────────────────────────────────────────
+const APPLIED_EXAMPLE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating APPLIED_EXAMPLE training pairs.
+
+${contextBlock}
+
+Your job is to detect if the document contains ANY applicable method (e.g., a scoring rubric, formula, decision tree, interpretation bands, or classification system meant to be applied to new inputs).
+
+Document content (summary):
+${documentChunks}
+
+First, determine if such a method exists. If NOT, output an empty JSON array: []
+If a method DOES exist, invent plausible novel inputs (e.g., specific hypothetical job roles, scenarios, or case studies) that the method could apply to. 
+Generate 10-15 Q&A pairs where the prompt asks to evaluate the novel input using the method, and the completion walks through the application step-by-step to arrive at a final concrete output on the method's own scale.
+
+CRITICAL RULES:
+- The completion MUST walk through the method step-by-step.
+- The completion MUST end with a final concrete output (e.g., "Total Score: 85/100 -> High Risk").
+- Mix the document's own listed examples (if any) with novel ones to teach generalization.
+
+Output ONLY a raw JSON array of objects with "prompt" and "completion" keys. No markdown.`;
+
+async function generateAppliedExamplePairs(
+  contextBlock: string,
+  chunks: string[],
+): Promise<DatasetPair[]> {
+  const docSample = chunks.join("\\n\\n---\\n\\n").substring(0, 15000);
+  try {
+    const result = await generateWithModelFallback(
+      APPLIED_EXAMPLE_GENERATION_PROMPT(contextBlock, docSample),
+      { generationConfig: { temperature: 0.5, maxOutputTokens: 8192 } }
+    );
+    const raw = parseJsonArray(result.response.text() || "[]");
+    return raw
+      .filter((p: any) => p.prompt && p.completion)
+      .map((p: any) => ({
+        prompt: p.prompt,
+        completion: p.completion,
+        _meta: { source_chunk_index: -1, pass_type: "applied_example", source_hash: "applied_example" },
+      }));
+  } catch (e) {
+    console.error("[Pipeline] Applied example generation failed:", e);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────
+// Format-Following Post-Processing (Gap 2)
+// ─────────────────────────────────────────────
+const FORMAT_REWRITE_PROMPT = `You are an expert AI Data Engineer rewriting Q&A pairs to follow specific format requests.
+
+You will be given a JSON array of existing Q&A pairs. For EACH pair, rewrite the prompt to explicitly request a specific format (e.g., "List the key points as bullets", "Summarize this as a table", "Answer in one sentence", "Give a step-by-step breakdown") and rewrite the completion to fulfill that format accurately.
+
+Distribute the format requests roughly equally among:
+1. Bulleted lists
+2. Markdown tables
+3. Short direct answers (1-2 sentences)
+4. Numbered steps / breakdowns
+
+Output ONLY a raw JSON array of objects with the rewritten "prompt" and "completion" keys. No markdown.`;
+
+async function applyFormatFollowingTraining(pairs: DatasetPair[]): Promise<{ pairs: DatasetPair[], count: number }> {
+  // We want to sample ~15-20% of the pairs.
+  const sampleSize = Math.max(1, Math.floor(pairs.length * 0.15));
+  
+  // Create a copy and shuffle to pick random pairs
+  const shuffled = [...pairs].sort(() => 0.5 - Math.random());
+  const selectedToRewrite = shuffled.slice(0, sampleSize);
+  const remaining = shuffled.slice(sampleSize);
+
+  const BATCH_SIZE = 5;
+  const rewrittenPairs: DatasetPair[] = [];
+
+  for (let b = 0; b < selectedToRewrite.length; b += BATCH_SIZE) {
+    const batch = selectedToRewrite.slice(b, b + BATCH_SIZE);
+    try {
+      const result = await generateWithModelFallback(
+        `${FORMAT_REWRITE_PROMPT}\\n\\nExisting Pairs:\\n${JSON.stringify(batch.map(p => ({ prompt: p.prompt, completion: p.completion })), null, 2)}`,
+        { generationConfig: { temperature: 0.4, maxOutputTokens: 8192 } }
+      );
+      const raw = parseJsonArray(result.response.text() || "[]");
+      
+      for (let i = 0; i < raw.length; i++) {
+        if (raw[i].prompt && raw[i].completion) {
+          const originalMeta = batch[i]?._meta;
+          rewrittenPairs.push({
+            prompt: raw[i].prompt,
+            completion: raw[i].completion,
+            _meta: { ...originalMeta, pass_type: "format_variant", source_hash: originalMeta?.source_hash || "format" } as any
+          });
+        }
+      }
+    } catch (e) {
+      console.error("[Pipeline] Format rewrite failed for a batch:", e);
+      // If a batch fails, just keep the original pairs for that batch
+      rewrittenPairs.push(...batch);
+    }
+    // Pace requests
+    if (b + BATCH_SIZE < selectedToRewrite.length) {
+      await new Promise(resolve => setTimeout(resolve, 1500));
+    }
+  }
+
+  return { 
+    pairs: [...remaining, ...rewrittenPairs], 
+    count: rewrittenPairs.filter(p => p._meta?.pass_type === "format_variant").length 
+  };
+}
+
+
+// ─────────────────────────────────────────────
 // JSON Parsing Helper
 // ─────────────────────────────────────────────
 function extractObjectsFromText(text: string): any[] {
@@ -921,7 +1032,7 @@ export async function generateDataset(
   goal: string,
   onProgress?: (progress: PipelineProgress) => void,
   wizardContext?: WizardContext
-): Promise<{ pairs: DatasetPair[]; jsonl: string; jsonlWithMeta: string; stats: PipelineStats; systemPrompt: string }> {
+): Promise<{ pairs: DatasetPair[]; trainPairs: DatasetPair[]; evalPairs: DatasetPair[]; jsonl: string; evalJsonl: string; jsonlWithMeta: string; stats: PipelineStats; systemPrompt: string }> {
 
   // Build the enriched context block from wizard context (or fall back to bare goal)
   const ctx = wizardContext ?? { ...EMPTY_WIZARD_CONTEXT, goal };
@@ -1051,31 +1162,76 @@ export async function generateDataset(
   const docSummaryForBoundary = ctx.documentSummary
     || chunks.slice(0, 3).map(c => c.substring(0, 300)).join(" ");
 
-  const [boundaryPairs, contrastivePairs, metaCognitivePairs] = await Promise.all([
+  const [boundaryPairs, contrastivePairs, metaCognitivePairs, appliedExamplePairs] = await Promise.all([
     generateBoundaryPairs(contextBlock, docSummaryForBoundary),
     generateContrastivePairs(contextBlock, chunks),
     generateMetaCognitivePairs(contextBlock, chunks),
+    generateAppliedExamplePairs(contextBlock, chunks),
   ]);
 
-  console.log(`[Pipeline] Boundary pairs: ${boundaryPairs.length}, Contrastive pairs: ${contrastivePairs.length}, Meta-cognitive pairs: ${metaCognitivePairs.length}`);
+  console.log(`[Pipeline] Boundary pairs: ${boundaryPairs.length}, Contrastive pairs: ${contrastivePairs.length}, Meta-cognitive pairs: ${metaCognitivePairs.length}, Applied Example pairs: ${appliedExamplePairs.length}`);
 
   // Merge all pair types
-  const allFinalPairs = [...final, ...boundaryPairs, ...contrastivePairs, ...metaCognitivePairs];
+  let allFinalPairs = [...final, ...boundaryPairs, ...contrastivePairs, ...metaCognitivePairs, ...appliedExamplePairs];
+
+  // ── Stage 6: Format-Following Post-Processing ──
+  onProgress?.({
+    stage: "validating",
+    message: `Applying format-following training...`,
+    chunksTotal: totalChunks,
+    chunksProcessed: totalChunks,
+    pairsGenerated: allFinalPairs.length,
+  });
+
+  const formatResult = await applyFormatFollowingTraining(allFinalPairs);
+  allFinalPairs = formatResult.pairs;
+  const formatVariantCount = formatResult.count;
+  console.log(`[Pipeline] Format variant pairs generated: ${formatVariantCount}`);
 
   // Inject system_prompt into every pair
   for (const pair of allFinalPairs) {
     pair.system_prompt = systemPrompt;
   }
 
+  // ── Stage 7: Split Held-Out Test Set ──
+  const testSplitRatio = 0.15;
+  const evalPairs: DatasetPair[] = [];
+  const trainPairs: DatasetPair[] = [];
+
+  // Group by pass_type to stratify
+  const grouped = new Map<string, DatasetPair[]>();
+  for (const pair of allFinalPairs) {
+    const pt = pair._meta?.pass_type ?? "unknown";
+    if (!grouped.has(pt)) grouped.set(pt, []);
+    grouped.get(pt)!.push(pair);
+  }
+
+  for (const [pt, pairs] of grouped.entries()) {
+    // Shuffle the array
+    const shuffled = [...pairs].sort(() => 0.5 - Math.random());
+    const splitIndex = Math.floor(shuffled.length * testSplitRatio);
+    evalPairs.push(...shuffled.slice(0, splitIndex));
+    trainPairs.push(...shuffled.slice(splitIndex));
+  }
+
+  console.log(`[Pipeline] Split Dataset: ${trainPairs.length} for training, ${evalPairs.length} for evaluation.`);
+
   // ── Build JSONL ──
   // FIX 4: Build two versions — one with metadata for R2 audit, one clean for SFTTrainer.
   // The JSONL sent to training contains prompt+completion+system_prompt (SFTTrainer expects this).
   // Metadata is logged to console for debugging.
-  const jsonlForTraining = allFinalPairs.map((p) => JSON.stringify({
+  const jsonlForTraining = trainPairs.map((p) => JSON.stringify({
     prompt: p.prompt,
     completion: p.completion,
     ...(p.system_prompt ? { system_prompt: p.system_prompt } : {}),
   })).join("\n");
+  
+  const evalJsonl = evalPairs.map((p) => JSON.stringify({
+    prompt: p.prompt,
+    completion: p.completion,
+    ...(p.system_prompt ? { system_prompt: p.system_prompt } : {}),
+  })).join("\n");
+
   const jsonlWithMeta = allFinalPairs.map((p) => JSON.stringify(p)).join("\n");
 
   // Log provenance summary
@@ -1094,20 +1250,24 @@ export async function generateDataset(
     boundaryPairs: boundaryPairs.length,
     contrastivePairs: contrastivePairs.length,
     metaCognitivePairs: metaCognitivePairs.length,
+    appliedExamplePairs: appliedExamplePairs.length,
+    formatVariantPairs: formatVariantCount,
     finalTotal: allFinalPairs.length,
+    trainPairsCount: trainPairs.length,
+    evalPairsCount: evalPairs.length,
     documentLength: text.length,
     sourceHash: crypto.createHash("md5").update(text).digest("hex"),
   };
 
   onProgress?.({
     stage: "complete",
-    message: `Done! Generated ${allFinalPairs.length} high-quality pairs (${final.length} factual + ${boundaryPairs.length} boundary + ${contrastivePairs.length} contrastive + ${metaCognitivePairs.length} meta-cognitive)`,
+    message: `Done! Generated ${trainPairs.length} training pairs, ${evalPairs.length} eval pairs.`,
     chunksTotal: totalChunks,
     chunksProcessed: totalChunks,
-    pairsGenerated: allFinalPairs.length,
+    pairsGenerated: trainPairs.length,
   });
 
-  return { pairs: allFinalPairs, jsonl: jsonlForTraining, jsonlWithMeta, stats, systemPrompt };
+  return { pairs: allFinalPairs, trainPairs, evalPairs, jsonl: jsonlForTraining, evalJsonl, jsonlWithMeta, stats, systemPrompt };
 }
 
 export interface PipelineStats {
@@ -1118,8 +1278,13 @@ export interface PipelineStats {
   boundaryPairs: number;
   contrastivePairs: number;
   metaCognitivePairs: number;
+  appliedExamplePairs?: number;
+  formatVariantPairs?: number;
   finalTotal: number;
+  trainPairsCount: number;
+  evalPairsCount: number;
   documentLength: number;
   /** MD5 hash of the full source document — for post-hoc verification */
   sourceHash: string;
 }
+

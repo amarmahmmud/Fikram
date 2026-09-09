@@ -126,7 +126,7 @@ export default function NewJobPage() {
   // ── Pipeline Progress Overlay ──
   const [showPipelineOverlay, setShowPipelineOverlay] = useState(false);
   const [pipelineEvent, setPipelineEvent] = useState<PipelineEvent | null>(null);
-  const pipelineResolveRef = useRef<((result: { jsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => void) | null>(null);
+  const pipelineResolveRef = useRef<((result: { jsonl: string; evalJsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => void) | null>(null);
   const pipelineRejectRef = useRef<((error: string) => void) | null>(null);
 
   // ── Success panel ──
@@ -564,8 +564,10 @@ export default function NewJobPage() {
     setDowngradeSuggestions([]);
     try {
       let finalDatasetUrl = null;
+      let finalEvalDatasetUrl: string | null = null;
       let finalDatasetSize = datasetRowCount || 100;
       let generatedSystemPrompt = "";
+      let documentFlaggedThin = false;
 
       // Retrain mode: reuse existing dataset from R2 (no upload/generation needed)
       if (retrainDatasetUrl) {
@@ -606,7 +608,7 @@ export default function NewJobPage() {
             const ctx = buildWizardContext();
 
             // Create a promise that the overlay will resolve/reject
-            const genData = await new Promise<{ jsonl: string; stats: Record<string, unknown>; systemPrompt: string }>(
+            const genData = await new Promise<{ jsonl: string; evalJsonl: string; stats: Record<string, unknown>; systemPrompt: string }>(
               (resolve, reject) => {
                 pipelineResolveRef.current = resolve;
                 pipelineRejectRef.current = (errMsg) => reject(new Error(errMsg));
@@ -671,6 +673,13 @@ export default function NewJobPage() {
             setDatasetRowCount(rowCount);
             finalDatasetSize = rowCount;
 
+            // Pre-training document sufficiency check (heuristic: tune once real user data exists)
+            const MINIMUM_PAIRS_THRESHOLD = 100;
+            const totalPairsGenerated = (genData.stats as Record<string, unknown>)?.finalTotal as number ?? rowCount;
+            if (totalPairsGenerated < MINIMUM_PAIRS_THRESHOLD) {
+              documentFlaggedThin = true;
+            }
+
             if (rowCount > MAX_TRAINING_EXAMPLES) {
               alert(`Generated dataset has ${rowCount.toLocaleString()} rows, exceeding the maximum of ${MAX_TRAINING_EXAMPLES.toLocaleString()}. Try using a shorter document.`);
               setLaunching(false);
@@ -680,6 +689,29 @@ export default function NewJobPage() {
             const blob = new Blob([genData.jsonl as string], { type: "application/jsonl" });
             const baseName = files[0]?.name?.replace(/\.[^/.]+$/, "") || "generated";
             fileToUpload = new File([blob], `${baseName}_dataset.jsonl`, { type: "application/jsonl" });
+
+            // Upload held-out eval set to R2 (separate file)
+            const evalContent = (genData.evalJsonl as string) || "";
+            if (evalContent.trim()) {
+              try {
+                setGenerationStatus("Uploading evaluation set...");
+                const evalBlob = new Blob([evalContent], { type: "application/jsonl" });
+                const evalFile = new File([evalBlob], `${baseName}_eval.jsonl`, { type: "application/jsonl" });
+
+                const evalUpload = await apiClient.post<any>("/api/upload", {
+                  filename: evalFile.name,
+                  contentType: evalFile.type,
+                });
+                if (evalUpload.ok) {
+                  await apiClient.put<any>(evalUpload.uploadUrl, evalFile, {
+                    headers: { "Content-Type": evalFile.type || "application/octet-stream" },
+                  });
+                  finalEvalDatasetUrl = evalUpload.downloadUrl;
+                }
+              } catch (err) {
+                console.warn("[NewJob] Eval set upload failed (non-critical):", err);
+              }
+            }
           }
 
           setGenerationStatus("Uploading dataset...");
@@ -711,6 +743,8 @@ export default function NewJobPage() {
           batchSize: costEstimate?.batch_size ?? config.batchSize,
           maxSteps: costEstimate?.max_steps,
           warmupSteps: costEstimate?.warmup_steps ?? config.warmupSteps,
+          eval_dataset_url: finalEvalDatasetUrl,
+          document_flagged_thin: documentFlaggedThin,
         },
         datasetUrl: finalDatasetUrl,
         datasetSize: finalDatasetSize,
@@ -764,7 +798,7 @@ export default function NewJobPage() {
   }
 
   /* ── Pipeline overlay callbacks ── */
-  const handlePipelineComplete = useCallback((data: { jsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => {
+  const handlePipelineComplete = useCallback((data: { jsonl: string; evalJsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => {
     pipelineResolveRef.current?.(data);
     pipelineResolveRef.current = null;
   }, []);

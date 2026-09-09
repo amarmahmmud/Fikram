@@ -210,6 +210,19 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       icon: "💾",
     },
     {
+      id: "evaluating",
+      label: "Evaluating",
+      friendlyLabel: "Testing your model's accuracy",
+      techDetail: `Running held-out test set through LLM-as-a-Judge evaluation`,
+      status: isCompleted
+        ? (config.eval_status === "completed" ? "done"
+          : config.eval_status === "running" ? "active"
+          : config.eval_status === "unavailable" ? "done"
+          : config.eval_dataset_url ? "active" : "done")
+        : "pending",
+      icon: "📊",
+    },
+    {
       id: "complete",
       label: "Complete",
       friendlyLabel: "Your model is ready!",
@@ -404,6 +417,188 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 ))}
               </div>
             </div>
+
+            {/* ── Evaluation Report Card ── */}
+            {isCompleted && (() => {
+              const evalStatus = config.eval_status as string | undefined;
+              const evalResult = config.eval_result as Record<string, any> | undefined;
+              const evalError = config.eval_error as string | undefined;
+
+              // Not evaluated yet and no eval set
+              if (!evalStatus && !evalResult) return null;
+
+              // Evaluation is running
+              if (evalStatus === "running") {
+                return (
+                  <div className={styles.evalCard}>
+                    <div className={styles.evalHeader}>
+                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
+                    </div>
+                    <div className={styles.evalStatusRunning}>
+                      <div className={styles.evalSpinner} />
+                      <span>Evaluating your model against held-out test questions... This may take a few minutes.</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Evaluation unavailable
+              if (evalStatus === "unavailable") {
+                return (
+                  <div className={styles.evalCard}>
+                    <div className={styles.evalHeader}>
+                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
+                      <span className={`${styles.evalBadge} ${styles.evalBadgeWarn}`}>Unavailable</span>
+                    </div>
+                    <p className={styles.explainerText}>
+                      {evalError || "Automatic evaluation could not be completed. You can still test your model in the playground and publish it."}
+                    </p>
+                  </div>
+                );
+              }
+
+              // Evaluation completed — show the Report Card
+              if (evalResult) {
+                const pct = evalResult.overallPercentage as number ?? 0;
+                const avgScore = evalResult.overallScore as number ?? 0;
+                const categories = (evalResult.categoryScores || {}) as Record<string, { avg: number; count: number; percentage: number }>;
+                const failedExamples = (evalResult.failedExamples || []) as Array<{
+                  prompt: string; sourceQuote: string; reasoning: string; score: number;
+                }>;
+                const guidance = evalResult.guidance as { summary: string; primaryAction: string; actionLabel: string } | null;
+                const isGood = avgScore >= 4.0;
+                const isOkay = avgScore >= 3.0 && avgScore < 4.0;
+
+                const colorClass = isGood ? "Good" : isOkay ? "Warn" : "Bad";
+
+                // Friendly category labels
+                const categoryLabels: Record<string, string> = {
+                  recall: "Fact Recall",
+                  application: "Application",
+                  format_following: "Format",
+                  meta_cognitive: "Self-Awareness",
+                  contrastive: "Comparisons",
+                  boundary: "Boundaries",
+                  unknown: "Other",
+                };
+
+                return (
+                  <div className={styles.evalCard}>
+                    <div className={styles.evalHeader}>
+                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
+                      <span className={`${styles.evalBadge} ${styles[`evalBadge${colorClass}`]}`}>
+                        {isGood ? "Ready to Publish" : isOkay ? "Needs Improvement" : "Needs Work"}
+                      </span>
+                    </div>
+
+                    {/* Overall Score */}
+                    <div className={styles.evalScoreRing}>
+                      <div style={{ textAlign: "center" }}>
+                        <div className={`${styles.evalPercentage} ${styles[`evalPercentage${colorClass}`]}`}>
+                          {pct}%
+                        </div>
+                        <div className={styles.evalSubtext}>
+                          {avgScore.toFixed(1)}/5.0 · {evalResult.totalEvaluated} questions tested
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Category Breakdown */}
+                    {Object.keys(categories).length > 0 && (
+                      <div className={styles.evalCategories}>
+                        {Object.entries(categories).map(([cat, data]) => {
+                          const catColor = data.percentage >= 80 ? "#10b981" : data.percentage >= 60 ? "#fbbf24" : "#ef4444";
+                          return (
+                            <div key={cat} className={styles.evalCategoryItem}>
+                              <div className={styles.evalCategoryLabel}>
+                                {categoryLabels[cat] || cat}
+                              </div>
+                              <div className={styles.evalCategoryScore} style={{ color: catColor }}>
+                                {data.percentage}%
+                              </div>
+                              <div className={styles.evalCategoryCount}>
+                                {data.count} question{data.count !== 1 ? "s" : ""}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Failed Examples (trust-building transparency) */}
+                    {failedExamples.length > 0 && (
+                      <div className={styles.evalFailedSection}>
+                        <div className={styles.evalFailedTitle}>
+                          Where the model struggled ({failedExamples.length} example{failedExamples.length !== 1 ? "s" : ""})
+                        </div>
+                        {failedExamples.map((ex, idx) => (
+                          <div key={idx} className={styles.evalFailedItem}>
+                            <div className={styles.evalFailedQuestion}>
+                              Q: {ex.prompt.length > 150 ? ex.prompt.substring(0, 150) + "…" : ex.prompt}
+                            </div>
+                            <div className={styles.evalFailedMeta}>
+                              <span className={styles.evalFailedScore}>{ex.score}/5</span>
+                            </div>
+                            {ex.sourceQuote && (
+                              <div className={styles.evalFailedQuote}>
+                                &ldquo;{ex.sourceQuote.length > 200 ? ex.sourceQuote.substring(0, 200) + "…" : ex.sourceQuote}&rdquo;
+                              </div>
+                            )}
+                            <div className={styles.evalFailedReasoning}>{ex.reasoning}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Guidance & Actions */}
+                    {guidance && guidance.primaryAction !== "none" && (
+                      <div className={styles.evalGuidance}>
+                        <p className={styles.evalGuidanceText}>{guidance.summary}</p>
+                        <div className={styles.evalGuidanceActions}>
+                          {/* Lightweight action: retrain (routes through cost estimation) */}
+                          {(guidance.primaryAction === "add_data" || guidance.primaryAction === "more_steps") && (
+                            <Link
+                              href={`/new-job?retrain=${job.id}`}
+                              className="btn btn-sm btn-primary"
+                              style={{ gap: 6, display: "inline-flex", alignItems: "center" }}
+                            >
+                              <RotateCcw size={14} />
+                              {guidance.actionLabel}
+                            </Link>
+                          )}
+                          {/* Heavyweight action: different model → fresh job setup with cost preview */}
+                          {guidance.primaryAction === "different_model" && (
+                            <Link
+                              href="/new-job"
+                              className="btn btn-sm btn-secondary"
+                              style={{ gap: 6, display: "inline-flex", alignItems: "center" }}
+                            >
+                              {guidance.actionLabel} →
+                            </Link>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Good score — prominent Publish CTA */}
+                    {isGood && (
+                      <div style={{ marginTop: 16, textAlign: "center" }}>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => setPublishModalOpen(true)}
+                          style={{ gap: 8, display: "inline-flex", alignItems: "center", padding: "10px 24px" }}
+                        >
+                          <Globe size={16} />
+                          Publish Your Model
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
           </div>
 
           {/* Right col */}
