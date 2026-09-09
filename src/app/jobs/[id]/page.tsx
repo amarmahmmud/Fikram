@@ -20,6 +20,8 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
+  const [liveElapsed, setLiveElapsed] = useState(0);
+  const [showTechDetails, setShowTechDetails] = useState(false);
 
   const fetchJob = useCallback(async () => {
     try {
@@ -58,6 +60,16 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
     return () => clearInterval(interval);
   }, [job, fetchJob]);
+
+  // Live elapsed timer — ticks every second while running/pending
+  useEffect(() => {
+    if (!job?.started_at || job.status === "completed" || job.status === "failed" || job.status === "cancelled") return;
+    const start = new Date(job.started_at).getTime();
+    const tick = () => setLiveElapsed(Math.max(0, Math.floor((Date.now() - start) / 1000)));
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [job?.started_at, job?.status]);
 
   async function handleMarkFailed() {
     if (!job) return;
@@ -118,48 +130,108 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const batchSize = config.batchSize ?? 2;
   const detectedFamily = config.detected_family as string | undefined;
   const datasetFileName = job.dataset_url ? job.dataset_url.split("/").pop()?.split("?")[0] : "Uploaded Dataset";
+  const estimatedTrainingSec = config.estimated_training_seconds ?? (config.estimatedTime ? parseInt(config.estimatedTime) * 60 : 720);
+
 
   // Calculate elapsed or total duration
-  let durationStr = "—";
-  if (job.started_at) {
+  const getElapsedSec = () => {
+    if (!job.started_at) return 0;
     const start = new Date(job.started_at).getTime();
-    const end = job.finished_at || job.completed_at ? new Date(job.finished_at || job.completed_at || "").getTime() : Date.now();
-    const diffSec = Math.max(0, Math.floor((end - start) / 1000));
-    const mins = Math.floor(diffSec / 60);
-    const secs = diffSec % 60;
-    durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  }
+    const end = job.finished_at || job.completed_at
+      ? new Date(job.finished_at || job.completed_at || "").getTime()
+      : Date.now();
+    return Math.max(0, Math.floor((end - start) / 1000));
+  };
 
-  // Generate real status logs
-  const logs: { type: "info" | "success" | "dim" | "error"; text: string }[] = [];
-  logs.push({ type: "info", text: `[System] Job ID: ${job.id}` });
-  logs.push({ type: "info", text: `[Config] Base Model: ${job.base_model} | Method: ${job.method.toUpperCase()}` });
-  logs.push({ type: "dim",  text: `[Config] Epochs: ${epochs} | Learning Rate: ${lr} | Batch Size: ${batchSize}` });
+  const elapsedSec = isRunning ? liveElapsed : getElapsedSec();
+  const mins = Math.floor(elapsedSec / 60);
+  const secs = elapsedSec % 60;
+  const durationStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, "0")}s` : `${secs}s`;
 
-  if (job.dataset_url) {
-    logs.push({ type: "success", text: `[Dataset] Source: ${datasetFileName} verified on Cloudflare R2 ✓` });
-  }
+  // Progress calculation — based on elapsed vs estimated
+  const progressPercent = isCompleted
+    ? 100
+    : isFailed
+    ? 100
+    : isPending
+    ? 5
+    : Math.min(95, Math.round((elapsedSec / estimatedTrainingSec) * 100));
 
-  if (isPending) {
-    logs.push({ type: "info", text: "[Queue] Job is queued, waiting for available GPU worker..." });
-  } else if (isRunning) {
-    logs.push({ type: "info", text: "[Modal Cloud] GPU Container allocated (NVIDIA L4 24GB VRAM)" });
-    logs.push({ type: "info", text: "[Transformers] Initializing model & tokenizer..." });
-    logs.push({ type: "info", text: "[LoRA] Injected trainable adapter matrices (r=16, alpha=16)" });
-    logs.push({ type: "dim",  text: "[Training] Active forward-backward optimization loop in progress..." });
-    logs.push({ type: "info", text: `[Progress] Running step optimization (elapsed: ${durationStr})...` });
-  } else if (isCompleted) {
-    logs.push({ type: "info",    text: "[Modal Cloud] GPU Container allocated (NVIDIA L4 24GB VRAM)" });
-    logs.push({ type: "success", text: "[Transformers] Base model loaded & configured ✓" });
-    logs.push({ type: "success", text: "[LoRA] Fine-tuning iterations converged ✓" });
-    logs.push({ type: "success", text: `[Storage] LoRA adapter weights uploaded to R2 prefix: ${job.result_url || "adapters/" + job.id} ✓` });
-    logs.push({ type: "success", text: `[Complete] Job finished successfully in ${durationStr} ✓` });
-  } else if (isFailed) {
-    logs.push({ type: "error", text: "[Error] Training execution failed or was terminated." });
-    if (job.logs) {
-      logs.push({ type: "error", text: `[Reason] ${job.logs.trim()}` });
-    }
-  }
+  // ETA calculation
+  const etaSec = isRunning && estimatedTrainingSec > 0
+    ? Math.max(0, estimatedTrainingSec - elapsedSec)
+    : 0;
+  const etaStr = etaSec > 60
+    ? `~${Math.ceil(etaSec / 60)}m remaining`
+    : etaSec > 0
+    ? `~${etaSec}s remaining`
+    : "";
+
+  // Training phases — derived from real job state
+  const phases = [
+    {
+      id: "queued",
+      label: "Job Queued",
+      friendlyLabel: "Waiting in line",
+      techDetail: `Job ${job.id.substring(0, 8)} submitted to Modal.com GPU cluster`,
+      status: isPending ? "active" : "done",
+      icon: "⏳",
+    },
+    {
+      id: "gpu",
+      label: "GPU Allocated",
+      friendlyLabel: "GPU reserved for your model",
+      techDetail: "NVIDIA L4 24GB VRAM container provisioned",
+      status: isPending ? "pending" : "done",
+      icon: "🖥️",
+    },
+    {
+      id: "loading",
+      label: "Loading Model",
+      friendlyLabel: "Setting up the AI model",
+      techDetail: `Loading ${job.base_model} with ${job.method.toUpperCase()} adapter (r=16, alpha=16)`,
+      status: isPending ? "pending" : (isRunning && elapsedSec < 45) ? "active" : isRunning || isCompleted ? "done" : "pending",
+      icon: "📦",
+    },
+    {
+      id: "training",
+      label: "Training",
+      friendlyLabel: "Your model is learning from the data",
+      techDetail: `${epochs} epochs × batch ${batchSize} | LR: ${lr} | AdamW optimizer`,
+      status: isRunning && elapsedSec >= 45 ? "active" : isCompleted ? "done" : "pending",
+      icon: "🧠",
+    },
+    {
+      id: "uploading",
+      label: "Saving Weights",
+      friendlyLabel: "Saving your trained model",
+      techDetail: `Uploading LoRA adapter weights to Cloudflare R2`,
+      status: isCompleted ? "done" : "pending",
+      icon: "💾",
+    },
+    {
+      id: "complete",
+      label: "Complete",
+      friendlyLabel: "Your model is ready!",
+      techDetail: `Finished in ${durationStr}. Adapter available at ${job.result_url || "adapters/" + job.id}`,
+      status: isCompleted ? "done" : isFailed ? "failed" : "pending",
+      icon: "✨",
+    },
+  ];
+
+  // "What's happening" explainer text
+  const activePhase = phases.find(p => p.status === "active");
+  const explainerText = isFailed
+    ? "Something went wrong during training. You can retry with the same dataset."
+    : isCompleted
+    ? "Training is complete! Your custom AI model is ready to test in the playground."
+    : isPending
+    ? "Your job is in the queue. It will start automatically once a GPU becomes available (usually within a minute)."
+    : activePhase?.id === "loading"
+    ? `We're loading ${job.base_model} onto the GPU and configuring the fine-tuning adapter. This takes about 30-45 seconds.`
+    : activePhase?.id === "training"
+    ? `Your model is learning from the training data. Each pass through your data (called an 'epoch') helps it become more accurate. Running ${epochs} epoch${epochs > 1 ? "s" : ""}.`
+    : "Processing your training job...";
 
   return (
     <>
@@ -235,52 +307,101 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         <div className={styles.grid}>
           {/* Left col */}
           <div className={styles.leftCol}>
-            {/* Live Status Card */}
+            {/* Live Status Card — with real progress + timer */}
             <div className="card">
               <div className={styles.cardHead}>
-                <span className={styles.cardTitle}>Training Pipeline Status</span>
+                <span className={styles.cardTitle}>Training Status</span>
                 <span className="font-mono" style={{ fontSize: "0.8125rem", color: isCompleted ? "var(--success)" : isRunning ? "var(--warning)" : isFailed ? "var(--error)" : "var(--text-muted)" }}>
-                  {isCompleted ? "100% (Completed)" : isRunning ? "Training on Modal GPU..." : isFailed ? "Failed" : "Queued"}
+                  {isCompleted ? "Complete" : isRunning ? `${progressPercent}%` : isFailed ? "Failed" : "Queued"}
                 </span>
               </div>
+
+              {/* Progress bar */}
               <div className="progress-bar" style={{ marginTop: 12 }}>
                 <div 
                   className="progress-fill" 
                   style={{ 
-                    width: isCompleted ? "100%" : isRunning ? "65%" : isFailed ? "100%" : "15%",
+                    width: `${progressPercent}%`,
                     backgroundColor: isFailed ? "var(--error)" : undefined,
-                    transition: "width 0.8s ease" 
+                    transition: "width 1s ease" 
                   }} 
                 />
               </div>
-              <div className={styles.progressMeta}>
-                <span>Engine: Modal.com (NVIDIA L4)</span>
-                <span>Duration: {durationStr}</span>
+
+              {/* Timer row */}
+              <div className={styles.timerRow}>
+                <div className={styles.timerItem}>
+                  <span className={styles.timerValue}>{durationStr}</span>
+                  <span className={styles.timerLabel}>elapsed</span>
+                </div>
+                {etaStr && (
+                  <div className={styles.timerItem}>
+                    <span className={`${styles.timerValue} ${styles.timerEta}`}>{etaStr}</span>
+                    <span className={styles.timerLabel}>estimated</span>
+                  </div>
+                )}
+                <div className={styles.timerItem}>
+                  <span className={styles.timerLabel}>Engine: Modal.com (NVIDIA L4)</span>
+                </div>
               </div>
             </div>
 
-            {/* Live Terminal Logs */}
-            <div className="terminal">
-              <div className="terminal-header">
-                <div className="terminal-dot red" />
-                <div className="terminal-dot yellow" />
-                <div className="terminal-dot green" />
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: 8, fontFamily: "var(--font-mono)" }}>
-                  pipeline_events.log
-                </span>
-                <span className={`badge ${isCompleted ? "badge-success" : isRunning ? "badge-warning" : isFailed ? "badge-error" : "badge-default"}`} style={{ marginLeft: "auto", fontSize: "0.625rem" }}>
-                  ● {job.status.toUpperCase()}
+            {/* What's Happening — friendly explainer */}
+            <div className={styles.explainerCard} aria-live="polite">
+              <div className={styles.explainerHeader}>
+                <span className={styles.explainerDot} style={{
+                  background: isCompleted ? "var(--success)" : isFailed ? "var(--error)" : isRunning ? "var(--warning)" : "var(--text-muted)",
+                  animation: isRunning || isPending ? "pulse-dot 2s infinite" : "none",
+                }} />
+                <span className={styles.explainerTitle}>
+                  {isCompleted ? "Training Complete" : isFailed ? "Training Failed" : isPending ? "Waiting to Start" : "Training in Progress"}
                 </span>
               </div>
-              <div className="terminal-body" style={{ minHeight: "180px" }}>
-                {logs.map((l, i) => (
-                  <span key={i} className={`terminal-line ${l.type}`}>{l.text}</span>
+              <p className={styles.explainerText}>{explainerText}</p>
+            </div>
+
+            {/* Phase Timeline */}
+            <div className="card">
+              <div className={styles.cardHead} style={{ marginBottom: 16 }}>
+                <span className={styles.cardTitle}>Training Pipeline</span>
+                <button
+                  className={styles.techToggle}
+                  onClick={() => setShowTechDetails(!showTechDetails)}
+                >
+                  {showTechDetails ? "Simple View" : "Technical Details"}
+                </button>
+              </div>
+              <div className={styles.phaseTimeline}>
+                {phases.map((phase, idx) => (
+                  <div key={phase.id} className={`${styles.phaseItem} ${styles[`phase_${phase.status}`]}`}>
+                    <div className={styles.phaseIconCol}>
+                      <div className={styles.phaseIcon}>
+                        {phase.status === "done" ? (
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path d="M2.5 7.5L5.5 10.5L11.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        ) : phase.status === "failed" ? (
+                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                        ) : (
+                          <span style={{ fontSize: "0.75rem" }}>{phase.icon}</span>
+                        )}
+                      </div>
+                      {idx < phases.length - 1 && (
+                        <div className={`${styles.phaseConnector} ${phase.status === "done" ? styles.phaseConnectorDone : ""}`} />
+                      )}
+                    </div>
+                    <div className={styles.phaseContent}>
+                      <span className={styles.phaseLabel}>
+                        {showTechDetails ? phase.label : phase.friendlyLabel}
+                      </span>
+                      {showTechDetails && (
+                        <span className={styles.phaseTechDetail}>{phase.techDetail}</span>
+                      )}
+                    </div>
+                  </div>
                 ))}
-                {isRunning && (
-                  <span className="terminal-line dim" style={{ animation: "pulse 1.5s infinite" }}>
-                    &gt; GPU computing in progress... (auto-refreshing)
-                  </span>
-                )}
               </div>
             </div>
           </div>
