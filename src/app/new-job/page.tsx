@@ -529,6 +529,11 @@ export default function NewJobPage() {
 
   /* ── Launch real job ── */
   async function handleLaunch() {
+    if (!jobName.trim()) {
+      alert("⚠️ Please give your model a Job Name before launching! (e.g. 'Workforce Risk Analyst')");
+      return;
+    }
+
     // Pre-launch validation: catch field-mapping bugs before they corrupt training data
     const ctx = buildWizardContext();
     const warnings = validateWizardContext(ctx);
@@ -1522,7 +1527,7 @@ export default function NewJobPage() {
                 id="launch-job-btn"
                 className="btn btn-primary btn-lg"
                 onClick={handleLaunch}
-                disabled={launching || insufficientCredits || costLoading || !jobName.trim()}
+                disabled={launching || insufficientCredits || costLoading}
               >
                 {launching ? (
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
