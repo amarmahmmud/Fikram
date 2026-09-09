@@ -1390,7 +1390,7 @@ export default function NewJobPage() {
               {/* Job name */}
               <div className={styles.configGroup}>
                 <div className="input-group">
-                  <label htmlFor="job-name-input" className="input-label">Job Name (optional)</label>
+                  <label htmlFor="job-name-input" className="input-label">Job Name</label>
                   <input
                     id="job-name-input"
                     className="input"
@@ -1522,7 +1522,7 @@ export default function NewJobPage() {
                 id="launch-job-btn"
                 className="btn btn-primary btn-lg"
                 onClick={handleLaunch}
-                disabled={launching || insufficientCredits || costLoading}
+                disabled={launching || insufficientCredits || costLoading || !jobName.trim()}
               >
                 {launching ? (
                   <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
