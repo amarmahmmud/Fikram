@@ -1,11 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 
 export const RESILIENT_GEMINI_MODELS = [
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
+  "gemini-3.5-flash",
   "gemini-3.6-flash",
-  "gemini-3-flash-preview",
 ];
 
 export interface ResilientGenerateOptions {
@@ -55,42 +52,84 @@ function setupGoogleCredentials(): boolean {
 }
 
 /**
+ * Returns all configured Gemini API keys, allowing round-robin rotation
+ * across multiple keys to bypass per-key rate limits.
+ */
+export function getGeminiApiKeys(): string[] {
+  const keysStr = process.env.GOOGLE_GEMINI_API_KEYS;
+  if (keysStr) {
+    const parsed = keysStr.split(",").map((k) => k.trim()).filter(Boolean);
+    if (parsed.length > 0) return parsed;
+  }
+  const single = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
+  if (single) {
+    if (single.includes(",")) {
+      return single.split(",").map((k) => k.trim()).filter(Boolean);
+    }
+    return [single.trim()];
+  }
+  return [];
+}
+
+const clientCache = new Map<string, GoogleGenAI>();
+let currentKeyIndex = 0;
+
+function getGenAIClientForKey(apiKey: string): GoogleGenAI {
+  let client = clientCache.get(apiKey);
+  if (!client) {
+    client = new GoogleGenAI({ apiKey });
+    clientCache.set(apiKey, client);
+  }
+  return client;
+}
+
+function getEnterpriseClient(): GoogleGenAI {
+  setupGoogleCredentials();
+  const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
+  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+  return new GoogleGenAI({
+    vertexai: true,
+    project: project,
+    location: location,
+  });
+}
+
+/**
  * Returns an initialized GoogleGenAI client configured for Vertex AI Enterprise
  * if a service account key or GOOGLE_GENAI_USE_ENTERPRISE is present,
  * otherwise falling back to standard API key mode.
  */
-function getGenAIClient(): GoogleGenAI {
-  const hasServiceAccount = setupGoogleCredentials();
-  const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
-  const useEnterprise = (process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true" || hasServiceAccount) && !!project;
-
+export function getGenAIClient(): GoogleGenAI {
+  const useEnterprise = process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true";
   if (useEnterprise) {
-    return new GoogleGenAI({
-      vertexai: true,
-      project: project,
-      location: location,
-    });
+    return getEnterpriseClient();
   }
 
-  const apiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-  if (!apiKey) {
+  const keys = getGeminiApiKeys();
+  if (keys.length === 0) {
     throw new Error("Neither Google Service Account key nor Gemini API key is configured in environment.");
   }
 
-  return new GoogleGenAI({ apiKey });
+  const key = keys[currentKeyIndex % keys.length];
+  return getGenAIClientForKey(key);
 }
 
 /**
  * Execute a generateContent call against Gemini with automatic
- * retry and fallback across multiple models when encountering 503 (high demand)
+ * retry and fallback across multiple models and API keys when encountering 503 (high demand)
  * or 429 (rate limits).
  */
 export async function generateWithModelFallback(
   contentsOrRequest: any,
   options: ResilientGenerateOptions = {}
 ) {
-  const client = getGenAIClient();
+  const useEnterprise = process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true";
+  const keys = useEnterprise ? [] : getGeminiApiKeys();
+
+  if (!useEnterprise && keys.length === 0) {
+    throw new Error("Neither Google Service Account key nor Gemini API key is configured in environment.");
+  }
+
   const models = options.preferredModels && options.preferredModels.length > 0
     ? options.preferredModels
     : RESILIENT_GEMINI_MODELS;
@@ -108,50 +147,85 @@ export async function generateWithModelFallback(
 
   for (const modelName of models) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        const result = await client.models.generateContent({
-          model: modelName,
-          contents: contents,
-          config: Object.keys(config).length > 0 ? config : undefined,
-        });
+      // If we have multiple keys, we try across available keys before sleeping
+      const keysToTryCount = useEnterprise ? 1 : Math.max(1, keys.length);
 
-        // result.text may be a getter (string) or a function depending on the SDK version
-        const rawText = result.text;
-        const textOutput = (typeof rawText === "function" ? (rawText as () => string)() : rawText) || "";
+      for (let keyAttempt = 0; keyAttempt < keysToTryCount; keyAttempt++) {
+        const activeKey = useEnterprise ? "" : keys[currentKeyIndex % keys.length];
+        const client = useEnterprise ? getEnterpriseClient() : getGenAIClientForKey(activeKey);
 
-        // Return an adapter object preserving .response.text() compatibility for existing callers
-        return {
-          text: () => textOutput,
-          response: {
+        try {
+          const result = await client.models.generateContent({
+            model: modelName,
+            contents: contents,
+            config: Object.keys(config).length > 0 ? config : undefined,
+          });
+
+          // result.text may be a getter (string) or a function depending on the SDK version
+          const rawText = result.text;
+          const textOutput = (typeof rawText === "function" ? (rawText as () => string)() : rawText) || "";
+
+          // Advance key index for natural load-balancing across requests
+          if (!useEnterprise && keys.length > 1) {
+            currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+          }
+
+          // Return an adapter object preserving .response.text() compatibility for existing callers
+          return {
             text: () => textOutput,
-          },
-          raw: result,
-        };
-      } catch (err: any) {
-        lastError = err;
-        const msg = err?.message || "";
-        const status = err?.status;
+            response: {
+              text: () => textOutput,
+            },
+            raw: result,
+          };
+        } catch (err: any) {
+          lastError = err;
+          const msg = err?.message || "";
+          const status = err?.status;
 
-        const isTransient =
-          status === 503 ||
-          status === 429 ||
-          msg.includes("503") ||
-          msg.includes("429") ||
-          msg.includes("high demand") ||
-          msg.includes("overloaded") ||
-          msg.includes("Resource has been exhausted");
+          const isTransient =
+            status === 503 ||
+            status === 429 ||
+            status === 502 ||
+            status === 504 ||
+            msg.includes("503") ||
+            msg.includes("429") ||
+            msg.includes("502") ||
+            msg.includes("504") ||
+            msg.includes("high demand") ||
+            msg.includes("overloaded") ||
+            msg.includes("Resource has been exhausted") ||
+            msg.includes("fetch failed") ||
+            msg.includes("Timeout") ||
+            msg.includes("timeout") ||
+            msg.includes("ETIMEDOUT") ||
+            msg.includes("ECONNRESET") ||
+            err?.code === "UND_ERR_CONNECT_TIMEOUT";
 
-        if (isTransient) {
-          const delay = (status === 429 || msg.includes("429") || msg.includes("Resource has been exhausted"))
-            ? attempt * 2500
-            : attempt * 1000;
-          console.warn(
-            `[Gemini Fallback] Model ${modelName} hit transient issue (status ${status}, attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, delay));
-        } else {
-          console.warn(`[Gemini Fallback] Model ${modelName} failed with error: ${msg}. Trying next candidate model...`);
-          break; // Don't retry same model if it's not transient, try next model
+          if (isTransient) {
+            if (!useEnterprise && keys.length > 1) {
+              const prevIdx = currentKeyIndex % keys.length;
+              currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+              console.warn(
+                `[Gemini Rotation] Model ${modelName} hit ${status || "transient"} on key ${prevIdx + 1}/${keys.length}. Switching to key ${currentKeyIndex + 1}/${keys.length}...`
+              );
+              // If there are more keys to try without delay, try next key immediately
+              if (keyAttempt < keysToTryCount - 1) {
+                continue;
+              }
+            }
+
+            const delay = (status === 429 || msg.includes("429") || msg.includes("Resource has been exhausted"))
+              ? attempt * 2000
+              : attempt * 1000;
+            console.warn(
+              `[Gemini Fallback] Model ${modelName} all keys hit transient issue (status ${status}, attempt ${attempt}/${maxRetries}). Retrying in ${delay}ms...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            console.warn(`[Gemini Fallback] Model ${modelName} failed with non-transient error: ${msg}. Trying next candidate model...`);
+            break; // Don't retry same model if it's not transient, try next model
+          }
         }
       }
     }

@@ -1,7 +1,7 @@
 import modal
 import sys
 
-call_id = "fc-01M22P58CYXMM3MAETG3G62J9X"
+call_id = sys.argv[1]
 call = modal.FunctionCall.from_id(call_id)
 print(f"Call status: {call}")
 

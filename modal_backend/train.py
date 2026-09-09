@@ -1019,6 +1019,23 @@ def start_training(item: dict):
 
 
 # ── Local test entry point ────────────────────────────────────────────────
+@app.function(image=planning_image)
+@modal.fastapi_endpoint(method="GET")
+def check_job_status(call_id: str):
+    import modal
+    try:
+        call = modal.FunctionCall.from_id(call_id)
+        try:
+            # Poll with a short timeout to see if it's done
+            res = call.get(timeout=2.0)
+            return {"status": "completed", "result": res}
+        except TimeoutError:
+            return {"status": "running"}
+        except Exception as e:
+            return {"status": "failed", "error": str(e)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 @app.local_entrypoint()
 def main():
     print("Modal training backend loaded. Deploy with: modal deploy modal_backend/train.py")

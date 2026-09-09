@@ -137,10 +137,16 @@ function inferCategory(prompt: string, completion: string | string[]): JudgeResu
     return "format_following";
   }
 
-  // Application/scoring: look for rubric application keywords
-  if (p.includes("score") || p.includes("evaluate") || p.includes("assess") ||
-      p.includes("classify") || p.includes("apply the") || p.includes("using the rubric") ||
-      p.includes("what tier") || p.includes("what risk level")) {
+  // Contrastive / reasoning: compare, contrast, difference, vs, what factors, why
+  if (p.includes("compare") || p.includes("contrast") || p.includes("difference between") ||
+      p.includes(" vs ") || p.includes("versus") || p.includes("what factors") ||
+      p.includes("why is") || p.includes("why are") || p.includes("core reasons")) {
+    return "contrastive";
+  }
+
+  // Application/scoring: look for explicit rubric/scoring application keywords
+  if (p.includes("score") || p.includes("evaluate using") || p.includes("calculate") ||
+      p.includes("apply the") || p.includes("using the rubric") || p.includes("rubric")) {
     return "application";
   }
 
@@ -149,12 +155,6 @@ function inferCategory(prompt: string, completion: string | string[]): JudgeResu
       p.includes("outdated") || p.includes("scope") || p.includes("methodology") ||
       p.includes("how reliable") || p.includes("what can't you")) {
     return "meta_cognitive";
-  }
-
-  // Contrastive: compare, contrast, difference, vs
-  if (p.includes("compare") || p.includes("contrast") || p.includes("difference between") ||
-      p.includes(" vs ") || p.includes("versus")) {
-    return "contrastive";
   }
 
   // Boundary: what you don't know, outside scope
@@ -184,7 +184,8 @@ export async function judgeOnePair(
   const result = await generateWithModelFallback(judgePrompt, {
     generationConfig: {
       temperature: 0.0, // Deterministic for consistent grading
-      maxOutputTokens: 1024,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json",
     },
   });
 

@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { S3Client, HeadObjectCommand } from "@aws-sdk/client-s3";
-import { execSync } from "child_process";
-import path from "path";
 
 const s3 = new S3Client({
   region: "auto",
@@ -28,11 +26,18 @@ async function checkJobR2(jobId: string): Promise<boolean> {
   }
 }
 
-function checkModalStatus(replicateId: string): { status: string; result?: any; error?: string } | null {
+async function checkModalStatus(replicateId: string): Promise<{ status: string; result?: any; error?: string } | null> {
   try {
-    const scriptPath = path.resolve(process.cwd(), "scripts/check_modal_status.py");
-    const output = execSync(`python "${scriptPath}" "${replicateId}"`).toString().trim();
-    return JSON.parse(output);
+    const checkUrl = process.env.MODAL_TRAIN_URL
+      ? process.env.MODAL_TRAIN_URL.replace("-start-training", "-check-job-status")
+      : "https://amarsuadbusiness--model-factory-trainer-check-job-status.modal.run";
+    
+    const url = new URL(checkUrl);
+    url.searchParams.set("call_id", replicateId);
+    
+    const res = await fetch(url.toString(), { method: "GET" });
+    if (!res.ok) return null;
+    return await res.json();
   } catch (e) {
     return null;
   }
@@ -60,6 +65,14 @@ async function syncJobRecord(j: any, supabase: any): Promise<boolean> {
       completed_at: new Date().toISOString(),
       finished_at: new Date().toISOString(),
     }).eq("id", j.id);
+
+    // Trigger eval async since webhook might have been missed
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/jobs/${j.id}/evaluate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trigger: "sync_has_adapter" })
+    }).catch(() => {});
+
     return true;
   } else if (isStale) {
     let finalStatus = "failed";
@@ -67,7 +80,7 @@ async function syncJobRecord(j: any, supabase: any): Promise<boolean> {
     
     // Check Modal directly before failing
     if (j.replicate_id) {
-      const modalCheck = checkModalStatus(j.replicate_id);
+      const modalCheck = await checkModalStatus(j.replicate_id);
       if (modalCheck?.status === "completed") {
         finalStatus = "completed";
         // Trigger eval async since webhook might have been missed

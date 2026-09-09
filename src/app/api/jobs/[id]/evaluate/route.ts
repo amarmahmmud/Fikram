@@ -83,8 +83,7 @@ export async function POST(
     console.log(`[Evaluate] Starting evaluation for job ${jobId} with ${evalPairs.length} held-out pairs`);
 
     // Build the inference function that calls our fine-tuned model
-    // [TESTING] Intentionally broken URL to test fallback behavior
-    const modalInferenceUrl = "https://this-url-definitely-does-not-exist.modal.run";
+    const modalInferenceUrl = process.env.MODAL_INFERENCE_URL;
     if (!modalInferenceUrl) {
       await supabase.from("jobs").update({
         config: { ...config, eval_status: "unavailable", eval_error: "Inference endpoint not configured" },

@@ -137,7 +137,7 @@ export function buildContextBlock(ctx: WizardContext): string {
   if (ctx.format) lines.push(`Response Format: ${ctx.format}`);
   if (ctx.boundaries) lines.push(`Boundaries: ${ctx.boundaries}`);
 
-  if (ctx.goldExamples.length > 0) {
+  if (ctx.goldExamples && ctx.goldExamples.length > 0) {
     lines.push("");
     lines.push("Here are example Q&A pairs the user approved (match this style closely):");
     for (const ex of ctx.goldExamples) {

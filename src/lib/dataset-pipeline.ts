@@ -180,10 +180,11 @@ export function buildSystemPrompt(ctx: WizardContext): string {
     parts.push(`Boundaries: ${ctx.boundaries}.`);
   }
 
-  // Depth, phrasing variety, and self-awareness instructions
+  // Depth, phrasing variety, self-awareness, and prompt-discipline instructions
   parts.push(`When answering, always provide context and reasoning — never give bare one-sentence facts. Structure answers as: direct answer, then explanation or mechanism, then implication or example.`);
   parts.push(`Vary your phrasing naturally. Do not repeatedly use the same attribution phrases like "according to the report".`);
   parts.push(`When asked about limitations or staleness of your knowledge, be specific about which claims are time-sensitive and why, rather than giving generic disclaimers.`);
+  parts.push(`When asked for qualitative explanations, reasons, or factors, provide thorough factual analysis and never fabricate or inject unrequested numerical scores, point ranges, or rubric formulas. Only perform numerical scoring or rubric calculations when explicitly asked to score, grade, or calculate.`);
   parts.push(`Answer based strictly on your training knowledge. If a question falls outside your expertise or training data, clearly state that you don't have that information rather than guessing.`);
 
   return parts.join(" ");
@@ -717,24 +718,26 @@ async function generateBoundaryPairs(
 // Generates pairs that explicitly counter common base-model biases.
 // E.g., "Litigators are LOW risk despite being in the legal field"
 // These override the base model's priors on counterintuitive facts.
-const CONTRASTIVE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating CONTRASTIVE training pairs.
+const CONTRASTIVE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating CONTRASTIVE and PROMPT-DISCIPLINE training pairs.
 
 ${contextBlock}
 
-Your job is to find facts in the document that might SURPRISE someone or CONTRADICT common assumptions, and generate Q&A pairs that explicitly reinforce the correct (document-based) answer.
+Your job is to find facts in the document that might SURPRISE someone or CONTRADICT common assumptions, and generate Q&A pairs that explicitly reinforce the correct (document-based) answer while teaching prompt discipline.
 
 Document content:
 ${documentChunks}
 
-Generate 6-10 contrastive Q&A pairs. Focus on:
-1. Classifications that contradict intuition (e.g., a role people assume is high-risk but is actually low-risk, or vice versa)
-2. Numbers that are counterintuitive (e.g., net job GAIN despite automation fears)
-3. Distinctions that are easy to confuse (e.g., two similar-sounding metrics that mean different things)
+Generate 8-12 contrastive Q&A pairs. Focus on:
+1. Classifications that contradict intuition (e.g., a role people assume is high-risk but is actually low-risk, or vice versa).
+2. Numbers that are counterintuitive (e.g., net job GAIN despite automation fears).
+3. Distinctions that are easy to confuse (e.g., two similar-sounding metrics that mean different things).
+4. Prompt-Discipline / Metric Boundaries: Questions asking for qualitative explanation of a category or asking if an arbitrary fabricated score exists (e.g., Q: "Does the report assign an exact numerical score of 45 to architects?" -> A: "No. The document does not assign arbitrary numeric point scores to architects; it classifies architecture qualitatively in the Low–Medium risk category based on licensure, legal liability for structural safety, and client-relationship design judgment.").
 
 Each answer MUST:
 - Explicitly state the correct classification/number from the document
 - Briefly explain WHY it's counterintuitive or different from what people might assume
-- Use the EXACT numbers and classifications from the document
+- Use the EXACT numbers and classifications from the document without fabricating unstated scores
+- When asked for qualitative reasons, explain thoroughly without making up score numbers
 
 Example:
 {"prompt": "Is being a litigator a high-risk profession for AI automation?", "completion": "No. Despite being in the legal field, litigators and trial lawyers are classified as LOW risk (beyond 2030). This is because their core work — physical courtroom advocacy, real-time jury persuasion, spontaneous cross-examination, and high-stakes interpersonal negotiation — cannot be replicated by current AI. This is a common misconception: while legal research roles are high-risk, litigation itself is fundamentally different."}
@@ -832,9 +835,9 @@ async function generateMetaCognitivePairs(
 
 
 // ─────────────────────────────────────────────
-// Applied Example Pair Generation (Gap 1)
+// Applied Example & Prompt-Discipline Pair Generation
 // ─────────────────────────────────────────────
-const APPLIED_EXAMPLE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating APPLIED_EXAMPLE training pairs.
+const APPLIED_EXAMPLE_GENERATION_PROMPT = (contextBlock: string, documentChunks: string) => `You are an expert AI Data Engineer generating APPLIED_EXAMPLE and CONTRASTIVE PROMPT-DISCIPLINE training pairs.
 
 ${contextBlock}
 
@@ -845,11 +848,20 @@ ${documentChunks}
 
 First, determine if such a method exists. If NOT, output an empty JSON array: []
 If a method DOES exist, invent plausible novel inputs (e.g., specific hypothetical job roles, scenarios, or case studies) that the method could apply to. 
-Generate 10-15 Q&A pairs where the prompt asks to evaluate the novel input using the method, and the completion walks through the application step-by-step to arrive at a final concrete output on the method's own scale.
+Generate 12-16 balanced Q&A pairs divided into TWO complementary types:
+
+TYPE 1: EXPLICIT METHOD/SCORING APPLICATION (50% of pairs)
+- The prompt explicitly commands to evaluate, calculate, or score the input using the document's method (e.g., "Using the scoring rubric from the report, evaluate [Role] and calculate the overall score.", "Apply the decision framework to score [Scenario].").
+- The completion walks through the application step-by-step and ends with a final concrete output on the method's own scale (e.g., "Total Score: 85/100 -> High Risk").
+
+TYPE 2: CONTRASTIVE QUALITATIVE REASONING (50% of pairs)
+- For the SAME or similar inputs, the prompt asks for qualitative explanation, reasoning, or contributing factors WITHOUT asking for scores (e.g., "What factors explain why [Role] is classified in this risk category?", "Explain the core reasons behind [Role]'s vulnerability, focusing on qualitative job duties.", "Analyze the challenges facing [Role] without calculating numeric rubric points.").
+- The completion gives a deep, evidence-grounded explanation based on the document's concepts, but STRICTLY DOES NOT invent, fabricate, or inject numeric score values, point ranges, or rubric formulas.
 
 CRITICAL RULES:
-- The completion MUST walk through the method step-by-step.
-- The completion MUST end with a final concrete output (e.g., "Total Score: 85/100 -> High Risk").
+- Pairs MUST be balanced between Type 1 (explicit scoring) and Type 2 (qualitative reasoning).
+- In Type 2 completions, NEVER include unrequested numeric scores or rubric point tallies — explain the concepts and mechanics qualitatively.
+- This contrastive balance is vital: it teaches the fine-tuned model to calculate scores only when explicitly commanded to, and to give clean, qualitative explanations without making up numbers when asked to explain.
 - Mix the document's own listed examples (if any) with novel ones to teach generalization.
 
 Output ONLY a raw JSON array of objects with "prompt" and "completion" keys. No markdown.`;
@@ -867,11 +879,20 @@ async function generateAppliedExamplePairs(
     const raw = parseJsonArray(result.response.text() || "[]");
     return raw
       .filter((p: any) => p.prompt && p.completion)
-      .map((p: any) => ({
-        prompt: p.prompt,
-        completion: p.completion,
-        _meta: { source_chunk_index: -1, pass_type: "applied_example", source_hash: "applied_example" },
-      }));
+      .map((p: any) => {
+        const isScoring = p.prompt.toLowerCase().includes("score") ||
+          p.prompt.toLowerCase().includes("calculate") ||
+          p.prompt.toLowerCase().includes("rubric");
+        return {
+          prompt: p.prompt,
+          completion: p.completion,
+          _meta: {
+            source_chunk_index: -1,
+            pass_type: isScoring ? "applied_example" : "contrastive",
+            source_hash: "applied_example",
+          },
+        };
+      });
   } catch (e) {
     console.error("[Pipeline] Applied example generation failed:", e);
     return [];
@@ -985,7 +1006,7 @@ function extractObjectsFromText(text: string): any[] {
   return results;
 }
 
-function parseJsonArray(raw: string): any[] {
+export function parseJsonArray(raw: string): any[] {
   // Strip markdown fences and think tags
   let cleaned = raw
     .replace(/<think>[\s\S]*?<\/think>/gi, "")
