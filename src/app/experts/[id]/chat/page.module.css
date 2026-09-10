@@ -693,6 +693,108 @@
 }
 
 /* Responsive */
+.micBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-right: 4px;
+}
+
+.micBtn:hover:not(:disabled) {
+  color: #ff4b4b;
+  background: rgba(255, 75, 75, 0.1);
+}
+
+.micBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recordingState {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: rgba(255, 75, 75, 0.05);
+  border-radius: 24px;
+  animation: pulseBg 2s infinite ease-in-out;
+  min-height: 48px;
+}
+
+.recordingIndicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ff4b4b;
+  box-shadow: 0 0 8px rgba(255, 75, 75, 0.8);
+  animation: pulseDot 1.5s infinite ease-in-out;
+}
+
+.recordingTime {
+  color: #ff4b4b;
+  font-family: monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.stopRecordBtn {
+  background: #ff4b4b;
+  color: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.stopRecordBtn:hover {
+  background: #fa3131;
+}
+
+.cancelRecordBtn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.cancelRecordBtn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes pulseBg {
+  0% { background: rgba(255, 75, 75, 0.05); }
+  50% { background: rgba(255, 75, 75, 0.1); }
+  100% { background: rgba(255, 75, 75, 0.05); }
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.95); opacity: 0.7; }
+  50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 12px rgba(255, 75, 75, 1); }
+  100% { transform: scale(0.95); opacity: 0.7; }
+}
+
 @media (max-width: 768px) {
   .sidebar {
     position: absolute;
