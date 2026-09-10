@@ -54,8 +54,7 @@ export async function POST(
       // Process file attachment(s)
       const file = formData.get("file") as File | null;
       if (file && isMediaMimeType(file.type)) {
-        const arrayBuffer = await file.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
         mediaAttachments.push({
           data: base64,
           mimeType: file.type,

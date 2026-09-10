@@ -4,12 +4,12 @@ import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 
-// Maximum file sizes per type (in bytes)
+// Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
 const MAX_FILE_SIZES: Record<string, number> = {
-  text: 10 * 1024 * 1024,    // 10MB for text/PDF
-  image: 20 * 1024 * 1024,   // 20MB for images
-  audio: 25 * 1024 * 1024,   // 25MB for audio
-  video: 50 * 1024 * 1024,   // 50MB for video
+  text: 4 * 1024 * 1024,     // 4MB for text/PDF
+  image: 4 * 1024 * 1024,    // 4MB for images
+  audio: 4 * 1024 * 1024,    // 4MB for audio
+  video: 4 * 1024 * 1024,    // 4MB for video
 };
 
 export async function POST(
@@ -62,8 +62,7 @@ export async function POST(
       // ── Media file: use Gemini to describe/transcribe ──────────────────
       console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" (${(fileSize / 1024).toFixed(0)}KB) via Gemini`);
 
-      const arrayBuffer = await file.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString("base64");
+      const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
 
       text = await describeMediaWithGemini({
         data: base64,

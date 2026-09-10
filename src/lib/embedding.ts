@@ -170,7 +170,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
             outputDimensionality: EMBEDDING_DIMENSIONS,
           } as any)),
         });
-        allEmbeddings.push(...result.embeddings.map((e) => e.values));
+        allEmbeddings.push(...result.embeddings.map((e: any) => e.values));
         success = true;
       } catch (err: any) {
         const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");

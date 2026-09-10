@@ -368,12 +368,10 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       return;
     }
 
-    // Validate size (20MB for images, 25MB for audio, 50MB for video)
-    const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024
-      : file.type.startsWith("audio/") ? 25 * 1024 * 1024
-      : 20 * 1024 * 1024;
+    // Validate size (4MB total max for Vercel serverless limit)
+    const maxSize = 4 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
+      alert(`File too large. Maximum size is 4MB due to server limits.`);
       return;
     }
 
