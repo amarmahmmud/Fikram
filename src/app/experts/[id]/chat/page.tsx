@@ -265,23 +265,46 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       let data: any;
 
       if (pendingAttachment) {
-        // FormData path — includes file attachment
-        const formData = new FormData();
-        formData.append("message", userMsg);
-        formData.append("file", pendingAttachment.file);
-        if (activeConvId) formData.append("conversationId", activeConvId);
-        formData.append("history", JSON.stringify(
-          messages
+        // Direct-to-R2 architecture for media
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            filename: pendingAttachment.file.name,
+            contentType: pendingAttachment.file.type,
+          }),
+        });
+
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}));
+          throw new Error(err.error || "Failed to initiate upload");
+        }
+        
+        const { uploadUrl, downloadUrl } = await uploadRes.json();
+        
+        // Upload directly to Cloudflare R2
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          body: pendingAttachment.file,
+          headers: { "Content-Type": pendingAttachment.file.type },
+        });
+
+        if (!putRes.ok) throw new Error("Failed to upload file to storage");
+
+        // Send chat request with the R2 URL
+        data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
+          message: userMsg,
+          conversationId: activeConvId,
+          history: messages
             .filter((m) => m.role === "user" || m.role === "model")
             .slice(-10)
-            .map((m) => ({ role: m.role, content: m.content }))
-        ));
-
-        const res = await fetch(`/api/experts/${expertId}/chat`, {
-          method: "POST",
-          body: formData,
+            .map((m) => ({ role: m.role, content: m.content })),
+          attachment: {
+             url: downloadUrl,
+             mimeType: pendingAttachment.mimeType,
+             filename: pendingAttachment.file.name
+          }
         });
-        data = await res.json();
         setPendingAttachment(null);
       } else {
         // JSON path — standard text-only chat
@@ -368,10 +391,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       return;
     }
 
-    // Validate size (4MB total max for Vercel serverless limit)
-    const maxSize = 4 * 1024 * 1024;
+    // Validate size (20MB for images, 25MB for audio, 50MB for video)
+    const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024
+      : file.type.startsWith("audio/") ? 25 * 1024 * 1024
+      : 20 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert(`File too large. Maximum size is 4MB due to server limits.`);
+      alert(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
       return;
     }
 

@@ -21,7 +21,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
-import { generateWithModelFallback, RESILIENT_GEMINI_MODELS } from "@/lib/gemini";
+import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile } from "@/lib/gemini";
 
 const googleApiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(googleApiKey || "");
@@ -30,8 +30,10 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 // ── Media Attachment Types ───────────────────────────────────────────────────
 
 export interface MediaAttachment {
-  /** base64-encoded file data */
-  data: string;
+  /** If present, the URL to download the file from (e.g. Cloudflare R2) */
+  url?: string;
+  /** base64-encoded file data (fallback for small files) */
+  data?: string;
   /** MIME type, e.g. "image/png", "audio/mp3", "video/mp4" */
   mimeType: string;
   /** Original filename for display */
@@ -65,49 +67,55 @@ export function getMediaCategory(mimeType: string): "image" | "audio" | "video" 
  * for ingestion into the knowledge base. Returns a text description that
  * can be chunked and embedded like any other document.
  */
-export async function describeMediaWithGemini(
-  media: MediaAttachment,
-): Promise<string> {
-  const category = getMediaCategory(media.mimeType);
+export async function describeMediaWithGemini({
+  url,
+  data,
+  mimeType,
+  filename,
+}: {
+  url?: string;
+  data?: string;
+  mimeType: string;
+  filename: string;
+}): Promise<string> {
+  const parts: any[] = [];
+  let fileUri: string | null = null;
 
-  let textPrompt: string;
-  switch (category) {
-    case "image":
-      textPrompt =
-        "Describe this image in thorough detail. Include ALL text visible in the image (OCR). " +
-        "If there are charts, tables, graphs, or diagrams, describe their structure and data points. " +
-        "If there are people, describe the scene. Provide a comprehensive description suitable for a knowledge base.";
-      break;
-    case "audio":
-      textPrompt =
-        "Transcribe this audio completely and accurately. Include speaker identification if multiple speakers are present. " +
-        "Note any significant non-speech sounds. After the transcription, provide a brief summary of the key topics discussed.";
-      break;
-    case "video":
-      textPrompt =
-        "Analyze this video thoroughly. Provide: 1) A complete transcription of all speech. " +
-        "2) Description of key visual elements, scenes, and on-screen text. " +
-        "3) A summary of the main topics and content covered.";
-      break;
-    default:
-      textPrompt = "Describe the content of this file in detail.";
+  if (url) {
+    fileUri = await uploadFileFromUrl(url, mimeType);
+    parts.push({ fileData: { fileUri, mimeType } });
+  } else if (data) {
+    parts.push({ inlineData: { data, mimeType } });
+  } else {
+    throw new Error("Must provide either url or data");
   }
 
-  const contents = [
-    {
-      role: "user" as const,
-      parts: [
-        { inlineData: { mimeType: media.mimeType, data: media.data } },
-        { text: textPrompt },
-      ],
-    },
-  ];
+  const isVideo = mimeType.startsWith("video/");
+  const isAudio = mimeType.startsWith("audio/");
 
-  const result = await generateWithModelFallback(contents, {
-    generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
-  });
+  let prompt = `Describe the contents of this ${isVideo ? "video" : isAudio ? "audio" : "image"} in high detail. `;
+  prompt += `Include all spoken words, visible text (OCR), key subjects, and important events. `;
+  prompt += `Format the output as a clear, structured document that can be used for a knowledge base.`;
 
-  return result.text();
+  parts.push({ text: prompt });
+
+  try {
+    const result = await generateWithModelFallback([{ role: "user", parts }], {
+      systemInstruction: "You are an expert transcriber and visual analyst. Your job is to convert media into highly accurate, detailed textual knowledge bases.",
+      generationConfig: { temperature: 0.1 },
+    });
+    
+    if (fileUri) {
+      deleteGeminiFile(fileUri).catch(console.error);
+    }
+    
+    return result.text();
+  } catch (err) {
+    if (fileUri) {
+      deleteGeminiFile(fileUri).catch(console.error);
+    }
+    throw err;
+  }
 }
 
 // ── Embedding ────────────────────────────────────────────────────────────────
@@ -791,10 +799,8 @@ ${finalGroundingBlock}`;
   let draft: string;
 
   if (hasMedia) {
-    // ── Gemini Multimodal Path ─────────────────────────────────────────────
-    // Build Gemini contents array with system instruction, chat history,
-    // and user message with inline media attachments.
     const geminiContents: any[] = [];
+    const uploadedUris: string[] = [];
 
     // Add chat history as alternating user/model turns
     for (const msg of chatHistory) {
@@ -809,25 +815,44 @@ ${finalGroundingBlock}`;
     // Build the final user turn with text + media parts
     const userParts: any[] = [];
     for (const attachment of options!.mediaAttachments!) {
-      userParts.push({
-        inlineData: { mimeType: attachment.mimeType, data: attachment.data },
-      });
+      if (attachment.url) {
+        try {
+          console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
+          const fileUri = await uploadFileFromUrl(attachment.url, attachment.mimeType);
+          uploadedUris.push(fileUri);
+          userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
+        } catch (err: any) {
+          console.error("[RAG] Failed to process media attachment from URL:", err);
+          throw new Error(`Failed to process media attachment: ${err.message}`);
+        }
+      } else if (attachment.data) {
+        userParts.push({
+          inlineData: { mimeType: attachment.mimeType, data: attachment.data },
+        });
+      }
     }
     userParts.push({ text: query });
     geminiContents.push({ role: "user", parts: userParts });
 
     console.log(`[RAG] Using Gemini multimodal with ${options!.mediaAttachments!.length} attachment(s)`);
 
-    const geminiResult = await generateWithModelFallback(geminiContents, {
-      systemInstruction: groundedSystemPrompt,
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: mode === "evaluative" ? 0.25 : 0.3,
-        ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
-      },
-    });
+    try {
+      const geminiResult = await generateWithModelFallback(geminiContents, {
+        systemInstruction: groundedSystemPrompt,
+        generationConfig: {
+          maxOutputTokens: 4096,
+          temperature: mode === "evaluative" ? 0.25 : 0.3,
+          ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
+        },
+      });
 
-    draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";
+      draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";
+    } finally {
+      // Clean up uploaded files
+      if (uploadedUris.length > 0) {
+        Promise.all(uploadedUris.map(uri => deleteGeminiFile(uri))).catch(console.error);
+      }
+    }
   } else {
     // ── Groq Text-Only Path (default, free, fast) ─────────────────────────
     const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [

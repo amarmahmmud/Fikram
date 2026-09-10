@@ -94,12 +94,33 @@ export function KnowledgeModal({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const formData = new FormData();
-        formData.append("file", file);
+        // Direct-to-R2 Architecture
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: file.name, contentType: file.type }),
+        });
+        
+        if (!uploadRes.ok) throw new Error("Failed to get upload URL");
+        const { uploadUrl, downloadUrl } = await uploadRes.json();
+        
+        // Upload to R2 directly
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type },
+        });
+        if (!putRes.ok) throw new Error("Failed to upload file to storage");
 
+        // Send ingest request to backend
         const res = await fetch(`/api/experts/${expertId}/ingest`, {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            url: downloadUrl,
+            mimeType: file.type,
+            filename: file.name,
+          }),
         });
         const data = await res.json();
 

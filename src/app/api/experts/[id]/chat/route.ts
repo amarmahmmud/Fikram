@@ -32,45 +32,23 @@ export async function POST(
       );
     }
 
-    // ── Parse request body (supports both JSON and FormData) ──────────────
-    let message = "";
-    let history: any[] = [];
-    let conversationId: string | null = null;
-    let mediaAttachments: MediaAttachment[] = [];
+    // Parse JSON body
+    const body = await req.json();
+    const { message, history, conversationId, attachment } = body;
 
-    const contentType = req.headers.get("content-type") || "";
-
-    if (contentType.includes("multipart/form-data")) {
-      // FormData path — used when chat includes file attachments
-      const formData = await req.formData();
-      message = (formData.get("message") as string) || "";
-      conversationId = (formData.get("conversationId") as string) || null;
-
-      const historyStr = formData.get("history") as string;
-      if (historyStr) {
-        try { history = JSON.parse(historyStr); } catch { history = []; }
-      }
-
-      // Process file attachment(s)
-      const file = formData.get("file") as File | null;
-      if (file && isMediaMimeType(file.type)) {
-        const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-        mediaAttachments.push({
-          data: base64,
-          mimeType: file.type,
-          filename: file.name,
-        });
-        console.log(`[Expert Chat] Media attachment: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(0)}KB)`);
-      }
-    } else {
-      // JSON path — standard text-only chat (existing behavior)
-      const body = await req.json();
-      message = body.message || "";
-      history = body.history || [];
-      conversationId = body.conversationId || null;
+    // Process file attachment(s)
+    const mediaAttachments: MediaAttachment[] = [];
+    if (attachment && isMediaMimeType(attachment.mimeType)) {
+      mediaAttachments.push({
+        url: attachment.url,
+        data: attachment.data,
+        mimeType: attachment.mimeType,
+        filename: attachment.filename,
+      });
+      console.log(`[Expert Chat] Media attachment: ${attachment.filename} (${attachment.mimeType})`);
     }
 
-    if (!message?.trim()) {
+    if (!message?.trim() && mediaAttachments.length === 0) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
     }
 

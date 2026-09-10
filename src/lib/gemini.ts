@@ -233,3 +233,97 @@ export async function generateWithModelFallback(
 
   throw lastError;
 }
+
+/**
+ * Downloads a file from a URL to a temporary local file, uploads it to Gemini File API,
+ * polls until it becomes ACTIVE, and returns the file URI.
+ */
+export async function uploadFileFromUrl(url: string, mimeType: string): Promise<string> {
+  const os = await import("os");
+  const fs = await import("fs");
+  const path = await import("path");
+
+  // Fetch the file from the signed URL
+  const res = await fetch(url);
+  if (!res.ok || !res.body) throw new Error(`Failed to download file from storage: ${res.statusText}`);
+
+  // Create temp file path
+  const tempPath = path.join(os.tmpdir(), `gemini-upload-${Date.now()}-${Math.random().toString(36).substring(7)}`);
+  
+  // Stream to disk
+  const fileStream = fs.createWriteStream(tempPath);
+  
+  // @ts-ignore - native fetch response body to Node stream
+  await new Promise((resolve, reject) => {
+    // We can use node's native readable stream from Web Streams API
+    // Actually, simple array buffer is safer for smallish files (up to 50MB) if streaming is complex, 
+    // but arrayBuffer still uses memory. 
+    // Let's use array buffer for simplicity and to avoid polyfill issues, 50MB ArrayBuffer is OK locally,
+    // just avoid Base64 stringification.
+    res.arrayBuffer().then(buffer => {
+      fs.writeFileSync(tempPath, Buffer.from(buffer));
+      resolve(true);
+    }).catch(reject);
+  });
+  const isEnterprise = Boolean(process.env.GOOGLE_CLOUD_PROJECT && process.env.GOOGLE_GENAI_USE_ENTERPRISE);
+  const keys = getGeminiApiKeys();
+  const activeKey = isEnterprise ? "" : keys[currentKeyIndex % keys.length];
+  const client = isEnterprise ? getEnterpriseClient() : getGenAIClientForKey(activeKey);
+
+  try {
+    console.log(`[Gemini File API] Uploading temp file ${tempPath} (${mimeType})`);
+    let file = await client.files.upload({
+      file: tempPath,
+      config: { mimeType },
+    });
+
+    console.log(`[Gemini File API] Uploaded ${file.name}. Polling until ACTIVE...`);
+    let retries = 0;
+    while (file.state?.toString() !== "ACTIVE") {
+      if (file.state?.toString() === "FAILED") {
+        throw new Error("Gemini file processing failed");
+      }
+      if (retries > 60) {
+        throw new Error("Timeout waiting for Gemini file processing");
+      }
+      
+      await new Promise(r => setTimeout(r, 2000));
+      file = await client.files.get({ name: file.name! });
+      retries++;
+    }
+
+    console.log(`[Gemini File API] File ${file.name} is ACTIVE`);
+    return file.uri!;
+  } finally {
+    // Always cleanup the local temp file
+    if (fs.existsSync(tempPath)) {
+      fs.unlinkSync(tempPath);
+    }
+  }
+}
+
+/**
+ * Deletes a file from Gemini File API by URI
+ */
+export async function deleteGeminiFile(uri: string) {
+  // Extract name from uri, typical uri: https://generativelanguage.googleapis.com/v1beta/files/abc
+  // Wait, files API uses the short name, e.g. "files/abc"
+  const keys = getGeminiApiKeys();
+  const activeKey = keys[currentKeyIndex % keys.length];
+  const client = getGenAIClientForKey(activeKey);
+  
+  try {
+    // If it's a URI, we can try to extract the file ID
+    // E.g., https://generativelanguage.googleapis.com/v1beta/files/abc -> files/abc
+    const match = uri.match(/files\/[a-zA-Z0-9_-]+/);
+    const name = match ? match[0] : null;
+    
+    if (name) {
+      await client.files.delete({ name });
+      console.log(`[Gemini File API] Deleted ${name}`);
+    }
+  } catch (err) {
+    console.warn(`[Gemini File API] Failed to delete ${uri}:`, err);
+  }
+}
+

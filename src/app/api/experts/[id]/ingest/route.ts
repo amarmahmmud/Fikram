@@ -34,38 +34,29 @@ export async function POST(
       return NextResponse.json({ error: "Expert not found" }, { status: 404 });
     }
 
-    // Parse the uploaded file
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
+    // ── Parse request body (JSON) ──────────────
+    const body = await req.json();
+    const { url, data, mimeType, filename } = body;
 
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (!filename) {
+      return NextResponse.json({ error: "Filename is required" }, { status: 400 });
+    }
+    if (!url && !data) {
+      return NextResponse.json({ error: "File URL or content data is required" }, { status: 400 });
     }
 
-    const filename = file.name;
-    const mimeType = file.type || "application/octet-stream";
-    const fileSize = file.size;
-    const isMedia = isMediaMimeType(mimeType);
+    const isMedia = isMediaMimeType(mimeType || "application/octet-stream");
     const mediaCategory = isMedia ? getMediaCategory(mimeType) : "text";
-
-    // Check file size limits
-    const sizeLimit = MAX_FILE_SIZES[mediaCategory] ?? MAX_FILE_SIZES.text;
-    if (fileSize > sizeLimit) {
-      return NextResponse.json({
-        error: `File too large. Maximum size for ${mediaCategory} files is ${Math.round(sizeLimit / 1024 / 1024)}MB.`,
-      }, { status: 413 });
-    }
 
     let text = "";
 
     if (isMedia) {
       // ── Media file: use Gemini to describe/transcribe ──────────────────
-      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" (${(fileSize / 1024).toFixed(0)}KB) via Gemini`);
-
-      const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
+      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via Gemini`);
 
       text = await describeMediaWithGemini({
-        data: base64,
+        url,
+        data,
         mimeType,
         filename,
       });
@@ -82,7 +73,13 @@ export async function POST(
       console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);
     } else if (filename.toLowerCase().endsWith(".pdf")) {
       // ── PDF: existing text extraction ──────────────────────────────────
-      const arrayBuffer = await file.arrayBuffer();
+      if (!url) {
+        // Fallback for direct data upload for text
+        return NextResponse.json({ error: "PDF ingestion requires a file URL in the new architecture" }, { status: 400 });
+      }
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Failed to fetch PDF from storage");
+      const arrayBuffer = await res.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const parser = new PDFParse({
         data: new Uint8Array(buffer),
@@ -92,7 +89,13 @@ export async function POST(
       text = result.text;
     } else {
       // ── Plain text, markdown, CSV, etc. ────────────────────────────────
-      text = await file.text();
+      if (url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch text from storage");
+        text = await res.text();
+      } else if (data) {
+        text = Buffer.from(data, "base64").toString("utf-8");
+      }
     }
 
     if (!text.trim()) {
