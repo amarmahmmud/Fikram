@@ -5,6 +5,7 @@
 // and Supabase pgvector for storage + similarity search.
 //
 // CHANGELOG (this version):
+// - Multimodal support: text-only → Groq (free/fast), media → Gemini 3.5/3.6 Flash
 // - Section-aware chunking: splits on the document's own numbered/heading
 //   structure BEFORE falling back to char-based splitting, so a chunk never
 //   silently straddles two different sections.
@@ -20,10 +21,94 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
+import { generateWithModelFallback, RESILIENT_GEMINI_MODELS } from "@/lib/gemini";
 
 const googleApiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(googleApiKey || "");
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+
+// ── Media Attachment Types ───────────────────────────────────────────────────
+
+export interface MediaAttachment {
+  /** base64-encoded file data */
+  data: string;
+  /** MIME type, e.g. "image/png", "audio/mp3", "video/mp4" */
+  mimeType: string;
+  /** Original filename for display */
+  filename?: string;
+}
+
+const IMAGE_MIME_TYPES = new Set([
+  "image/png", "image/jpeg", "image/webp", "image/gif", "image/heic", "image/heif",
+]);
+const AUDIO_MIME_TYPES = new Set([
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm",
+  "audio/mp4", "audio/x-m4a", "audio/aac", "audio/flac",
+]);
+const VIDEO_MIME_TYPES = new Set([
+  "video/mp4", "video/webm", "video/ogg", "video/quicktime",
+]);
+
+export function isMediaMimeType(mimeType: string): boolean {
+  return IMAGE_MIME_TYPES.has(mimeType) || AUDIO_MIME_TYPES.has(mimeType) || VIDEO_MIME_TYPES.has(mimeType);
+}
+
+export function getMediaCategory(mimeType: string): "image" | "audio" | "video" | "unknown" {
+  if (IMAGE_MIME_TYPES.has(mimeType)) return "image";
+  if (AUDIO_MIME_TYPES.has(mimeType)) return "audio";
+  if (VIDEO_MIME_TYPES.has(mimeType)) return "video";
+  return "unknown";
+}
+
+/**
+ * Use Gemini to describe/transcribe a media file (image, audio, or video)
+ * for ingestion into the knowledge base. Returns a text description that
+ * can be chunked and embedded like any other document.
+ */
+export async function describeMediaWithGemini(
+  media: MediaAttachment,
+): Promise<string> {
+  const category = getMediaCategory(media.mimeType);
+
+  let textPrompt: string;
+  switch (category) {
+    case "image":
+      textPrompt =
+        "Describe this image in thorough detail. Include ALL text visible in the image (OCR). " +
+        "If there are charts, tables, graphs, or diagrams, describe their structure and data points. " +
+        "If there are people, describe the scene. Provide a comprehensive description suitable for a knowledge base.";
+      break;
+    case "audio":
+      textPrompt =
+        "Transcribe this audio completely and accurately. Include speaker identification if multiple speakers are present. " +
+        "Note any significant non-speech sounds. After the transcription, provide a brief summary of the key topics discussed.";
+      break;
+    case "video":
+      textPrompt =
+        "Analyze this video thoroughly. Provide: 1) A complete transcription of all speech. " +
+        "2) Description of key visual elements, scenes, and on-screen text. " +
+        "3) A summary of the main topics and content covered.";
+      break;
+    default:
+      textPrompt = "Describe the content of this file in detail.";
+  }
+
+  const contents = [
+    {
+      role: "user" as const,
+      parts: [
+        { inlineData: { mimeType: media.mimeType, data: media.data } },
+        { text: textPrompt },
+      ],
+    },
+  ];
+
+  const result = await generateWithModelFallback(contents, {
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+  });
+
+  return result.text();
+}
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
@@ -430,6 +515,8 @@ const RUBRIC_DIMENSIONS = [
 export interface GenerateRAGOptions {
   reasoningMode?: "strict" | "evaluative" | "hybrid";
   webSearchEnabled?: boolean;
+  /** When present, routes generation to Gemini instead of Groq for multimodal processing. */
+  mediaAttachments?: MediaAttachment[];
 }
 
 export interface RAGResponse {
@@ -551,11 +638,12 @@ export async function generateRAGResponse(
   chatHistory: { role: string; content: string }[] = [],
   options?: GenerateRAGOptions,
 ): Promise<RAGResponse> {
+  const hasMedia = options?.mediaAttachments && options.mediaAttachments.length > 0;
   const mode = options?.reasoningMode || "hybrid";
   const chunks = await retrieveChunks(query, expertId, undefined, 0.3, mode);
 
   console.log(
-    `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"}) | Mode: ${options?.reasoningMode || "hybrid"} | WebSearch: ${options?.webSearchEnabled ? "ON" : "OFF"}`,
+    `[RAG] Retrieved ${chunks.length} chunks (top similarity: ${chunks[0]?.similarity?.toFixed(3) ?? "N/A"}) | Mode: ${options?.reasoningMode || "hybrid"} | WebSearch: ${options?.webSearchEnabled ? "ON" : "OFF"} | Provider: ${hasMedia ? "Gemini (multimodal)" : "Groq (text)"}`,
   );
 
   const sourcesText =
@@ -700,30 +788,73 @@ ${sourcesText}
 ${webSourcesText}
 ${finalGroundingBlock}`;
 
-  const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-    { role: "system", content: groundedSystemPrompt },
-  ];
+  let draft: string;
 
-  for (const msg of chatHistory) {
-    if (msg.role === "user" || msg.role === "model") {
-      groqHistory.push({
-        role: msg.role === "user" ? "user" : "assistant",
-        content: msg.content,
+  if (hasMedia) {
+    // ── Gemini Multimodal Path ─────────────────────────────────────────────
+    // Build Gemini contents array with system instruction, chat history,
+    // and user message with inline media attachments.
+    const geminiContents: any[] = [];
+
+    // Add chat history as alternating user/model turns
+    for (const msg of chatHistory) {
+      if (msg.role === "user" || msg.role === "model") {
+        geminiContents.push({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+
+    // Build the final user turn with text + media parts
+    const userParts: any[] = [];
+    for (const attachment of options!.mediaAttachments!) {
+      userParts.push({
+        inlineData: { mimeType: attachment.mimeType, data: attachment.data },
       });
     }
+    userParts.push({ text: query });
+    geminiContents.push({ role: "user", parts: userParts });
+
+    console.log(`[RAG] Using Gemini multimodal with ${options!.mediaAttachments!.length} attachment(s)`);
+
+    const geminiResult = await generateWithModelFallback(geminiContents, {
+      systemInstruction: groundedSystemPrompt,
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: mode === "evaluative" ? 0.25 : 0.3,
+        ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
+      },
+    });
+
+    draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";
+  } else {
+    // ── Groq Text-Only Path (default, free, fast) ─────────────────────────
+    const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: groundedSystemPrompt },
+    ];
+
+    for (const msg of chatHistory) {
+      if (msg.role === "user" || msg.role === "model") {
+        groqHistory.push({
+          role: msg.role === "user" ? "user" : "assistant",
+          content: msg.content,
+        });
+      }
+    }
+
+    groqHistory.push({ role: "user", content: query });
+
+    const completion = await groq.chat.completions.create({
+      messages: groqHistory,
+      model: "openai/gpt-oss-120b",
+      temperature: mode === "evaluative" ? 0.25 : 0.3,
+      max_completion_tokens: 4096,
+      ...(mode === "evaluative" ? { response_format: { type: "json_object" } } : {}),
+    });
+
+    draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
   }
-
-  groqHistory.push({ role: "user", content: query });
-
-  const completion = await groq.chat.completions.create({
-    messages: groqHistory,
-    model: "openai/gpt-oss-120b",
-    temperature: mode === "evaluative" ? 0.25 : 0.3,
-    max_completion_tokens: 4096,
-    ...(mode === "evaluative" ? { response_format: { type: "json_object" } } : {}),
-  });
-
-  let draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
 
   // Re-assemble JSON into markdown if in evaluative mode
   if (mode === "evaluative") {

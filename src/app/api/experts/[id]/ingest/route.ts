@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
+import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
+
+// Maximum file sizes per type (in bytes)
+const MAX_FILE_SIZES: Record<string, number> = {
+  text: 10 * 1024 * 1024,    // 10MB for text/PDF
+  image: 20 * 1024 * 1024,   // 20MB for images
+  audio: 25 * 1024 * 1024,   // 25MB for audio
+  video: 50 * 1024 * 1024,   // 50MB for video
+};
 
 export async function POST(
   req: Request,
@@ -33,10 +42,47 @@ export async function POST(
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
-    let text = "";
     const filename = file.name;
+    const mimeType = file.type || "application/octet-stream";
+    const fileSize = file.size;
+    const isMedia = isMediaMimeType(mimeType);
+    const mediaCategory = isMedia ? getMediaCategory(mimeType) : "text";
 
-    if (filename.toLowerCase().endsWith(".pdf")) {
+    // Check file size limits
+    const sizeLimit = MAX_FILE_SIZES[mediaCategory] ?? MAX_FILE_SIZES.text;
+    if (fileSize > sizeLimit) {
+      return NextResponse.json({
+        error: `File too large. Maximum size for ${mediaCategory} files is ${Math.round(sizeLimit / 1024 / 1024)}MB.`,
+      }, { status: 413 });
+    }
+
+    let text = "";
+
+    if (isMedia) {
+      // ── Media file: use Gemini to describe/transcribe ──────────────────
+      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" (${(fileSize / 1024).toFixed(0)}KB) via Gemini`);
+
+      const arrayBuffer = await file.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString("base64");
+
+      text = await describeMediaWithGemini({
+        data: base64,
+        mimeType,
+        filename,
+      });
+
+      if (!text.trim()) {
+        return NextResponse.json({
+          error: `Gemini could not extract content from this ${mediaCategory} file. Please try a different file.`,
+        }, { status: 422 });
+      }
+
+      // Prepend a metadata header so chunks know their origin
+      text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
+
+      console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);
+    } else if (filename.toLowerCase().endsWith(".pdf")) {
+      // ── PDF: existing text extraction ──────────────────────────────────
       const arrayBuffer = await file.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
       const parser = new PDFParse({
@@ -46,7 +92,7 @@ export async function POST(
       const result = await parser.getText();
       text = result.text;
     } else {
-      // Plain text, markdown, etc.
+      // ── Plain text, markdown, CSV, etc. ────────────────────────────────
       text = await file.text();
     }
 
@@ -54,7 +100,7 @@ export async function POST(
       return NextResponse.json({ error: "File contains no extractable text" }, { status: 422 });
     }
 
-    console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars)`);
+    console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars, type: ${mediaCategory})`);
 
     // Chunk, embed, and store
     const result = await ingestDocument(expertId, text, filename);
@@ -64,6 +110,7 @@ export async function POST(
       filename,
       textLength: text.length,
       chunksStored: result.chunksStored,
+      mediaType: mediaCategory,
     });
   } catch (err: any) {
     console.error("[Ingest] Error:", err);
@@ -73,3 +120,4 @@ export async function POST(
     );
   }
 }
+

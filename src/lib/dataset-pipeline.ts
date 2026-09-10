@@ -1108,9 +1108,9 @@ export async function generateDataset(
 
     console.log(`[Pipeline] Generation pass: chunk ${i + 1}/${totalChunks} done, total pairs: ${allPairs.length}`);
 
-    // 4-second delay between requests to stay well under Gemini's 15 RPM limit
+    // Delay between batch requests to stay under Gemini's limits
     if (i + PARALLEL_LIMIT < totalChunks) {
-      await new Promise(resolve => setTimeout(resolve, 4000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
     onProgress?.({

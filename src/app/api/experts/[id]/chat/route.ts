@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateRAGResponse } from "@/lib/embedding";
+import { generateRAGResponse, isMediaMimeType, type MediaAttachment } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 import { parseExpertMetadata } from "@/lib/expert-metadata";
 
@@ -32,8 +32,44 @@ export async function POST(
       );
     }
 
-    const body = await req.json();
-    const { message, history, conversationId } = body;
+    // ── Parse request body (supports both JSON and FormData) ──────────────
+    let message = "";
+    let history: any[] = [];
+    let conversationId: string | null = null;
+    let mediaAttachments: MediaAttachment[] = [];
+
+    const contentType = req.headers.get("content-type") || "";
+
+    if (contentType.includes("multipart/form-data")) {
+      // FormData path — used when chat includes file attachments
+      const formData = await req.formData();
+      message = (formData.get("message") as string) || "";
+      conversationId = (formData.get("conversationId") as string) || null;
+
+      const historyStr = formData.get("history") as string;
+      if (historyStr) {
+        try { history = JSON.parse(historyStr); } catch { history = []; }
+      }
+
+      // Process file attachment(s)
+      const file = formData.get("file") as File | null;
+      if (file && isMediaMimeType(file.type)) {
+        const arrayBuffer = await file.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString("base64");
+        mediaAttachments.push({
+          data: base64,
+          mimeType: file.type,
+          filename: file.name,
+        });
+        console.log(`[Expert Chat] Media attachment: ${file.name} (${file.type}, ${(file.size / 1024).toFixed(0)}KB)`);
+      }
+    } else {
+      // JSON path — standard text-only chat (existing behavior)
+      const body = await req.json();
+      message = body.message || "";
+      history = body.history || [];
+      conversationId = body.conversationId || null;
+    }
 
     if (!message?.trim()) {
       return NextResponse.json({ error: "No message provided" }, { status: 400 });
@@ -123,6 +159,14 @@ export async function POST(
           conversation_id: activeConvId,
           role: "user",
           content: message.trim(),
+          // Store attachment metadata (not the full base64) for UI reference
+          ...(mediaAttachments.length > 0 ? {
+            sources: mediaAttachments.map(a => ({
+              type: "attachment",
+              mimeType: a.mimeType,
+              filename: a.filename,
+            })) as any,
+          } : {}),
         });
       }
     }
@@ -130,7 +174,7 @@ export async function POST(
     // Parse expert configuration metadata (mode, web search, etc.)
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
-    // Run RAG pipeline
+    // Run RAG pipeline — automatically routes to Gemini if media attachments present
     const result = await generateRAGResponse(
       message.trim(),
       expertId,
@@ -139,6 +183,7 @@ export async function POST(
       {
         reasoningMode: metadata.reasoningMode,
         webSearchEnabled: metadata.webSearchEnabled,
+        mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
       }
     );
 
@@ -173,3 +218,4 @@ export async function POST(
     );
   }
 }
+

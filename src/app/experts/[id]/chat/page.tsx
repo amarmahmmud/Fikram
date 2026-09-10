@@ -18,6 +18,11 @@ import {
   ExternalLink,
   MessageSquare,
   Clock,
+  Paperclip,
+  X,
+  Image as ImageIcon,
+  FileAudio,
+  Film,
 } from "lucide-react";
 
 interface Message {
@@ -26,6 +31,7 @@ interface Message {
   content: string;
   sources?: { filename: string; chunkIndex: number; similarity: number }[];
   webSources?: { title: string; snippet: string; link: string }[];
+  attachment?: { mimeType: string; previewUrl?: string; filename?: string };
 }
 
 interface ConversationItem {
@@ -58,6 +64,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Pending file attachment for the current message
+  const [pendingAttachment, setPendingAttachment] = useState<{
+    file: File;
+    previewUrl: string;
+    mimeType: string;
+  } | null>(null);
 
   /** Helper to sanitize expert description and avoid leaking config bracket tags */
   const sanitizeDescription = useCallback((desc: string = "") => {
@@ -234,18 +248,52 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
     const userMsg = input.trim();
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: userMsg }]);
+
+    // Build user message with optional attachment preview
+    const userMessage: Message = { role: "user", content: userMsg };
+    if (pendingAttachment) {
+      userMessage.attachment = {
+        mimeType: pendingAttachment.mimeType,
+        previewUrl: pendingAttachment.previewUrl,
+        filename: pendingAttachment.file.name,
+      };
+    }
+    setMessages((prev) => [...prev, userMessage]);
     setSending(true);
 
     try {
-      const data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
-        message: userMsg,
-        conversationId: activeConvId,
-        history: messages
-          .filter((m) => m.role === "user" || m.role === "model")
-          .slice(-10) // last 10 messages for context
-          .map((m) => ({ role: m.role, content: m.content })),
-      });
+      let data: any;
+
+      if (pendingAttachment) {
+        // FormData path — includes file attachment
+        const formData = new FormData();
+        formData.append("message", userMsg);
+        formData.append("file", pendingAttachment.file);
+        if (activeConvId) formData.append("conversationId", activeConvId);
+        formData.append("history", JSON.stringify(
+          messages
+            .filter((m) => m.role === "user" || m.role === "model")
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content }))
+        ));
+
+        const res = await fetch(`/api/experts/${expertId}/chat`, {
+          method: "POST",
+          body: formData,
+        });
+        data = await res.json();
+        setPendingAttachment(null);
+      } else {
+        // JSON path — standard text-only chat
+        data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
+          message: userMsg,
+          conversationId: activeConvId,
+          history: messages
+            .filter((m) => m.role === "user" || m.role === "model")
+            .slice(-10)
+            .map((m) => ({ role: m.role, content: m.content })),
+        });
+      }
 
       if (data.ok) {
         const newModelMsg: Message = {
@@ -302,6 +350,46 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       e.preventDefault();
       handleSend();
     }
+  }
+
+  /** Handle file selection from the attachment button */
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = [
+      "image/png", "image/jpeg", "image/webp", "image/gif", "image/heic",
+      "audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/x-m4a",
+      "video/mp4", "video/webm",
+    ];
+    if (!validTypes.includes(file.type)) {
+      alert("Unsupported file type. Please upload an image, audio, or video file.");
+      return;
+    }
+
+    // Validate size (20MB for images, 25MB for audio, 50MB for video)
+    const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024
+      : file.type.startsWith("audio/") ? 25 * 1024 * 1024
+      : 20 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
+      return;
+    }
+
+    // Create preview URL for images
+    const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : "";
+    setPendingAttachment({ file, previewUrl, mimeType: file.type });
+
+    // Reset file input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function clearPendingAttachment() {
+    if (pendingAttachment?.previewUrl) {
+      URL.revokeObjectURL(pendingAttachment.previewUrl);
+    }
+    setPendingAttachment(null);
   }
 
   /** Format relative date string */
@@ -463,6 +551,30 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               }`}
             >
               <div className={styles.messageContent}>
+                {/* Inline attachment display */}
+                {msg.attachment && (
+                  <div className={styles.messageAttachment}>
+                    {msg.attachment.mimeType.startsWith("image/") && msg.attachment.previewUrl && (
+                      <img
+                        src={msg.attachment.previewUrl}
+                        alt={msg.attachment.filename || "Attached image"}
+                        className={styles.attachmentImage}
+                      />
+                    )}
+                    {msg.attachment.mimeType.startsWith("audio/") && (
+                      <div className={styles.attachmentAudio}>
+                        <FileAudio size={16} />
+                        <span>{msg.attachment.filename || "Audio file"}</span>
+                      </div>
+                    )}
+                    {msg.attachment.mimeType.startsWith("video/") && (
+                      <div className={styles.attachmentVideo}>
+                        <Film size={16} />
+                        <span>{msg.attachment.filename || "Video file"}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <MarkdownContent content={msg.content} />
               </div>
 
@@ -545,23 +657,72 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
         {/* Input Area */}
         <div className={styles.inputArea}>
-          <textarea
-            className={styles.chatInput}
-            placeholder={`Ask ${expert.name} a question, or pitch an idea to validate...`}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            disabled={sending}
-          />
-          <button
-            className={styles.sendBtn}
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            title="Send message (Enter)"
-          >
-            ↑
-          </button>
+          {/* Pending attachment preview */}
+          {pendingAttachment && (
+            <div className={styles.attachmentPreview}>
+              {pendingAttachment.mimeType.startsWith("image/") && pendingAttachment.previewUrl ? (
+                <img
+                  src={pendingAttachment.previewUrl}
+                  alt="Preview"
+                  className={styles.previewThumb}
+                />
+              ) : pendingAttachment.mimeType.startsWith("audio/") ? (
+                <div className={styles.previewIcon}>
+                  <FileAudio size={20} />
+                </div>
+              ) : (
+                <div className={styles.previewIcon}>
+                  <Film size={20} />
+                </div>
+              )}
+              <span className={styles.previewFilename}>
+                {pendingAttachment.file.name}
+              </span>
+              <button
+                className={styles.previewRemoveBtn}
+                onClick={clearPendingAttachment}
+                title="Remove attachment"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          <div className={styles.inputRow}>
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/webm,audio/mp4,video/mp4,video/webm"
+              style={{ display: "none" }}
+              onChange={handleFileSelect}
+            />
+            <button
+              className={styles.attachBtn}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              title="Attach image, audio, or video"
+            >
+              <Paperclip size={18} />
+            </button>
+            <textarea
+              className={styles.chatInput}
+              placeholder={`Ask ${expert.name} a question, or pitch an idea to validate...`}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              disabled={sending}
+            />
+            <button
+              className={styles.sendBtn}
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              title="Send message (Enter)"
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
 

@@ -57,6 +57,8 @@ async function main() {
       style: "Analytical and precise",
       format: "Detailed",
       boundaries: "Strictly adhere to the intelligence brief; do not invent unstated statistics or arbitrary scores",
+      goldExamples: [],
+      documentSummary: "",
     }
   );
 
@@ -110,7 +112,7 @@ async function main() {
       dataset_url: job.dataset_url,
       webhook_url: webhookUrl,
       base_model: job.base_model,
-      dataset_size: 20,
+      dataset_size: 150,
       system_prompt: systemPrompt,
       learning_rate: 0.0002,
       lora_r: 16,
@@ -120,7 +122,7 @@ async function main() {
       r2_access_key: process.env.R2_ACCESS_KEY_ID,
       r2_secret_key: process.env.R2_SECRET_ACCESS_KEY,
       r2_bucket: process.env.R2_BUCKET_NAME,
-      max_steps: 10,
+      max_steps: 60,
     }),
   });
 

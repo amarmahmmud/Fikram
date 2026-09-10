@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import styles from "./KnowledgeModal.module.css";
-import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
 
 interface SourceItem {
@@ -172,7 +172,16 @@ export function KnowledgeModal({
                 {sources.map((s, idx) => (
                   <div key={idx} className={styles.sourceItem}>
                     <div className={styles.sourceInfo}>
-                      <FileText size={16} color="var(--accent-primary)" />
+                      {(() => {
+                        const ext = s.filename.split(".").pop()?.toLowerCase() || "";
+                        const isImg = ["png", "jpg", "jpeg", "webp", "gif", "heic"].includes(ext);
+                        const isAud = ["mp3", "wav", "m4a", "ogg", "aac", "flac"].includes(ext);
+                        const isVid = ["mp4", "webm", "mov"].includes(ext);
+                        if (isImg) return <Image size={16} color="var(--accent-primary)" />;
+                        if (isAud) return <FileAudio size={16} color="var(--accent-primary)" />;
+                        if (isVid) return <Film size={16} color="var(--accent-primary)" />;
+                        return <FileText size={16} color="var(--accent-primary)" />;
+                      })()}
                       <span className={styles.sourceName} title={s.filename}>
                         {s.filename}
                       </span>
@@ -251,7 +260,7 @@ export function KnowledgeModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.txt,.md"
+                  accept=".pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.heic,.mp3,.wav,.m4a,.ogg,.aac,.flac,.mp4,.webm,.mov"
                   multiple
                   hidden
                   onChange={handleFileUpload}
@@ -260,8 +269,8 @@ export function KnowledgeModal({
                 <UploadCloud size={28} color="var(--accent-primary)" style={{ margin: "0 auto" }} />
                 <div className={styles.dropzoneText}>
                   {uploading
-                    ? "Embedding & indexing documents..."
-                    : "Click to upload PDF, TXT, or MD files"}
+                    ? "Processing & embedding content..."
+                    : "Click to upload documents, images, audio, or video"}
                 </div>
               </div>
 

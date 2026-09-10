@@ -233,21 +233,25 @@ export async function runEvaluation(
   const results: JudgeResult[] = [];
   let hadErrors = false;
 
-  // Process sequentially to respect rate limits (Gemini 15 RPM)
-  for (let i = 0; i < evalPairs.length; i++) {
-    try {
-      const result = await judgeOnePair(evalPairs[i], getModelResponse);
-      results.push(result);
-      console.log(`[Evaluator] Pair ${i + 1}/${evalPairs.length}: score=${result.score}/5 category=${result.category}`);
-
-      // Rate limit delay: 4 seconds between judge calls
-      if (i < evalPairs.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 4000));
+  // Process in parallel batches of 4 to leverage 7-key rotation while staying under limits
+  const CONCURRENCY = 4;
+  for (let i = 0; i < evalPairs.length; i += CONCURRENCY) {
+    const batch = evalPairs.slice(i, i + CONCURRENCY);
+    const batchPromises = batch.map(async (pair, batchIdx) => {
+      try {
+        const result = await judgeOnePair(pair, getModelResponse);
+        console.log(`[Evaluator] Pair ${i + batchIdx + 1}/${evalPairs.length}: score=${result.score}/5 category=${result.category}`);
+        return result;
+      } catch (err) {
+        console.error(`[Evaluator] Failed to evaluate pair ${i + batchIdx + 1}:`, err);
+        hadErrors = true;
+        return null;
       }
-    } catch (err) {
-      console.error(`[Evaluator] Failed to evaluate pair ${i + 1}:`, err);
-      hadErrors = true;
-      // Continue with remaining pairs — partial results are better than none
+    });
+
+    const batchResults = await Promise.all(batchPromises);
+    for (const res of batchResults) {
+      if (res) results.push(res);
     }
   }
 

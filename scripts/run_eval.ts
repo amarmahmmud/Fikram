@@ -209,58 +209,62 @@ async function main() {
   let hadErrors = false;
   const GOOD_SCORE_THRESHOLD = 4.0;
 
-  for (let i = 0; i < pairsToRun.length; i++) {
-    const pair = pairsToRun[i];
-    try {
-      // Step 1: Get model response
-      const modelResponse = await getModelResponse(pair.prompt, pair.system_prompt);
-
-      // Step 2: Judge with Gemini
-      const judgePrompt = buildJudgePrompt(pair.prompt, pair.completion, modelResponse);
-      const rawText = await generateWithFallback(judgePrompt, {
-        temperature: 0.0,
-        maxOutputTokens: 2048,
-        responseMimeType: "application/json",
-      });
-
-      // Parse judge response
-      let parsed: { source_quote?: string; reasoning?: string; score?: number };
+  const CONCURRENCY = 4;
+  for (let i = 0; i < pairsToRun.length; i += CONCURRENCY) {
+    const batch = pairsToRun.slice(i, i + CONCURRENCY);
+    const batchPromises = batch.map(async (pair, batchIdx) => {
       try {
-        const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
-        parsed = JSON.parse(cleaned);
-      } catch {
-        console.warn(`[Pair ${i + 1}] JSON parse failed, extracting score from text`);
-        const scoreMatch = rawText.match(/"score"\s*:\s*(\d)/);
-        parsed = {
-          source_quote: "Parse error",
-          reasoning: rawText.substring(0, 300),
-          score: scoreMatch ? parseInt(scoreMatch[1]) : 2,
+        // Step 1: Get model response
+        const modelResponse = await getModelResponse(pair.prompt, pair.system_prompt);
+
+        // Step 2: Judge with Gemini
+        const judgePrompt = buildJudgePrompt(pair.prompt, pair.completion, modelResponse);
+        const rawText = await generateWithFallback(judgePrompt, {
+          temperature: 0.0,
+          maxOutputTokens: 2048,
+          responseMimeType: "application/json",
+        });
+
+        // Parse judge response
+        let parsed: { source_quote?: string; reasoning?: string; score?: number };
+        try {
+          const cleaned = rawText.replace(/```json\s*/gi, "").replace(/```\s*/gi, "").trim();
+          parsed = JSON.parse(cleaned);
+        } catch {
+          console.warn(`[Pair ${i + batchIdx + 1}] JSON parse failed, extracting score from text`);
+          const scoreMatch = rawText.match(/"score"\s*:\s*(\d)/);
+          parsed = {
+            source_quote: "Parse error",
+            reasoning: rawText.substring(0, 300),
+            score: scoreMatch ? parseInt(scoreMatch[1]) : 2,
+          };
+        }
+
+        const category = inferCategory(pair.prompt, pair.completion);
+        const result: JudgeResult = {
+          prompt: pair.prompt,
+          expectedCompletion: pair.completion,
+          modelResponse,
+          sourceQuote: parsed.source_quote || "",
+          reasoning: parsed.reasoning || "",
+          score: Math.min(5, Math.max(0, Math.round(parsed.score ?? 0))),
+          category,
         };
+
+        console.log(
+          `[${i + batchIdx + 1}/${pairsToRun.length}] score=${result.score}/5 cat=${result.category} prompt="${pair.prompt.slice(0, 60)}..."`
+        );
+        return result;
+      } catch (err) {
+        console.error(`[${i + batchIdx + 1}/${pairsToRun.length}] FAILED:`, (err as Error).message?.slice(0, 120));
+        hadErrors = true;
+        return null;
       }
+    });
 
-      const category = inferCategory(pair.prompt, pair.completion);
-      const result: JudgeResult = {
-        prompt: pair.prompt,
-        expectedCompletion: pair.completion,
-        modelResponse,
-        sourceQuote: parsed.source_quote || "",
-        reasoning: parsed.reasoning || "",
-        score: Math.min(5, Math.max(0, Math.round(parsed.score ?? 0))),
-        category,
-      };
-
-      results.push(result);
-      console.log(
-        `[${i + 1}/${pairsToRun.length}] score=${result.score}/5 cat=${result.category} prompt="${pair.prompt.slice(0, 60)}..."`
-      );
-
-      // Rate limit delay (minimized thanks to 7-key rotation)
-      if (i < pairsToRun.length - 1) {
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    } catch (err) {
-      console.error(`[${i + 1}/${pairsToRun.length}] FAILED:`, (err as Error).message?.slice(0, 120));
-      hadErrors = true;
+    const batchResults = await Promise.all(batchPromises);
+    for (const res of batchResults) {
+      if (res) results.push(res);
     }
   }
 
