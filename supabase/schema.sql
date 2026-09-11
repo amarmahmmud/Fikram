@@ -495,3 +495,30 @@ create policy "Users manage messages in own conversations"
     )
   );
 
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 13. ASR / Tajweed Fine-Tuning Columns on Jobs
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Ratio of phoneme labels that were human-corrected (0.0 = fully automated, 1.0 = all corrected)
+alter table public.jobs add column if not exists phoneme_correction_ratio float;
+
+-- Which Tajweed rules, letters, and harakat this training job targets
+-- Example: {"letters":["ب","ت"],"harakat":["فتحة","ضمة"],"rules":["ghunnah","qalqalah"],"lessons":[1,2,3]}
+alter table public.jobs add column if not exists tajweed_rule_scope jsonb default '[]'::jsonb;
+
+-- Which phonetic script system is used for labels
+alter table public.jobs add column if not exists reference_script_type text default 'QPS';
+-- NOTE: CHECK constraint added separately to be safe for re-runs
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.check_constraints
+    where constraint_name = 'jobs_reference_script_type_check'
+  ) then
+    alter table public.jobs add constraint jobs_reference_script_type_check
+      check (reference_script_type in ('QPS', 'IPA', 'orthographic'));
+  end if;
+end;
+$$;
+

@@ -1,39 +1,42 @@
 import { NextResponse } from "next/server";
-import { generatePairsForChunk } from "@/lib/dataset-pipeline";
-import type { WizardContext } from "@/lib/wizard-types";
-import { buildContextBlock, EMPTY_WIZARD_CONTEXT } from "@/lib/wizard-types";
+import { bootstrapTranscribe, segmentAudio } from "@/lib/dataset-pipeline";
+import type { ASRDatasetPair } from "@/lib/qps-types";
 
-/**
- * POST /api/preview-pairs
- * Body: { text: string, context: WizardContext }
- * Returns 5 synthetic Q&A pairs generated using the enriched wizard context.
- */
+// Generate preview pairs using bootstrap transcription
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const text: string = body.text;
-    const context: WizardContext = body.context ?? EMPTY_WIZARD_CONTEXT;
+    const audioUrl = body.audioUrl;
+    const audioR2Key = body.audioR2Key;
+    const modelCheckpoint = body.modelCheckpoint;
 
-    if (!text || typeof text !== "string") {
-      return NextResponse.json({ ok: false, error: "No text provided" }, { status: 400 });
+    if (!audioUrl || !audioR2Key) {
+      return NextResponse.json({ error: "Missing audioUrl or audioR2Key" }, { status: 400 });
     }
 
-    // Use the first ~4000 chars as a representative chunk for preview
-    const chunk = text.slice(0, 4000);
+    // 1. Get just a few clips via VAD
+    const segmentResult = await segmentAudio(audioR2Key, audioUrl);
+    // Take only first 3 for preview
+    const previewClips = segmentResult.clips.slice(0, 3);
 
-    // Build the enriched context block and pass it as a string to generateForChunk
-    const contextBlock = buildContextBlock(context);
+    // 2. Bootstrap transcribe them
+    const transcriptions = await bootstrapTranscribe(previewClips, modelCheckpoint);
 
-    // generatePairsForChunk returns { pairs, report }. For preview, process top 4 facts (fast)
-    const result = await generatePairsForChunk(chunk, contextBlock, 0, 1, 4);
-    const pairs = result.pairs;
+    // 3. Format as ASRDatasetPair
+    const pairs: ASRDatasetPair[] = previewClips.map((clip) => {
+      const trans = transcriptions.find((t) => t.clipId === clip.id);
+      return {
+        audioClipId: clip.id,
+        audioR2Key: clip.r2Key,
+        phonemeLabels: trans?.labels || [],
+        qpsSequence: trans?.qpsSequence || "",
+        isDeliberateError: false,
+      };
+    });
 
-    // Return only the first 5 pairs
-    const preview = pairs.slice(0, 5);
-
-    return NextResponse.json({ ok: true, pairs: preview });
+    return NextResponse.json({ pairs });
   } catch (err: any) {
-    console.error("preview-pairs error:", err);
-    return NextResponse.json({ ok: false, error: err?.message ?? "Unknown error" }, { status: 500 });
+    console.error("[Preview API] Error:", err);
+    return NextResponse.json({ error: err.message || "Unknown error" }, { status: 500 });
   }
 }

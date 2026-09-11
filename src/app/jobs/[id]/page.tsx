@@ -8,6 +8,8 @@ import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
 import { apiClient } from "@/lib/apiClient";
 import { Globe, RotateCcw } from "lucide-react";
+import { ASREvalReport, formatPER, perToGrade } from "@/lib/evaluator";
+import { TAJWEED_RULE_LABELS, TajweedRule } from "@/lib/qps-types";
 
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 
@@ -125,13 +127,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const isFailed    = job.status === "failed" || job.status === "cancelled";
 
   const config = (job.config || {}) as Record<string, any>;
-  const epochs = config.epochs ?? 1;
-  const lr = config.learningRate ?? 0.0001;
-  const batchSize = config.batchSize ?? 2;
-  const detectedFamily = config.detected_family as string | undefined;
-  const datasetFileName = job.dataset_url ? job.dataset_url.split("/").pop()?.split("?")[0] : "Uploaded Dataset";
-  const estimatedTrainingSec = config.estimated_training_seconds ?? (config.estimatedTime ? parseInt(config.estimatedTime) * 60 : 720);
-
+  const epochs = config.epochs ?? 3; // Typically higher for ASR
+  const lr = config.learningRate ?? 0.0003;
+  const batchSize = config.batchSize ?? 8;
+  const datasetFileName = job.dataset_url ? job.dataset_url.split("/").pop()?.split("?")[0] : "Uploaded Audio Dataset";
+  const estimatedTrainingSec = config.estimated_training_seconds ?? (config.estimatedTime ? parseInt(config.estimatedTime) * 60 : 1200);
 
   // Calculate elapsed or total duration
   const getElapsedSec = () => {
@@ -148,7 +148,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
   const secs = elapsedSec % 60;
   const durationStr = mins > 0 ? `${mins}m ${secs.toString().padStart(2, "0")}s` : `${secs}s`;
 
-  // Progress calculation — based on elapsed vs estimated
+  // Progress calculation
   const progressPercent = isCompleted
     ? 100
     : isFailed
@@ -167,13 +167,13 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     ? `~${etaSec}s remaining`
     : "";
 
-  // Training phases — derived from real job state
+  // Training phases
   const phases = [
     {
       id: "queued",
       label: "Job Queued",
       friendlyLabel: "Waiting in line",
-      techDetail: `Job ${job.id.substring(0, 8)} submitted to Modal.com GPU cluster`,
+      techDetail: `Job ${job.id.substring(0, 8)} submitted to Modal GPU cluster`,
       status: isPending ? "active" : "done",
       icon: "⏳",
     },
@@ -181,39 +181,31 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       id: "gpu",
       label: "GPU Allocated",
       friendlyLabel: "GPU reserved for your model",
-      techDetail: "NVIDIA L4 24GB VRAM container provisioned",
+      techDetail: "NVIDIA A10G or L4 provisioned",
       status: isPending ? "pending" : "done",
       icon: "🖥️",
     },
     {
       id: "loading",
       label: "Loading Model",
-      friendlyLabel: "Setting up the AI model",
-      techDetail: `Loading ${job.base_model} with ${job.method.toUpperCase()} adapter (r=16, alpha=16)`,
+      friendlyLabel: "Setting up the ASR model",
+      techDetail: `Loading ${job.base_model} CTC checkpoint with adapter`,
       status: isPending ? "pending" : (isRunning && elapsedSec < 45) ? "active" : isRunning || isCompleted ? "done" : "pending",
       icon: "📦",
     },
     {
       id: "training",
       label: "Training",
-      friendlyLabel: "Your model is learning from the data",
-      techDetail: `${epochs} epochs × batch ${batchSize} | LR: ${lr} | AdamW optimizer`,
+      friendlyLabel: "Fine-tuning on audio pairs",
+      techDetail: `${epochs} epochs × batch ${batchSize} | LR: ${lr} | CTC Loss`,
       status: isRunning && elapsedSec >= 45 ? "active" : isCompleted ? "done" : "pending",
       icon: "🧠",
     },
     {
-      id: "uploading",
-      label: "Saving Weights",
-      friendlyLabel: "Saving your trained model",
-      techDetail: `Uploading LoRA adapter weights to Cloudflare R2`,
-      status: isCompleted ? "done" : "pending",
-      icon: "💾",
-    },
-    {
       id: "evaluating",
       label: "Evaluating",
-      friendlyLabel: "Testing your model's accuracy",
-      techDetail: `Running held-out test set through LLM-as-a-Judge evaluation`,
+      friendlyLabel: "Testing accuracy (PER/CER)",
+      techDetail: `Computing Phoneme Error Rate on held-out eval pairs`,
       status: isCompleted
         ? (config.eval_status === "completed" ? "done"
           : config.eval_status === "running" ? "active"
@@ -225,26 +217,25 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     {
       id: "complete",
       label: "Complete",
-      friendlyLabel: "Your model is ready!",
-      techDetail: `Finished in ${durationStr}. Adapter available at ${job.result_url || "adapters/" + job.id}`,
+      friendlyLabel: "Your ASR model is ready!",
+      techDetail: `Finished in ${durationStr}. Checkpoint available at ${job.result_url}`,
       status: isCompleted ? "done" : isFailed ? "failed" : "pending",
       icon: "✨",
     },
   ];
 
-  // "What's happening" explainer text
   const activePhase = phases.find(p => p.status === "active");
   const explainerText = isFailed
     ? "Something went wrong during training. You can retry with the same dataset."
     : isCompleted
-    ? "Training is complete! Your custom AI model is ready to test in the playground."
+    ? "Training is complete! Review the evaluation metrics below."
     : isPending
-    ? "Your job is in the queue. It will start automatically once a GPU becomes available (usually within a minute)."
+    ? "Your job is in the queue. It will start automatically once a GPU becomes available."
     : activePhase?.id === "loading"
-    ? `We're loading ${job.base_model} onto the GPU and configuring the fine-tuning adapter. This takes about 30-45 seconds.`
+    ? `We're loading ${job.base_model} onto the GPU and configuring the CTC adapter.`
     : activePhase?.id === "training"
-    ? `Your model is learning from the training data. Each pass through your data (called an 'epoch') helps it become more accurate. Running ${epochs} epoch${epochs > 1 ? "s" : ""}.`
-    : "Processing your training job...";
+    ? `Your model is learning to align audio with phonemes. Running ${epochs} epoch${epochs > 1 ? "s" : ""}.`
+    : "Processing your ASR fine-tuning job...";
 
   return (
     <>
@@ -291,12 +282,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   <Globe size={16} />
                   {(typeof job.config === "object" && job.config !== null && (job.config as Record<string, unknown>).published) ? "Published (Share)" : "Publish & Share"}
                 </button>
-                <Link 
-                  href={`/playground/${job.id}`} 
-                  className="btn btn-sm btn-primary"
-                >
-                  ▷ Test in Playground
-                </Link>
               </>
             )}
             {isFailed && job.dataset_url && (
@@ -309,18 +294,13 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 Retry Training
               </Link>
             )}
-            {job.dataset_url && (
-              <a href={job.dataset_url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
-                View Dataset
-              </a>
-            )}
           </div>
         </div>
 
         <div className={styles.grid}>
           {/* Left col */}
           <div className={styles.leftCol}>
-            {/* Live Status Card — with real progress + timer */}
+            {/* Live Status Card */}
             <div className="card">
               <div className={styles.cardHead}>
                 <span className={styles.cardTitle}>Training Status</span>
@@ -329,7 +309,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 </span>
               </div>
 
-              {/* Progress bar */}
               <div className="progress-bar" style={{ marginTop: 12 }}>
                 <div 
                   className="progress-fill" 
@@ -341,7 +320,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 />
               </div>
 
-              {/* Timer row */}
               <div className={styles.timerRow}>
                 <div className={styles.timerItem}>
                   <span className={styles.timerValue}>{durationStr}</span>
@@ -354,12 +332,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </div>
                 )}
                 <div className={styles.timerItem}>
-                  <span className={styles.timerLabel}>Engine: Modal.com (NVIDIA L4)</span>
+                  <span className={styles.timerLabel}>Engine: Modal.com GPU</span>
                 </div>
               </div>
             </div>
 
-            {/* What's Happening — friendly explainer */}
+            {/* Explainer */}
             <div className={styles.explainerCard} aria-live="polite">
               <div className={styles.explainerHeader}>
                 <span className={styles.explainerDot} style={{
@@ -373,10 +351,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               <p className={styles.explainerText}>{explainerText}</p>
             </div>
 
-            {/* Phase Timeline */}
+            {/* Pipeline Timeline */}
             <div className="card">
               <div className={styles.cardHead} style={{ marginBottom: 16 }}>
-                <span className={styles.cardTitle}>Training Pipeline</span>
+                <span className={styles.cardTitle}>Pipeline</span>
                 <button
                   className={styles.techToggle}
                   onClick={() => setShowTechDetails(!showTechDetails)}
@@ -418,179 +396,116 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               </div>
             </div>
 
-            {/* ── Evaluation Report Card ── */}
+            {/* ── ASR Evaluation Report ── */}
             {isCompleted && (() => {
               const evalStatus = config.eval_status as string | undefined;
-              const evalResult = config.eval_result as Record<string, any> | undefined;
+              const evalResult = config.eval_result as ASREvalReport | undefined;
               const evalError = config.eval_error as string | undefined;
 
-              // Not evaluated yet and no eval set
               if (!evalStatus && !evalResult) return null;
 
-              // Evaluation is running
               if (evalStatus === "running") {
                 return (
                   <div className={styles.evalCard}>
                     <div className={styles.evalHeader}>
-                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
+                      <span className={styles.evalTitle}>📊 ASR Evaluation</span>
                     </div>
                     <div className={styles.evalStatusRunning}>
                       <div className={styles.evalSpinner} />
-                      <span>Evaluating your model against held-out test questions... This may take a few minutes.</span>
+                      <span>Computing PER metrics...</span>
                     </div>
                   </div>
                 );
               }
 
-              // Evaluation unavailable
-              if (evalStatus === "unavailable") {
-                return (
-                  <div className={styles.evalCard}>
-                    <div className={styles.evalHeader}>
-                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
-                      <span className={`${styles.evalBadge} ${styles.evalBadgeWarn}`}>Unavailable</span>
-                    </div>
-                    <p className={styles.explainerText}>
-                      {evalError || "Automatic evaluation could not be completed. You can still test your model in the playground and publish it."}
-                    </p>
-                  </div>
-                );
-              }
-
-              // Evaluation completed — show the Report Card
               if (evalResult) {
-                const pct = evalResult.overallPercentage as number ?? 0;
-                const avgScore = evalResult.overallScore as number ?? 0;
-                const categories = (evalResult.categoryScores || {}) as Record<string, { avg: number; count: number; percentage: number }>;
-                const failedExamples = (evalResult.failedExamples || []) as Array<{
-                  prompt: string; sourceQuote: string; reasoning: string; score: number;
-                }>;
-                const guidance = evalResult.guidance as { summary: string; primaryAction: string; actionLabel: string } | null;
-                const isGood = avgScore >= 4.0;
-                const isOkay = avgScore >= 3.0 && avgScore < 4.0;
-
-                const colorClass = isGood ? "Good" : isOkay ? "Warn" : "Bad";
-
-                // Friendly category labels
-                const categoryLabels: Record<string, string> = {
-                  recall: "Fact Recall",
-                  application: "Application",
-                  format_following: "Format",
-                  meta_cognitive: "Self-Awareness",
-                  contrastive: "Comparisons",
-                  boundary: "Boundaries",
-                  unknown: "Other",
-                };
+                const { grade, label, color } = perToGrade(evalResult.per);
 
                 return (
                   <div className={styles.evalCard}>
                     <div className={styles.evalHeader}>
-                      <span className={styles.evalTitle}>📊 Evaluation Report</span>
-                      <span className={`${styles.evalBadge} ${styles[`evalBadge${colorClass}`]}`}>
-                        {isGood ? "Ready to Publish" : isOkay ? "Needs Improvement" : "Needs Work"}
+                      <span className={styles.evalTitle}>📊 ASR Evaluation Report</span>
+                      <span className={styles.evalBadge} style={{ backgroundColor: color, color: '#fff' }}>
+                        Grade: {grade} ({label})
                       </span>
                     </div>
 
-                    {/* Overall Score */}
-                    <div className={styles.evalScoreRing}>
-                      <div style={{ textAlign: "center" }}>
-                        <div className={`${styles.evalPercentage} ${styles[`evalPercentage${colorClass}`]}`}>
-                          {pct}%
+                    <div className="grid grid-cols-3 gap-4 mb-8 text-center mt-6">
+                      <div className="p-4 bg-gray-50 border rounded">
+                        <div className="text-3xl font-bold" style={{ color }}>
+                          {formatPER(evalResult.per)}
                         </div>
-                        <div className={styles.evalSubtext}>
-                          {avgScore.toFixed(1)}/5.0 · {evalResult.totalEvaluated} questions tested
+                        <div className="text-sm text-gray-500 font-medium">Phoneme Error Rate</div>
+                      </div>
+                      <div className="p-4 bg-gray-50 border rounded">
+                        <div className="text-3xl font-bold text-gray-700">
+                          {formatPER(evalResult.cer)}
                         </div>
+                        <div className="text-sm text-gray-500 font-medium">Char Error Rate</div>
+                      </div>
+                      <div className="p-4 bg-gray-50 border rounded">
+                        <div className="text-3xl font-bold text-gray-700">
+                          {formatPER(evalResult.wer)}
+                        </div>
+                        <div className="text-sm text-gray-500 font-medium">Word Error Rate</div>
                       </div>
                     </div>
 
-                    {/* Category Breakdown */}
-                    {Object.keys(categories).length > 0 && (
-                      <div className={styles.evalCategories}>
-                        {Object.entries(categories).map(([cat, data]) => {
-                          const catColor = data.percentage >= 80 ? "#10b981" : data.percentage >= 60 ? "#fbbf24" : "#ef4444";
-                          return (
-                            <div key={cat} className={styles.evalCategoryItem}>
-                              <div className={styles.evalCategoryLabel}>
-                                {categoryLabels[cat] || cat}
-                              </div>
-                              <div className={styles.evalCategoryScore} style={{ color: catColor }}>
-                                {data.percentage}%
-                              </div>
-                              <div className={styles.evalCategoryCount}>
-                                {data.count} question{data.count !== 1 ? "s" : ""}
-                              </div>
-                            </div>
-                          );
-                        })}
+                    {/* Diagnostics */}
+                    {evalResult.diagnosticGuidance && evalResult.diagnosticGuidance.length > 0 && (
+                      <div className="mb-8 p-4 border-l-4 border-l-primary bg-primary/5 rounded-r">
+                        <h4 className="font-medium mb-2">Diagnostics</h4>
+                        <ul className="space-y-2">
+                          {evalResult.diagnosticGuidance.map((diag, i) => (
+                            <li key={i} className="text-sm flex gap-2">
+                              {diag.level === "warning" || diag.level === "action" ? "⚠️" : "ℹ️"}
+                              <span>{diag.message}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
 
-                    {/* Failed Examples (trust-building transparency) */}
-                    {failedExamples.length > 0 && (
-                      <div className={styles.evalFailedSection}>
-                        <div className={styles.evalFailedTitle}>
-                          Where the model struggled ({failedExamples.length} example{failedExamples.length !== 1 ? "s" : ""})
-                        </div>
-                        {failedExamples.map((ex, idx) => (
-                          <div key={idx} className={styles.evalFailedItem}>
-                            <div className={styles.evalFailedQuestion}>
-                              Q: {ex.prompt.length > 150 ? ex.prompt.substring(0, 150) + "…" : ex.prompt}
-                            </div>
-                            <div className={styles.evalFailedMeta}>
-                              <span className={styles.evalFailedScore}>{ex.score}/5</span>
-                            </div>
-                            {ex.sourceQuote && (
-                              <div className={styles.evalFailedQuote}>
-                                &ldquo;{ex.sourceQuote.length > 200 ? ex.sourceQuote.substring(0, 200) + "…" : ex.sourceQuote}&rdquo;
+                    {/* Rule Accuracy */}
+                    {evalResult.perTajweedRule && Object.keys(evalResult.perTajweedRule).length > 0 && (
+                      <div className="mb-8">
+                        <h4 className="font-medium mb-4 text-gray-700 uppercase text-xs tracking-wider">Tajweed Rule Accuracy</h4>
+                        <div className="space-y-3">
+                          {Object.entries(evalResult.perTajweedRule).map(([rule, acc]) => (
+                            <div key={rule} className="flex items-center gap-4 text-sm">
+                              <div className="w-1/3">{TAJWEED_RULE_LABELS[rule as TajweedRule] || rule}</div>
+                              <div className="w-1/2 bg-gray-200 h-2 rounded-full overflow-hidden">
+                                <div 
+                                  className="h-full" 
+                                  style={{ 
+                                    width: `${acc.accuracy * 100}%`,
+                                    backgroundColor: acc.accuracy > 0.8 ? '#10b981' : acc.accuracy > 0.6 ? '#f59e0b' : '#ef4444'
+                                  }}
+                                />
                               </div>
-                            )}
-                            <div className={styles.evalFailedReasoning}>{ex.reasoning}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Guidance & Actions */}
-                    {guidance && guidance.primaryAction !== "none" && (
-                      <div className={styles.evalGuidance}>
-                        <p className={styles.evalGuidanceText}>{guidance.summary}</p>
-                        <div className={styles.evalGuidanceActions}>
-                          {/* Lightweight action: retrain (routes through cost estimation) */}
-                          {(guidance.primaryAction === "add_data" || guidance.primaryAction === "more_steps") && (
-                            <Link
-                              href={`/new-job?retrain=${job.id}`}
-                              className="btn btn-sm btn-primary"
-                              style={{ gap: 6, display: "inline-flex", alignItems: "center" }}
-                            >
-                              <RotateCcw size={14} />
-                              {guidance.actionLabel}
-                            </Link>
-                          )}
-                          {/* Heavyweight action: different model → fresh job setup with cost preview */}
-                          {guidance.primaryAction === "different_model" && (
-                            <Link
-                              href="/new-job"
-                              className="btn btn-sm btn-secondary"
-                              style={{ gap: 6, display: "inline-flex", alignItems: "center" }}
-                            >
-                              {guidance.actionLabel} →
-                            </Link>
-                          )}
+                              <div className="w-1/6 text-right tabular-nums">
+                                {Math.round(acc.accuracy * 100)}%
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {/* Good score — prominent Publish CTA */}
-                    {isGood && (
-                      <div style={{ marginTop: 16, textAlign: "center" }}>
-                        <button
-                          className="btn btn-primary"
-                          onClick={() => setPublishModalOpen(true)}
-                          style={{ gap: 8, display: "inline-flex", alignItems: "center", padding: "10px 24px" }}
-                        >
-                          <Globe size={16} />
-                          Publish Your Model
-                        </button>
+                    {/* Confusions */}
+                    {evalResult.confusionMatrix && evalResult.confusionMatrix.length > 0 && (
+                      <div>
+                        <h4 className="font-medium mb-4 text-gray-700 uppercase text-xs tracking-wider">Top Confusions (Expected → Model output)</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {evalResult.confusionMatrix.slice(0, 10).map((conf, i) => (
+                            <div key={i} className="bg-gray-50 border rounded px-3 py-1 text-sm font-mono flex items-center gap-2">
+                              <span>{conf.expected}</span>
+                              <span className="text-gray-400">→</span>
+                              <span className="text-red-500">{conf.got}</span>
+                              <span className="text-gray-400 ml-1 text-xs">{conf.count}x</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -603,19 +518,17 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
 
           {/* Right col */}
           <div className={styles.rightCol}>
-            {/* Real Configuration */}
+            {/* Configuration */}
             <div className="card">
               <span className={styles.cardTitle} style={{ display: "block", marginBottom: 16 }}>Configuration</span>
               {[
                 ["Base Model", job.base_model],
-                ...(detectedFamily ? [["Model Family", detectedFamily]] : []),
-                ["Method", job.method.toUpperCase()],
+                ["Task", "Phonetic ASR / Tajweed"],
                 ["Epochs", epochs],
                 ["Learning Rate", lr],
                 ["Batch Size", batchSize],
                 ["Dataset File", datasetFileName],
                 ["Duration", durationStr],
-                ["Credits", `${job.credits_used || 28} credits`],
               ].map(([label, value]) => (
                 <div key={String(label)} className={styles.configRow}>
                   <span className={styles.configLabel}>{label}</span>
@@ -630,16 +543,6 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="card">
               <span className={styles.cardTitle} style={{ display: "block", marginBottom: 16 }}>Actions</span>
               <div className={styles.actionsList}>
-                {isCompleted && (
-                  <Link 
-                    href={`/playground/${job.id}`} 
-                    className="btn btn-primary w-full" 
-                    style={{ textAlign: "center" }}
-                  >
-                    ▷ Test in Playground
-                  </Link>
-                )}
-
                 {(isCompleted || (isFailed && job.dataset_url)) && (
                   <Link
                     href={`/new-job?retrain=${job.id}`}
@@ -651,17 +554,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </Link>
                 )}
 
-
                 {job.result_url && (
-                  <div className={styles.configRow} style={{ padding: "8px 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                    <span>LoRA Prefix:</span>
-                    <span className="font-mono" style={{ color: "var(--accent)" }}>{job.result_url}</span>
+                  <div className={styles.configRow} style={{ padding: "8px 0", fontSize: "0.75rem", color: "var(--text-muted)", flexDirection: "column", alignItems: "flex-start", gap: 4 }}>
+                    <span>Model Checkpoint (HuggingFace):</span>
+                    <span className="font-mono bg-gray-50 px-2 py-1 rounded w-full overflow-hidden text-ellipsis" style={{ color: "var(--accent)" }}>{job.result_url}</span>
                   </div>
                 )}
-
-                <Link href="/new-job" className="btn btn-ghost w-full" style={{ color: "var(--text-muted)", textAlign: "center" }}>
-                  Fine-Tune Another Model
-                </Link>
               </div>
             </div>
           </div>

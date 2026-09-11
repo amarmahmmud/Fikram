@@ -1,440 +1,372 @@
 // ─────────────────────────────────────────────
-// Centralized Model Registry — Single source of truth
+// Centralized ASR Model Registry — Single source of truth
 // ─────────────────────────────────────────────
+// Replaces the text-LLM catalog with speech/ASR models for
+// Noorani Qaida / Tajweed phonetic fine-tuning.
+//
+// Default recommendation: obadx QPS checkpoint (best published PER
+// on Quranic phoneme recognition). wav2vec2-base is the fallback
+// ONLY if a hard size/licensing constraint applies — flagged via
+// UI tooltip, never a silent default.
 
-export interface ModelInfo {
+export interface ASRModelInfo {
   id: string;
   name: string;
   org: string;
   size: string;
-  sizeNum: number;          // numeric param count in billions for sorting/filtering
-  category: ModelCategory;
+  sizeNum: number;           // Numeric param count in millions for sorting
+  category: ASRModelCategory;
   strengths: string[];
   weaknesses: string[];
   bestFor: string[];
-  contextWindow: number;
-  languages: string[];
+  contextWindowMs: number;   // Max audio input length in milliseconds
   credits: { min: number; max: number };
   speed: "fast" | "medium" | "slow";
-  quality: number;          // 1-10 quality rating
+  quality: number;           // 1-10 quality rating
   popular: boolean;
   recommended: boolean;
   tags: string[];
+  // ASR-specific fields
+  phonemeVocabType: "QPS" | "IPA" | "configurable";
+  sifatLevelSupport: boolean;
+  publishedPER: number | null;     // Published Phoneme Error Rate if available
+  realtimeCapable: boolean;        // <200ms inference latency feasible
+  pretrainedOnQuran: boolean;
 }
 
-export type ModelCategory =
-  | "chat"
-  | "reasoning"
-  | "code"
-  | "multilingual"
-  | "creative"
-  | "lightweight"
-  | "general";
+export type ASRModelCategory =
+  | "quran_specialized"     // Pre-trained specifically on Quranic recitation
+  | "multilingual_asr"      // General multilingual ASR models
+  | "base_model"            // Foundation models requiring full fine-tuning
+  | "lightweight";          // Small models for real-time/edge deployment
 
-export const MODEL_CATEGORIES: { value: ModelCategory | "all"; label: string }[] = [
+export const ASR_MODEL_CATEGORIES: { value: ASRModelCategory | "all"; label: string }[] = [
   { value: "all", label: "All Models" },
-  { value: "chat", label: "Chat & Instruction" },
-  { value: "reasoning", label: "Reasoning" },
-  { value: "code", label: "Code" },
-  { value: "multilingual", label: "Multilingual" },
-  { value: "general", label: "General Purpose" },
-  { value: "lightweight", label: "Lightweight" },
+  { value: "quran_specialized", label: "Quran-Specialized" },
+  { value: "multilingual_asr", label: "Multilingual ASR" },
+  { value: "base_model", label: "Foundation Models" },
+  { value: "lightweight", label: "Lightweight / Real-time" },
 ];
 
+
 // ─────────────────────────────────────────────
-// The Model Catalog
+// The ASR Model Catalog
 // ─────────────────────────────────────────────
-export const MODELS: ModelInfo[] = [
-  // ── Chat / Instruction ──────────────────
+export const MODELS: ASRModelInfo[] = [
+  // ── Quran-Specialized ──────────────────────
   {
-    id: "meta-llama/Llama-3.1-8B-Instruct",
-    name: "Llama 3.1 8B Instruct",
-    org: "Meta",
-    size: "8B",
-    sizeNum: 8,
-    category: "chat",
-    strengths: ["Instruction following", "Chat & dialogue", "Q&A", "Content generation"],
-    weaknesses: ["Code generation", "Complex math"],
-    bestFor: ["Customer support bots", "Knowledge Q&A", "Content assistants", "Book/document experts"],
-    contextWindow: 8192,
-    languages: ["en", "es", "fr", "de", "pt", "it"],
-    credits: { min: 20, max: 40 },
-    speed: "fast",
-    quality: 8,
+    id: "obadx/qps-wav2vec2-ctc",
+    name: "obadx QPS Multi-Level CTC",
+    org: "obadx",
+    size: "300M",
+    sizeNum: 300,
+    category: "quran_specialized",
+    strengths: [
+      "QPS two-level phoneme+sifat output",
+      "Best published PER on Quranic phonemes",
+      "Sifat-level articulation detection",
+      "Trained on Quranic recitation data",
+    ],
+    weaknesses: [
+      "Larger model size",
+      "Requires QPS vocabulary",
+    ],
+    bestFor: [
+      "Tajweed mistake detection",
+      "Noorani Qaida training",
+      "Phoneme+sifat-level fine-tuning",
+    ],
+    contextWindowMs: 30000,
+    credits: { min: 20, max: 45 },
+    speed: "medium",
+    quality: 9,
     popular: true,
     recommended: true,
-    tags: ["chat", "instruction", "text"],
+    tags: ["quran", "qps", "tajweed", "sifat"],
+    phonemeVocabType: "QPS",
+    sifatLevelSupport: true,
+    publishedPER: null,  // TODO: Fill from obadx paper once exact number confirmed
+    realtimeCapable: false,
+    pretrainedOnQuran: true,
   },
   {
-    id: "google/gemma-2-9b-it",
-    name: "Gemma 2 9B Instruct",
-    org: "Google",
-    size: "9B",
-    sizeNum: 9,
-    category: "chat",
-    strengths: ["Detailed explanations", "Reasoning", "Safety alignment", "Structured output"],
-    weaknesses: ["Slower inference", "Higher cost"],
-    bestFor: ["Educational tutors", "Detailed analysis", "Research assistants"],
-    contextWindow: 8192,
-    languages: ["en"],
-    credits: { min: 25, max: 50 },
+    id: "TBOGamer22/wav2vec2-quran-phonetics",
+    name: "wav2vec2 Quran Phonetics",
+    org: "TBOGamer22",
+    size: "300M",
+    sizeNum: 300,
+    category: "quran_specialized",
+    strengths: [
+      "Pre-trained on Quranic audio",
+      "Community-validated",
+      "Standard wav2vec2 architecture",
+    ],
+    weaknesses: [
+      "IPA-based vocabulary (not QPS)",
+      "No sifat-level detail",
+      "Less Tajweed-specific than obadx",
+    ],
+    bestFor: [
+      "General Quran phoneme recognition",
+      "Projects using IPA notation",
+      "When QPS vocab is not available",
+    ],
+    contextWindowMs: 30000,
+    credits: { min: 18, max: 40 },
     speed: "medium",
-    quality: 8.5,
-    popular: true,
-    recommended: false,
-    tags: ["chat", "instruction", "reasoning"],
-  },
-
-  // ── General Purpose ─────────────────────
-  {
-    id: "mistralai/Mistral-7B-Instruct-v0.3",
-    name: "Mistral 7B Instruct v0.3",
-    org: "Mistral AI",
-    size: "7B",
-    sizeNum: 7,
-    category: "general",
-    strengths: ["Balanced quality & speed", "Concise answers", "Low cost"],
-    weaknesses: ["Less creative", "English-focused"],
-    bestFor: ["API backends", "Structured data extraction", "Email/text classification"],
-    contextWindow: 8192,
-    languages: ["en", "fr", "de", "es", "it"],
-    credits: { min: 15, max: 35 },
-    speed: "fast",
     quality: 7.5,
     popular: true,
     recommended: false,
-    tags: ["general", "instruction", "text"],
+    tags: ["quran", "ipa", "phonetics"],
+    phonemeVocabType: "IPA",
+    sifatLevelSupport: false,
+    publishedPER: null,
+    realtimeCapable: false,
+    pretrainedOnQuran: true,
   },
 
-  // ── Reasoning ───────────────────────────
+  // ── Foundation Models ──────────────────────
   {
-    id: "microsoft/Phi-3-mini-4k-instruct",
-    name: "Phi-3 Mini 4K Instruct",
-    org: "Microsoft",
-    size: "3.8B",
-    sizeNum: 3.8,
-    category: "reasoning",
-    strengths: ["Strong reasoning for size", "Cost efficient", "Fast inference"],
-    weaknesses: ["Limited context window", "Less fluent", "Shorter responses"],
-    bestFor: ["Logic tasks", "Budget projects", "Quick prototypes"],
-    contextWindow: 4096,
-    languages: ["en"],
-    credits: { min: 8, max: 18 },
+    id: "facebook/wav2vec2-base",
+    name: "wav2vec2 Base",
+    org: "Meta",
+    size: "95M",
+    sizeNum: 95,
+    category: "base_model",
+    strengths: [
+      "Smallest model — cheapest to fine-tune",
+      "Fast training and inference",
+      "Well-documented architecture",
+      "Configurable vocabulary",
+    ],
+    weaknesses: [
+      "No Quranic pre-training",
+      "Requires full fine-tuning for Arabic phonemes",
+      "Lower quality than specialized models",
+    ],
+    bestFor: [
+      "Budget-constrained projects",
+      "Quick experiments and prototyping",
+      "Real-time inference (with optimization)",
+    ],
+    contextWindowMs: 20000,
+    credits: { min: 8, max: 20 },
     speed: "fast",
+    quality: 5,
+    popular: false,
+    recommended: false,
+    tags: ["base", "configurable", "budget"],
+    phonemeVocabType: "configurable",
+    sifatLevelSupport: false,
+    publishedPER: null,
+    realtimeCapable: true,
+    pretrainedOnQuran: false,
+  },
+  {
+    id: "facebook/wav2vec2-large",
+    name: "wav2vec2 Large",
+    org: "Meta",
+    size: "317M",
+    sizeNum: 317,
+    category: "base_model",
+    strengths: [
+      "Larger capacity than base",
+      "Better feature extraction",
+      "Configurable vocabulary",
+    ],
+    weaknesses: [
+      "No Quranic pre-training",
+      "Slower than base model",
+      "Higher compute cost",
+    ],
+    bestFor: [
+      "Higher-quality phoneme recognition",
+      "When obadx checkpoint unavailable",
+    ],
+    contextWindowMs: 30000,
+    credits: { min: 20, max: 45 },
+    speed: "medium",
     quality: 6.5,
     popular: false,
     recommended: false,
-    tags: ["reasoning", "lightweight", "text"],
+    tags: ["base", "configurable", "large"],
+    phonemeVocabType: "configurable",
+    sifatLevelSupport: false,
+    publishedPER: null,
+    realtimeCapable: false,
+    pretrainedOnQuran: false,
   },
+
+  // ── Multilingual ASR ──────────────────────
   {
-    id: "microsoft/Phi-3.5-mini-instruct",
-    name: "Phi-3.5 Mini Instruct",
-    org: "Microsoft",
-    size: "3.8B",
-    sizeNum: 3.8,
-    category: "reasoning",
-    strengths: ["Improved reasoning", "Multilingual support", "Cost efficient"],
-    weaknesses: ["Smaller context", "Less creative output"],
-    bestFor: ["Reasoning tasks", "Multilingual classification", "Edge deployment"],
-    contextWindow: 4096,
-    languages: ["en", "ar", "zh", "ja", "ko"],
-    credits: { min: 8, max: 18 },
-    speed: "fast",
+    id: "facebook/wav2vec2-xls-r-300m",
+    name: "XLS-R 300M",
+    org: "Meta",
+    size: "300M",
+    sizeNum: 300,
+    category: "multilingual_asr",
+    strengths: [
+      "Pre-trained on 128 languages",
+      "Good Arabic speech understanding",
+      "Strong cross-lingual transfer",
+      "Configurable vocabulary",
+    ],
+    weaknesses: [
+      "Not Quran-specific",
+      "General-purpose — may miss Tajweed nuances",
+    ],
+    bestFor: [
+      "Multilingual recitation projects",
+      "When learners speak multiple languages",
+      "Cross-lingual transfer experiments",
+    ],
+    contextWindowMs: 30000,
+    credits: { min: 20, max: 45 },
+    speed: "medium",
     quality: 7,
     popular: false,
     recommended: false,
-    tags: ["reasoning", "multilingual", "lightweight"],
+    tags: ["multilingual", "arabic", "configurable"],
+    phonemeVocabType: "configurable",
+    sifatLevelSupport: false,
+    publishedPER: null,
+    realtimeCapable: false,
+    pretrainedOnQuran: false,
   },
   {
-    id: "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
-    name: "DeepSeek R1 Llama 8B",
-    org: "DeepSeek",
-    size: "8B",
-    sizeNum: 8,
-    category: "reasoning",
-    strengths: ["Chain-of-thought reasoning", "Math & logic", "Analytical tasks"],
-    weaknesses: ["Verbose responses", "Slower for simple tasks"],
-    bestFor: ["Math tutors", "Problem-solving assistants", "Technical analysis"],
-    contextWindow: 8192,
-    languages: ["en", "zh"],
-    credits: { min: 20, max: 40 },
-    speed: "medium",
-    quality: 8,
-    popular: true,
-    recommended: false,
-    tags: ["reasoning", "cot", "math"],
-  },
-
-  // ── Code ────────────────────────────────
-  {
-    id: "meta-llama/CodeLlama-7b-Instruct-hf",
-    name: "CodeLlama 7B Instruct",
+    id: "facebook/w2v-bert-2.0",
+    name: "w2v-BERT 2.0",
     org: "Meta",
-    size: "7B",
-    sizeNum: 7,
-    category: "code",
-    strengths: ["Code generation", "Debugging", "Code explanation"],
-    weaknesses: ["Poor at general chat", "Limited natural language"],
-    bestFor: ["Code assistants", "Documentation generators", "Bug fixers"],
-    contextWindow: 4096,
-    languages: ["en"],
-    credits: { min: 15, max: 35 },
-    speed: "fast",
-    quality: 7.5,
+    size: "600M",
+    sizeNum: 600,
+    category: "multilingual_asr",
+    strengths: [
+      "Largest model — highest capacity",
+      "State-of-the-art speech representations",
+      "143 languages pre-training",
+    ],
+    weaknesses: [
+      "Very large — expensive to fine-tune",
+      "Slow inference",
+      "Overkill for letter-level Noorani Qaida",
+    ],
+    bestFor: [
+      "Maximum quality when cost is not a concern",
+      "Complex Tajweed rule detection",
+      "Research / benchmarking",
+    ],
+    contextWindowMs: 30000,
+    credits: { min: 35, max: 70 },
+    speed: "slow",
+    quality: 8.5,
     popular: false,
     recommended: false,
-    tags: ["code", "instruction", "programming"],
-  },
-
-  // ── Multilingual ────────────────────────
-  {
-    id: "Qwen/Qwen2.5-7B-Instruct",
-    name: "Qwen 2.5 7B Instruct",
-    org: "Alibaba",
-    size: "7B",
-    sizeNum: 7,
-    category: "multilingual",
-    strengths: ["Excellent multilingual", "Arabic support", "Chinese native", "Structured output"],
-    weaknesses: ["Less tested in English-only", "Newer ecosystem"],
-    bestFor: ["Arabic chatbots", "Chinese assistants", "Multilingual customer support"],
-    contextWindow: 8192,
-    languages: ["en", "ar", "zh", "ja", "ko", "fr", "de", "es"],
-    credits: { min: 15, max: 35 },
-    speed: "fast",
-    quality: 7.5,
-    popular: false,
-    recommended: false,
-    tags: ["multilingual", "instruction", "text"],
-  },
-
-  // ── Lightweight / Budget ────────────────
-  {
-    id: "meta-llama/Llama-3.2-3B-Instruct",
-    name: "Llama 3.2 3B Instruct",
-    org: "Meta",
-    size: "3B",
-    sizeNum: 3,
-    category: "lightweight",
-    strengths: ["Very fast inference", "Lowest cost", "Good for simple tasks"],
-    weaknesses: ["Limited depth", "Short responses", "Basic reasoning"],
-    bestFor: ["Simple FAQ bots", "Classification", "Quick experiments"],
-    contextWindow: 8192,
-    languages: ["en", "es", "fr", "de", "pt", "it"],
-    credits: { min: 6, max: 14 },
-    speed: "fast",
-    quality: 6,
-    popular: false,
-    recommended: false,
-    tags: ["lightweight", "chat", "budget"],
-  },
-  {
-    id: "google/gemma-2-2b-it",
-    name: "Gemma 2 2B Instruct",
-    org: "Google",
-    size: "2B",
-    sizeNum: 2,
-    category: "lightweight",
-    strengths: ["Ultra-lightweight", "Very fast", "Cheap to run"],
-    weaknesses: ["Limited capability", "Simple outputs only"],
-    bestFor: ["Prototyping", "Edge/mobile apps", "Budget experiments"],
-    contextWindow: 8192,
-    languages: ["en"],
-    credits: { min: 4, max: 10 },
-    speed: "fast",
-    quality: 5.5,
-    popular: false,
-    recommended: false,
-    tags: ["lightweight", "budget", "text"],
-  },
-  {
-    id: "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-    name: "TinyLlama 1.1B Chat",
-    org: "TinyLlama",
-    size: "1.1B",
-    sizeNum: 1.1,
-    category: "lightweight",
-    strengths: ["Smallest model", "Near-instant inference", "Minimal cost"],
-    weaknesses: ["Very limited capability", "Poor complex reasoning", "Short responses"],
-    bestFor: ["Experiments", "Learning fine-tuning", "Proof of concepts"],
-    contextWindow: 2048,
-    languages: ["en"],
-    credits: { min: 2, max: 6 },
-    speed: "fast",
-    quality: 4,
-    popular: false,
-    recommended: false,
-    tags: ["lightweight", "experimental", "budget"],
-  },
-  {
-    id: "microsoft/phi-2",
-    name: "Phi-2",
-    org: "Microsoft",
-    size: "2.7B",
-    sizeNum: 2.7,
-    category: "general",
-    strengths: ["Good reasoning for size", "Efficient", "Compact"],
-    weaknesses: ["Older model", "Limited instruction following"],
-    bestFor: ["Budget general tasks", "Quick experiments"],
-    contextWindow: 2048,
-    languages: ["en"],
-    credits: { min: 6, max: 14 },
-    speed: "fast",
-    quality: 5.5,
-    popular: false,
-    recommended: false,
-    tags: ["lightweight", "general", "text"],
-  },
-
-  // ── Instruction Following ───────────────
-  {
-    id: "tiiuae/falcon-7b-instruct",
-    name: "Falcon 7B Instruct",
-    org: "TII UAE",
-    size: "7B",
-    sizeNum: 7,
-    category: "general",
-    strengths: ["Strong instruction following", "Open license"],
-    weaknesses: ["Older architecture", "Less refined output"],
-    bestFor: ["Instruction following", "Text generation"],
-    contextWindow: 2048,
-    languages: ["en"],
-    credits: { min: 15, max: 30 },
-    speed: "fast",
-    quality: 6.5,
-    popular: false,
-    recommended: false,
-    tags: ["instruction", "text", "general"],
+    tags: ["large", "bert", "multilingual", "research"],
+    phonemeVocabType: "configurable",
+    sifatLevelSupport: false,
+    publishedPER: null,
+    realtimeCapable: false,
+    pretrainedOnQuran: false,
   },
 ];
+
 
 // ─────────────────────────────────────────────
 // Helper Functions
 // ─────────────────────────────────────────────
 
 /** Get a model by its ID */
-export function getModelById(id: string): ModelInfo | undefined {
+export function getModelById(id: string): ASRModelInfo | undefined {
   return MODELS.find((m) => m.id === id);
 }
 
 /** Get all models for a specific category */
-export function getModelsByCategory(category: ModelCategory | "all"): ModelInfo[] {
+export function getModelsByCategory(category: ASRModelCategory | "all"): ASRModelInfo[] {
   if (category === "all") return MODELS;
   return MODELS.filter((m) => m.category === category);
 }
 
-/** Get the recommended model based on document size, language needs, and budget.
- *  This replaces the old hardcoded recommendation that always returned Llama 3.1 8B.
+/** Get models filtered by real-time capability */
+export function getRealtimeModels(): ASRModelInfo[] {
+  return MODELS.filter((m) => m.realtimeCapable);
+}
+
+/**
+ * Get the recommended model based on requirements.
  *
- *  Decision logic:
- *  1. Small document (< 5,000 chars) → lightweight model (cheapest that fits)
- *  2. Medium document (5,000–50,000 chars) → mid-size model (good value)
- *  3. Large document (> 50,000 chars) → full-size model (best quality)
- *  4. Non-English detected → prefer multilingual models
- *  5. Budget constraint → filter by maxCredits
- *  6. Pulls from multiple families, not just one
+ * Decision logic:
+ * 1. If sifat-level support needed → obadx QPS (only option)
+ * 2. If real-time required → filter to realtimeCapable, pick highest quality
+ * 3. If budget constrained → filter by maxCredits, pick highest quality
+ * 4. Default → obadx QPS (recommended)
+ *
+ * wav2vec2-base is ONLY the fallback if a hard size/licensing constraint
+ * applies — flagged via tooltip, never silent default.
  */
 export function getRecommendedModel(opts?: {
-  documentSizeChars?: number;
-  documentLanguages?: string[];
-  needsMultilingual?: boolean;
-  needsCode?: boolean;
-  needsReasoning?: boolean;
+  needsSifatLevel?: boolean;
+  needsRealtime?: boolean;
   budgetConstrained?: boolean;
   maxCredits?: number;
-}): ModelInfo {
-  // Specialty overrides — explicit category needs
-  if (opts?.needsCode) return MODELS.find((m) => m.category === "code") ?? MODELS[0];
-  if (opts?.needsReasoning) return MODELS.find((m) => m.id.includes("DeepSeek")) ?? MODELS[0];
+  preferPretrainedQuran?: boolean;
+}): ASRModelInfo {
+  // Sifat-level support → only obadx QPS
+  if (opts?.needsSifatLevel) {
+    return MODELS.find((m) => m.sifatLevelSupport) ?? MODELS[0];
+  }
 
-  // Language-aware selection
-  const needsMulti = opts?.needsMultilingual ||
-    (opts?.documentLanguages && opts.documentLanguages.some(
-      (l) => !["en", "english"].includes(l.toLowerCase())
-    ));
-
-  if (needsMulti) {
-    // Prefer Qwen for Arabic/Chinese, Phi-3.5 for general multilingual
-    const hasArabicOrChinese = opts?.documentLanguages?.some(
-      (l) => ["ar", "arabic", "zh", "chinese"].includes(l.toLowerCase())
-    );
-    if (hasArabicOrChinese) {
-      return MODELS.find((m) => m.id.includes("Qwen")) ?? MODELS[0];
-    }
-    return MODELS.find((m) => m.category === "multilingual") ??
-           MODELS.find((m) => m.id.includes("Phi-3.5")) ?? MODELS[0];
+  // Real-time → filter to capable models
+  if (opts?.needsRealtime) {
+    const rtModels = MODELS
+      .filter((m) => m.realtimeCapable)
+      .sort((a, b) => b.quality - a.quality);
+    return rtModels[0] ?? MODELS[0];
   }
 
   // Hard budget constraint
-  if (opts?.budgetConstrained || (opts?.maxCredits !== undefined && opts.maxCredits < 15)) {
+  if (opts?.budgetConstrained || (opts?.maxCredits !== undefined && opts.maxCredits < 20)) {
     const affordable = MODELS
-      .filter((m) => m.credits.max <= (opts?.maxCredits ?? 15))
+      .filter((m) => m.credits.max <= (opts?.maxCredits ?? 20))
       .sort((a, b) => b.quality - a.quality);
-    return affordable[0] ?? MODELS.find((m) => m.category === "lightweight") ?? MODELS[0];
+    return affordable[0] ?? MODELS[0];
   }
 
-  // Document-size-aware selection — the core new logic
-  const docSize = opts?.documentSizeChars ?? 0;
-
-  if (docSize > 0 && docSize < 5_000) {
-    // Small document → lightweight model is the best value
-    // Pick highest quality among lightweight/budget models from different families
-    const lightweight = MODELS
-      .filter((m) => m.sizeNum <= 3.8)
+  // Prefer Quran-pretrained if specified
+  if (opts?.preferPretrainedQuran !== false) {
+    const quranModels = MODELS
+      .filter((m) => m.pretrainedOnQuran)
       .sort((a, b) => b.quality - a.quality);
-    return lightweight[0] ?? MODELS[0];
+    return quranModels[0] ?? MODELS[0];
   }
 
-  if (docSize >= 5_000 && docSize <= 50_000) {
-    // Medium document → mid-size model, good value
-    // Prefer 7B-class models: Mistral 7B, Qwen 7B, or Llama 3.2 3B
-    const midSize = MODELS
-      .filter((m) => m.sizeNum >= 3 && m.sizeNum <= 8)
-      .sort((a, b) => b.quality - a.quality);
-    return midSize[0] ?? MODELS[0];
-  }
-
-  if (docSize > 50_000) {
-    // Large document → full-size model for best quality
-    const fullSize = MODELS
-      .filter((m) => m.sizeNum >= 7 && m.sizeNum <= 10)
-      .sort((a, b) => b.quality - a.quality);
-    return fullSize[0] ?? MODELS[0];
-  }
-
-  // No document size info — default to best quality-to-cost ratio (8B class)
-  const bestValue = MODELS
-    .filter((m) => m.sizeNum >= 7 && m.sizeNum <= 9)
-    .sort((a, b) => b.quality - a.quality);
-  return bestValue[0] ?? MODELS[0];
+  // Default: obadx QPS (the recommended model)
+  return MODELS.find((m) => m.recommended) ?? MODELS[0];
 }
 
 /** Get a recommendation reason string for the UI */
-export function getRecommendationReason(model: ModelInfo, opts?: {
-  documentSizeChars?: number;
+export function getRecommendationReason(model: ASRModelInfo, opts?: {
+  needsRealtime?: boolean;
   estimatedCredits?: number;
 }): string {
-  const docSize = opts?.documentSizeChars ?? 0;
-  const credits = opts?.estimatedCredits;
-
-  if (docSize > 0 && docSize < 5_000) {
-    return `Best value for a small document${credits ? ` — estimated ${credits} credits` : ""}`;
+  if (model.recommended) {
+    return `Best published PER on Quranic phonemes with sifat-level articulation detail${opts?.estimatedCredits ? ` — estimated ${opts.estimatedCredits} credits` : ""}`;
   }
-  if (docSize >= 5_000 && docSize <= 50_000) {
-    return `Great balance of quality and cost for your document${credits ? ` — estimated ${credits} credits` : ""}`;
+  if (model.realtimeCapable && opts?.needsRealtime) {
+    return `Optimized for real-time (<200ms) inference${opts?.estimatedCredits ? ` — estimated ${opts.estimatedCredits} credits` : ""}`;
   }
-  if (docSize > 50_000) {
-    return `Best quality for a large document${credits ? ` — estimated ${credits} credits` : ""}`;
+  if (model.pretrainedOnQuran) {
+    return `Pre-trained on Quranic recitation data${opts?.estimatedCredits ? ` — estimated ${opts.estimatedCredits} credits` : ""}`;
   }
-  return `Recommended for general use${credits ? ` — estimated ${credits} credits` : ""}`;
+  return `General-purpose ASR model — requires full fine-tuning for Tajweed${opts?.estimatedCredits ? ` — estimated ${opts.estimatedCredits} credits` : ""}`;
 }
 
-/** Build a summary string for use in AI prompts */
-export function getModelCatalogPrompt(): string {
+/** Build a summary string for use in recommendations */
+export function getModelCatalogSummary(): string {
   return MODELS.map((m) =>
     `- ${m.name} (${m.id}): ${m.size} params, ${m.category}, ` +
     `Quality ${m.quality}/10, ${m.credits.min}-${m.credits.max} credits, ` +
-    `Best for: ${m.bestFor.join(", ")}. ` +
-    `Strengths: ${m.strengths.join(", ")}. ` +
-    `Languages: ${m.languages.join(", ")}.`
+    `Vocab: ${m.phonemeVocabType}, Sifat: ${m.sifatLevelSupport ? "Yes" : "No"}, ` +
+    `Quran pretrained: ${m.pretrainedOnQuran ? "Yes" : "No"}. ` +
+    `Best for: ${m.bestFor.join(", ")}.`,
   ).join("\n");
 }
