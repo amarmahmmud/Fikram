@@ -6,52 +6,60 @@ import styles from "./PipelineProgressOverlay.module.css";
 /* ── Types ── */
 export interface PipelineEvent {
   type: "progress" | "complete" | "error";
-  stage?: "chunking" | "generating" | "validating" | "deduplicating" | "complete";
+  stage?: "chunking" | "generating" | "validating" | "deduplicating" | "complete" | "segmenting" | "transcribing";
   message?: string;
   chunksTotal?: number;
   chunksProcessed?: number;
   pairsGenerated?: number;
+  segmentsTotal?: number;
+  segmentsProcessed?: number;
+  clipsGenerated?: number;
   // Complete event fields
   ok?: boolean;
   jsonl?: string;
   evalJsonl?: string;
   stats?: Record<string, unknown>;
   systemPrompt?: string;
+  pairs?: unknown[];
+  trainPairs?: unknown[];
+  evalPairs?: unknown[];
   // Error event fields
   error?: string;
 }
 
-interface PipelineProgressOverlayProps {
-  visible: boolean;
-  onComplete: (data: { jsonl: string; evalJsonl: string; stats: Record<string, unknown>; systemPrompt: string }) => void;
-  onError: (error: string) => void;
-  latestEvent: PipelineEvent | null;
+export interface PipelineProgressOverlayProps {
+  visible?: boolean;
+  event?: PipelineEvent | null;
+  latestEvent?: PipelineEvent | null;
+  onComplete?: (data: any) => void;
+  onError?: (error: string) => void;
+  onClose?: () => void;
 }
 
 /* ── Pipeline stages (friendly names) ── */
 const STAGES = [
   {
     id: "chunking",
-    label: "Preparing",
-    friendlyDesc: "Reading through your document and splitting it into sections",
-    icon: "📄",
+    label: "Segmenting Audio",
+    friendlyDesc: "Running VAD segmentation to split audio into Noorani Qaida letter/syllable clips",
+    icon: "🎵",
   },
   {
     id: "generating",
-    label: "Building Knowledge",
-    friendlyDesc: "Our AI is creating questions and answers from each section",
+    label: "Bootstrap Transcription",
+    friendlyDesc: "Generating initial phonetic and sifat alignments for each audio clip",
     icon: "🧠",
   },
   {
     id: "validating",
-    label: "Quality Check",
-    friendlyDesc: "Checking every answer for accuracy and removing duplicates",
+    label: "Quality & Dedup",
+    friendlyDesc: "Checking duration, clipping, and removing near-duplicate phonetic patterns",
     icon: "✓",
   },
   {
     id: "complete",
     label: "Complete",
-    friendlyDesc: "Your training dataset is ready!",
+    friendlyDesc: "Your ASR training dataset is ready!",
     icon: "✨",
   },
 ] as const;
@@ -60,19 +68,23 @@ type StageId = (typeof STAGES)[number]["id"];
 
 function getStageIndex(stage?: string): number {
   if (!stage) return 0;
-  // "deduplicating" maps to the "validating" visual stage
-  const mapped = stage === "deduplicating" ? "validating" : stage;
-  const idx = STAGES.findIndex((s) => s.id === mapped);
-  return idx >= 0 ? idx : 0;
+  if (stage === "segmenting" || stage === "chunking") return 0;
+  if (stage === "transcribing" || stage === "generating") return 1;
+  if (stage === "validating" || stage === "deduplicating") return 2;
+  if (stage === "complete") return 3;
+  return 0;
 }
 
 /* ── Component ── */
 export default function PipelineProgressOverlay({
-  visible,
+  visible = true,
   onComplete,
   onError,
   latestEvent,
+  event,
+  onClose,
 }: PipelineProgressOverlayProps) {
+  const activeEvent = latestEvent || event;
   const [showDetails, setShowDetails] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -106,38 +118,42 @@ export default function PipelineProgressOverlay({
 
   // Process incoming events
   useEffect(() => {
-    if (!latestEvent || !visible) return;
+    if (!activeEvent || !visible) return;
 
-    if (latestEvent.type === "progress") {
-      if (latestEvent.pairsGenerated !== undefined) {
-        setPairsCount(latestEvent.pairsGenerated);
+    if (activeEvent.type === "progress") {
+      if (activeEvent.pairsGenerated !== undefined) {
+        setPairsCount(activeEvent.pairsGenerated);
+      } else if (activeEvent.clipsGenerated !== undefined) {
+        setPairsCount(activeEvent.clipsGenerated);
       }
-      if (latestEvent.message) {
+      if (activeEvent.message) {
         setLogs((prev) => {
           // Avoid duplicate consecutive messages
-          if (prev.length > 0 && prev[prev.length - 1] === latestEvent.message) return prev;
-          return [...prev, latestEvent.message!];
+          if (prev.length > 0 && prev[prev.length - 1] === activeEvent.message) return prev;
+          return [...prev, activeEvent.message!];
         });
       }
-    } else if (latestEvent.type === "complete" && !hasCompletedRef.current) {
+    } else if (activeEvent.type === "complete" && !hasCompletedRef.current) {
       hasCompletedRef.current = true;
-      if (latestEvent.pairsGenerated !== undefined) {
-        setPairsCount(latestEvent.pairsGenerated);
+      if (activeEvent.pairsGenerated !== undefined) {
+        setPairsCount(activeEvent.pairsGenerated);
+      } else if (activeEvent.clipsGenerated !== undefined) {
+        setPairsCount(activeEvent.clipsGenerated);
       }
       // Small delay so user sees the "Complete" stage
       setTimeout(() => {
-        onComplete({
-          jsonl: latestEvent.jsonl || "",
-          evalJsonl: latestEvent.evalJsonl || "",
-          stats: latestEvent.stats || {},
-          systemPrompt: latestEvent.systemPrompt || "",
+        onComplete?.({
+          jsonl: activeEvent.jsonl || "",
+          evalJsonl: activeEvent.evalJsonl || "",
+          stats: activeEvent.stats || {},
+          systemPrompt: activeEvent.systemPrompt || "",
         });
       }, 1500);
-    } else if (latestEvent.type === "error") {
+    } else if (activeEvent.type === "error") {
       hasCompletedRef.current = true;
-      onError(latestEvent.error || "An unknown error occurred");
+      onError?.(activeEvent.error || "An unknown error occurred");
     }
-  }, [latestEvent, visible, onComplete, onError]);
+  }, [activeEvent, visible, onComplete, onError]);
 
   // Smooth number animation for pairs counter
   useEffect(() => {
@@ -157,12 +173,12 @@ export default function PipelineProgressOverlay({
 
   if (!visible) return null;
 
-  const currentStageIdx = getStageIndex(latestEvent?.stage);
-  const chunksTotal = latestEvent?.chunksTotal || 0;
-  const chunksProcessed = latestEvent?.chunksProcessed || 0;
+  const currentStageIdx = getStageIndex(activeEvent?.stage);
+  const chunksTotal = activeEvent?.chunksTotal || activeEvent?.segmentsTotal || 0;
+  const chunksProcessed = activeEvent?.chunksProcessed || activeEvent?.segmentsProcessed || 0;
   const progressPercent = chunksTotal > 0 ? Math.round((chunksProcessed / chunksTotal) * 100) : 0;
-  const isComplete = latestEvent?.stage === "complete" || latestEvent?.type === "complete";
-  const isError = latestEvent?.type === "error";
+  const isComplete = activeEvent?.stage === "complete" || activeEvent?.type === "complete";
+  const isError = activeEvent?.type === "error";
 
   // ETA calculation
   const elapsedSec = Math.floor(elapsedMs / 1000);

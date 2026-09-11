@@ -35,6 +35,12 @@ export interface ASREvalReport {
   cer: number;
   /** Word Error Rate — for word-level groupings (0-1) */
   wer: number;
+  /** Exact sequence match percentage (0-100) */
+  exact_match_pct?: number;
+  exactMatchPct?: number;
+  /** Count match within +-1 phonemes percentage (0-100) */
+  count_match_pct?: number;
+  countMatchPct?: number;
   /** Accuracy breakdown per Tajweed rule */
   perTajweedRule: Record<string, TajweedRuleAccuracy>;
   /** Phoneme confusion matrix — which phonemes are most confused */

@@ -430,7 +430,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4 mb-8 text-center mt-6">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8 text-center mt-6">
                       <div className="p-4 bg-gray-50 border rounded">
                         <div className="text-3xl font-bold" style={{ color }}>
                           {formatPER(evalResult.per)}
@@ -444,10 +444,16 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                         <div className="text-sm text-gray-500 font-medium">Char Error Rate</div>
                       </div>
                       <div className="p-4 bg-gray-50 border rounded">
-                        <div className="text-3xl font-bold text-gray-700">
-                          {formatPER(evalResult.wer)}
+                        <div className="text-3xl font-bold text-emerald-600">
+                          {evalResult.exact_match_pct !== undefined ? `${evalResult.exact_match_pct}%` : evalResult.exactMatchPct !== undefined ? `${evalResult.exactMatchPct}%` : "—"}
                         </div>
-                        <div className="text-sm text-gray-500 font-medium">Word Error Rate</div>
+                        <div className="text-sm text-gray-500 font-medium">Exact Match</div>
+                      </div>
+                      <div className="p-4 bg-gray-50 border rounded">
+                        <div className="text-3xl font-bold text-blue-600">
+                          {evalResult.count_match_pct !== undefined ? `${evalResult.count_match_pct}%` : evalResult.countMatchPct !== undefined ? `${evalResult.countMatchPct}%` : "—"}
+                        </div>
+                        <div className="text-sm text-gray-500 font-medium">Count Match (±1)</div>
                       </div>
                     </div>
 

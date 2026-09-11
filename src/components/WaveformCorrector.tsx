@@ -57,13 +57,22 @@ export default function WaveformCorrector({
       }
     });
 
-    ws.load(clipUrl);
+    ws.load(clipUrl).catch((err: any) => {
+      // Gracefully ignore unmounted aborts
+      if (err?.name !== "AbortError" && !err?.message?.includes("aborted")) {
+        console.warn("WaveSurfer load warning:", err);
+      }
+    });
 
     wavesurferRef.current = ws;
     wsRegionsRef.current = wsRegions;
 
     return () => {
-      ws.destroy();
+      try {
+        ws.destroy();
+      } catch (err: any) {
+        // Ignore cleanup abort errors
+      }
     };
   }, [clipUrl]);
 

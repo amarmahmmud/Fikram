@@ -48,6 +48,10 @@ export const ASR_MODEL_CATEGORIES: { value: ASRModelCategory | "all"; label: str
   { value: "lightweight", label: "Lightweight / Real-time" },
 ];
 
+export const MODEL_CATEGORIES = ASR_MODEL_CATEGORIES;
+export type ModelCategory = ASRModelCategory;
+export type ModelInfo = ASRModelInfo;
+
 
 // ─────────────────────────────────────────────
 // The ASR Model Catalog

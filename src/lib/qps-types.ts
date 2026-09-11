@@ -220,6 +220,8 @@ export interface ASRDatasetPair {
   audioClipId: string;
   /** R2 storage key for the audio file */
   audioR2Key: string;
+  /** Direct audio URL (for preview playback) */
+  audioUrl?: string;
   /** QPS phoneme+sifat labels with timing */
   phonemeLabels: PhonemeLabel[];
   /** Flat QPS phoneme string — the CTC training target */

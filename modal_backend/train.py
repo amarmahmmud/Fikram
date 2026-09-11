@@ -1,1041 +1,715 @@
 """
-Modal.com Fine-Tuning Backend for Model Factory
-================================================
-Deploy this file with: modal deploy modal_backend/train.py
+Modal.com CTC Fine-Tuning Backend for Model Factory
+===================================================
+Deploy with: modal deploy modal_backend/train.py
 
 This script runs on Modal and:
-1. Estimates GPU memory need, GPU tier, and CREDIT COST for a training job
-   BEFORE any paid GPU is touched (estimate_cost endpoint — free, CPU-only)
-2. Picks the smallest GPU tier that fits the estimated model, downloads the
-   user's JSONL dataset from Cloudflare R2, and fine-tunes it with a flow
-   tuned to the model's family (Llama, Gemma, Qwen, Phi, Mistral, ...)
-3. Enforces a hard credit-budget ceiling so a job can never cost more than
-   what the user actually confirmed and had held
-4. Retries once (with reduced memory footprint) on CUDA OOM instead of
-   dying outright, since our users can't read a Python traceback
-5. Saves the LoRA adapter weights back to Cloudflare R2 and reports ACTUAL
-   usage (separate from the pre-job estimate) via webhook, so the platform
-   can reconcile: charge actual, refund the unused portion of the hold
-
-Universal compatibility (unchanged from prior versions):
-- Detects model family from HF `config.model_type` (falls back to name
-  matching, then to fully-generic auto-detection) and uses family-specific
-  LoRA target modules / chat-template behaviour / stop tokens where known
-- Any family not in the table still works — every family-specific value has
-  a universal auto-detected fallback, so unknown architectures are never
-  broken, just less finely tuned
-- Handles missing pad tokens, chat templates, and system roles
-
-Supported range (v1): up to ~30-34B parameters on a SINGLE GPU via QLoRA.
-Multi-GPU / distributed training is explicitly OUT OF SCOPE for this file —
-a model whose estimated VRAM exceeds the largest configured GPU_TIER fails
-fast with a structured "model_too_large" response, before any GPU spend.
-
-⚠️ CALIBRATION NOTE for whoever maintains this:
-The per-step timing constants in `estimate_training_seconds()` and the
-LoRA-adapter-size heuristic in `estimate_vram_requirements()` are reasonable
-starting estimates, not measured ground truth. As real jobs complete, log
-actual (param_count, use_qlora, steps, elapsed_seconds, peak_vram_gb) and
-periodically recalibrate BASE_SECONDS_PER_STEP_PER_BILLION_PARAMS and
-ADAPTER_PARAM_FRACTION_AT_R16 against real data. Until then, both estimators
-lean conservative (over- rather than under-estimate) on purpose — an
-overpriced quote costs you a little goodwill; an underpriced one costs you
-money on every job that runs long or OOMs.
+1. Estimates GPU need and credit cost for a CTC fine-tuning job (estimate_cost endpoint — CPU-only).
+2. Downloads audio clips and phoneme sequences from Cloudflare R2 / dataset_url.
+3. Dynamically builds the phoneme vocabulary (<pad>:0, <unk>:1, phonemes...).
+4. Fine-tunes Wav2Vec2ForCTC using the validated training recipe:
+   - Frozen 7-layer convolutional feature encoder
+   - Zero dropout during fine-tuning
+   - Neutral lm_head.bias initialization
+   - Differentiated AdamW learning rates (backbone=1e-4, lm_head=5e-4)
+   - OneCycleLR cosine schedule
+5. Evaluates a held-out split of the dataset on GPU using greedy CTC decode:
+   - Computes PER (Phoneme Error Rate), count match, exact match, CER, and confusion matrix
+6. Uploads trained model weights + vocab.json to Cloudflare R2 under adapters/{job_id}/
+7. Reports actual usage + full eval_result to Next.js webhook for billing & UI rendering.
 """
 
-import modal
 import os
 import time
+import json
+import subprocess
+import urllib.request
+from datetime import datetime
+import modal
 
 # ── Modal App Definition ──────────────────────────────────────────────────
 app = modal.App("model-factory-trainer")
 
-# Docker image with all GPU training dependencies.
-# NOTE: trl's public API changes quickly between releases (the
-# `dataset_text_field`/`max_seq_length` kwargs on SFTTrainer were moved into
-# SFTConfig). Versions below are pinned to a combination verified to work
-# together — bump deliberately, not implicitly, if you need a newer
-# trl/transformers.
 training_image = (
-    modal.Image.from_registry("nvidia/cuda:12.1.1-devel-ubuntu22.04", add_python="3.11")
-    .apt_install("git")
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("ffmpeg", "git")
     .pip_install(
-        "torch==2.5.1",
-        "xformers",
-        extra_index_url="https://download.pytorch.org/whl/cu121",
-    )
-    .pip_install(
-        "transformers==5.5.0",
-        "peft==0.20.0",
-        "trl==1.10.0",
-        "bitsandbytes==0.50.1",  # must be >=0.46.1 for transformers==5.5.0's internal check
-        "datasets",
+        "torch>=2.1",
+        "torchaudio>=2.1",
+        "transformers>=4.40",
+        "soundfile",
+        "jiwer",
+        "numpy",
         "boto3",
         "requests",
     )
 )
 
-# Persistent Modal Volume to cache base model downloads across jobs.
-model_cache = modal.Volume.from_name("model-factory-model-cache", create_if_missing=True)
-
-# CPU-only image for the free cost/tier estimate and for the pre-spawn
-# planning step in start_training. Includes torch+transformers (CPU wheel is
-# fine — we only ever use `torch.device("meta")` here, never real compute)
-# so both endpoints can resolve HF config + parameter count without ever
-# touching a GPU or downloading real weights.
-planning_image = modal.Image.debian_slim(python_version="3.11").pip_install(
-    "fastapi[standard]",
-    "torch==2.5.1",
-    "transformers==5.5.0",
-    "requests",
+planning_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .pip_install(
+        "fastapi[standard]",
+        "transformers>=4.40",
+        "torch>=2.1",
+        "requests",
+    )
 )
 
+model_cache = modal.Volume.from_name("model-factory-model-cache", create_if_missing=True)
+
 
 # ════════════════════════════════════════════════════════════════════════
-# BUSINESS / PRICING CONFIG — tune these as real usage data comes in
+# PRICING & HARDWARE CONFIG
 # ════════════════════════════════════════════════════════════════════════
-
-# GPU tiers, smallest-to-largest. `vram_gb` is usable training VRAM;
-# `hourly_cost_usd` is YOUR raw cost from Modal — keep this updated if
-# Modal's pricing changes. Tier selection always picks the smallest tier
-# whose vram_gb covers the (margin-inflated) estimate.
 GPU_TIERS = [
     {"name": "L4", "modal_gpu": "L4", "vram_gb": 24, "hourly_cost_usd": 0.80},
+    {"name": "A10G", "modal_gpu": "A10G", "vram_gb": 24, "hourly_cost_usd": 1.10},
     {"name": "A100-40GB", "modal_gpu": "A100-40GB", "vram_gb": 40, "hourly_cost_usd": 1.85},
-    {"name": "A100-80GB", "modal_gpu": "A100-80GB", "vram_gb": 80, "hourly_cost_usd": 2.50},
 ]
-# Largest supported model size is implicitly defined by GPU_TIERS[-1]. A
-# model whose estimate exceeds this fails fast (see select_gpu_tier).
 
-# Models above this size get QLoRA (4-bit) automatically; at/below, standard
-# bf16 LoRA (faster, no quantization overhead).
-QLORA_THRESHOLD_PARAMS = 4_000_000_000
-
-# Safety margin applied to every VRAM estimate before tier selection. Real
-# training runs spike above theoretical averages (fragmentation, odd
-# sequence lengths, etc.) — better to over-provision the tier than OOM.
-VRAM_SAFETY_MARGIN = 1.20
-
-# credits_charged = raw_gpu_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD
-# 1.5x over raw GPU cost is a conservative starting margin for a platform
-# that adds real value (no-code UX, auto dataset generation, hosting) on
-# top of bare compute — well under the 2-4x markup common among GPU
-# resellers, since the product itself is most of the value here, not just
-# GPU access. Revisit once you have real margin/CAC data.
 CREDIT_MARKUP_MULTIPLIER = 1.5
-CREDITS_PER_USD = 100  # i.e. 1 credit = $0.01 — adjust to match your pricing page
-
-# Flat credit fee charged (not refunded) when a job fails outright even
-# after the OOM retry — covers the GPU-seconds actually burned trying.
+CREDITS_PER_USD = 100  # 1 credit = $0.01
 FAILED_JOB_FLAT_FEE_CREDITS = 25
-
-# Absolute ceiling on training steps regardless of dataset size or budget —
-# a backstop so a mispriced estimate or a huge dataset can never turn into
-# an unbounded GPU bill.
-MAX_STEPS_CEILING = 1000
-
-# ⚠️ Calibration constants — see module docstring. Adjust as real job data
-# comes in; both are deliberately conservative (bias toward overestimating).
-ADAPTER_PARAM_FRACTION_AT_R16 = 0.0058  # observed: 54M/9.3B trainable params at r=16
-BASE_SECONDS_PER_STEP_PER_BILLION_PARAMS = 0.35
-JOB_LOAD_OVERHEAD_SECONDS = 120  # config fetch + weight download + LoRA setup
+SAMPLE_RATE = 16000
 
 
-# ────────────────────────────────────────────────────────────────────────
-# MODEL FAMILY REGISTRY — unchanged from the working version. Central
-# source of truth for per-architecture quirks. Detection is layered:
-#   1. HF `config.model_type` — most reliable, always present on real models
-#   2. model-id substring matching — fallback for renamed/community repos
-#   3. fully generic auto-detection — final fallback, works for ANY model
-# ────────────────────────────────────────────────────────────────────────
-
-_STANDARD_PROJ = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
-
-MODEL_FAMILIES = {
-    "llama": {
-        "model_types": {"llama", "llama4", "llama4_text"},
-        "name_hints": ("llama", "codellama"),
-        "target_modules": _STANDARD_PROJ,
-        "system_role": True,
-        "extra_stop_tokens": ["<|eot_id|>", "<|end_of_text|>"],
-        "byte_level_bpe": True,
-    },
-    "mistral": {
-        "model_types": {"mistral", "mixtral"},
-        "name_hints": ("mistral", "mixtral"),
-        "target_modules": _STANDARD_PROJ,
-        "system_role": True,
-        "extra_stop_tokens": ["</s>"],
-        "byte_level_bpe": True,
-    },
-    "qwen": {
-        "model_types": {"qwen2", "qwen2_moe", "qwen3", "qwen3_moe", "qwen"},
-        "name_hints": ("qwen",),
-        "target_modules": _STANDARD_PROJ,
-        "system_role": True,
-        "extra_stop_tokens": ["<|im_end|>"],
-        "byte_level_bpe": True,
-    },
-    "gemma": {
-        "model_types": {"gemma", "gemma2", "gemma3", "gemma3_text"},
-        "name_hints": ("gemma",),
-        "target_modules": _STANDARD_PROJ,
-        "system_role": False,
-        "extra_stop_tokens": ["<end_of_turn>"],
-        "byte_level_bpe": False,
-    },
-    "phi": {
-        "model_types": {"phi", "phi3", "phimoe", "phi4", "phi4mm"},
-        "name_hints": ("phi-", "phi_", "phi2", "phi3", "phi4"),
-        "target_modules": "auto",
-        "system_role": True,
-        "extra_stop_tokens": ["<|end|>", "<|im_end|>"],
-        "byte_level_bpe": False,
-    },
-    "falcon": {
-        "model_types": {"falcon", "falcon_mamba"},
-        "name_hints": ("falcon",),
-        "target_modules": "auto",
-        "system_role": True,
-        "extra_stop_tokens": ["<|endoftext|>"],
-        "byte_level_bpe": True,
-    },
-    "deepseek": {
-        "model_types": {"deepseek", "deepseek_v2", "deepseek_v3", "deepseek_vl"},
-        "name_hints": ("deepseek",),
-        "target_modules": "auto",
-        "system_role": True,
-        "extra_stop_tokens": ["<|im_end|>", "<end_of_sentence>"],
-        "byte_level_bpe": False,
-    },
-    "chatglm": {
-        "model_types": {"chatglm"},
-        "name_hints": ("chatglm", "glm-"),
-        "target_modules": "auto",
-        "system_role": True,
-        "extra_stop_tokens": [],
-        "byte_level_bpe": False,
-    },
-    "gpt2": {
-        "model_types": {"gpt2", "gpt_neo", "gptj", "gpt_neox"},
-        "name_hints": ("gpt2", "gpt-neo", "gptj", "gpt-j", "pythia"),
-        "target_modules": "auto",
-        "system_role": False,
-        "extra_stop_tokens": ["<|endoftext|>"],
-        "byte_level_bpe": True,
-    },
-}
-
-DEFAULT_FAMILY = {
-    "target_modules": "auto",
-    "system_role": None,
-    "extra_stop_tokens": [],
-    "byte_level_bpe": None,
-}
-
-
-def detect_model_family(model_id: str, model_type: str = ""):
-    """Detect model family from HF config.model_type first, then model-id
-    substring matching. Always returns a usable spec — unknown models fall
-    back to 'generic' with safe defaults."""
-    model_type = (model_type or "").lower()
-    name_lower = model_id.lower()
-
-    if model_type:
-        for family, spec in MODEL_FAMILIES.items():
-            if model_type in spec["model_types"]:
-                return family, spec
-
-    for family, spec in MODEL_FAMILIES.items():
-        if any(hint in name_lower for hint in spec["name_hints"]):
-            return family, spec
-
-    return "generic", DEFAULT_FAMILY
-
-
-# Gated models on HuggingFace (Meta Llama, Google Gemma) require an accepted
-# license + HF token. We resolve them to ungated mirrors when no HF token is
-# available. Both the planner and the trainer must resolve the SAME mirror
-# for a given original model id — a LoRA adapter is only valid against the
-# exact weights it was trained on.
-UNGATED_MIRRORS = {
-    "google/gemma-2-2b-it": "unsloth/gemma-2-2b-it",
-    "google/gemma-2-9b-it": "unsloth/gemma-2-9b-it",
-    "google/gemma-2-27b-it": "unsloth/gemma-2-27b-it",
-    "google/gemma-3-1b-it": "unsloth/gemma-3-1b-it",
-    "google/gemma-3-4b-it": "unsloth/gemma-3-4b-it",
-    "google/gemma-3-12b-it": "unsloth/gemma-3-12b-it",
-    "google/gemma-3-27b-it": "unsloth/gemma-3-27b-it",
-    "meta-llama/Llama-3.1-8B-Instruct": "unsloth/Meta-Llama-3.1-8B-Instruct",
-    "meta-llama/Llama-3.2-1B-Instruct": "unsloth/Llama-3.2-1B-Instruct",
-    "meta-llama/Llama-3.2-3B-Instruct": "unsloth/Llama-3.2-3B-Instruct",
-    "meta-llama/Llama-3.3-70B-Instruct": "unsloth/Llama-3.3-70B-Instruct",
-}
-
-
-def resolve_base_model(base_model: str, hf_token: str | None) -> str:
-    if not hf_token and base_model in UNGATED_MIRRORS:
-        return UNGATED_MIRRORS[base_model]
-    return base_model
-
-
-# ════════════════════════════════════════════════════════════════════════
-# PLANNING HELPERS — shared by estimate_cost (free, pre-job) and
-# start_training (pre-spawn, decides which GPU tier to actually rent).
-# None of these download real model weights — only HF config (a few KB)
-# and a `torch.device("meta")` model for parameter counting.
-# ════════════════════════════════════════════════════════════════════════
-
-def estimate_architecture_dims(param_count: float, cfg) -> tuple[int, int]:
-    """Get hidden_size / num_hidden_layers from the real HF config when
-    available (most models expose these); fall back to a rough size-based
-    heuristic for architectures that name these fields differently and
-    aren't worth special-casing individually."""
-    hidden_size = getattr(cfg, "hidden_size", None) or getattr(cfg, "n_embd", None)
-    num_layers = getattr(cfg, "num_hidden_layers", None) or getattr(cfg, "n_layer", None)
-
-    if hidden_size and num_layers:
-        return int(hidden_size), int(num_layers)
-
-    # Fallback heuristic, calibrated loosely against common open model
-    # shapes (Llama/Gemma/Qwen/Mistral families) at each size band.
-    params_b = param_count / 1e9
-    if params_b <= 2:
-        return 2048, 24
-    elif params_b <= 8:
-        return 4096, 32
-    elif params_b <= 15:
-        return 5120, 40
-    elif params_b <= 35:
-        return 6656, 48
-    else:
-        return 8192, 64
-
-
-def estimate_vram_requirements(
-    param_count: int, cfg, use_qlora: bool, batch_size: int, seq_length: int, lora_r: int
-) -> dict:
-    """Practical VRAM estimator for LoRA/QLoRA SFT training. Not exact
-    physics — a conservative planning estimate used to pick a GPU tier and
-    a credit cost BEFORE any weights are downloaded. Deliberately biased to
-    overestimate (see VRAM_SAFETY_MARGIN): underestimating causes mid-job
-    OOM crashes, which is far worse for a paying user than a slightly
-    conservative price quote.
-    """
-    bytes_per_base_param = 0.5 if use_qlora else 2.0  # 4-bit NF4 vs bf16
-    base_weights_bytes = param_count * bytes_per_base_param
-
-    adapter_param_fraction = ADAPTER_PARAM_FRACTION_AT_R16 * (lora_r / 16)
-    adapter_params = param_count * adapter_param_fraction
-    adapter_weights_bytes = adapter_params * 2       # trainable params, bf16
-    adapter_grad_bytes = adapter_params * 2          # bf16 gradients
-    adapter_optimizer_bytes = adapter_params * 8      # AdamW fp32 (2 moments × 4 bytes)
-
-    hidden_size, num_layers = estimate_architecture_dims(param_count, cfg)
-
-    # Activation memory: proportional model, ~12x hidden_size per token per
-    # layer for a standard transformer block (attn + MLP intermediates),
-    # divided by a reduction factor for gradient checkpointing (always on
-    # — see train_model's SFTConfig).
-    GRADIENT_CHECKPOINTING_REDUCTION = 4.0
-    activation_bytes = (
-        batch_size * seq_length * hidden_size * num_layers * 12 * 2
-    ) / GRADIENT_CHECKPOINTING_REDUCTION
-
-    total_bytes = (
-        base_weights_bytes + adapter_weights_bytes + adapter_grad_bytes
-        + adapter_optimizer_bytes + activation_bytes
+def get_s3_client(r2_endpoint: str, r2_access_key: str, r2_secret_key: str):
+    import boto3
+    endpoint = r2_endpoint or os.environ.get("R2_ENDPOINT", "")
+    access_key = r2_access_key or os.environ.get("AWS_ACCESS_KEY_ID", "")
+    secret_key = r2_secret_key or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
+    return boto3.client(
+        "s3",
+        endpoint_url=endpoint,
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        region_name="auto",
     )
-    total_with_margin = total_bytes * VRAM_SAFETY_MARGIN
-
-    return {
-        "base_weights_gb": base_weights_bytes / 1e9,
-        "adapter_overhead_gb": (adapter_weights_bytes + adapter_grad_bytes + adapter_optimizer_bytes) / 1e9,
-        "activation_gb": activation_bytes / 1e9,
-        "estimated_total_gb": total_bytes / 1e9,
-        "estimated_total_with_margin_gb": total_with_margin / 1e9,
-    }
-
-
-def select_gpu_tier(estimated_vram_gb: float) -> dict | None:
-    """Smallest GPU tier that fits the (margin-inflated) estimate, or None
-    if it exceeds the largest tier we support — caller must fail fast in
-    that case, before spawning any paid job."""
-    for tier in GPU_TIERS:
-        if estimated_vram_gb <= tier["vram_gb"]:
-            return tier
-    return None
-
-
-def compute_training_schedule(dataset_size: int, batch_size: int, grad_accum: int) -> tuple[int, int]:
-    """Scale epochs/steps to dataset size instead of using fixed constants.
-    Small datasets need more passes to learn anything at all; large
-    datasets need fewer epochs but enough steps to complete at least one
-    full pass, bounded by MAX_STEPS_CEILING regardless of size.
-
-    Applies principled optimization dynamics for ANY model family (1B to 34B):
-    - AdamW second-moment variance (beta2=0.999) needs ~50-60 steps minimum to stabilize.
-    - Small models (<=3B) are protected from overfitting by capping epochs at 6.
-    - Uses ceiling division so partial batches are not dropped from step budget.
-    """
-    if dataset_size <= 50:
-        epochs = 5
-    elif dataset_size <= 150:
-        epochs = 4
-    elif dataset_size <= 500:
-        epochs = 3
-    elif dataset_size <= 1500:
-        epochs = 2
-    else:
-        epochs = 1
-
-    effective_batch = max(1, batch_size * grad_accum)
-    steps_per_epoch = max(1, (dataset_size + effective_batch - 1) // effective_batch)
-    calculated_steps = steps_per_epoch * epochs
-
-    # Universal step floor: ensures enough gradient updates for AdamW moment
-    # stabilization AND for the adapter to learn fact-dense patterns. With LoRA
-    # (0.1-0.5% trainable params), 150 steps on a small dataset does NOT risk
-    # severe overfitting the way full fine-tuning would. Research suggests
-    # 3-10 epochs for 50-100 example LoRA fine-tuning; max_steps=150 with
-    # steps_per_epoch=10-15 means ~10-15 passes, which is the upper end but
-    # necessary for fact retention.
-    MIN_STEPS_FLOOR = 150
-    if calculated_steps < MIN_STEPS_FLOOR and dataset_size > 10:
-        needed_epochs = min(10, (MIN_STEPS_FLOOR + steps_per_epoch - 1) // steps_per_epoch)
-        epochs = max(epochs, needed_epochs)
-        calculated_steps = steps_per_epoch * epochs
-
-    max_steps = min(max(calculated_steps, MIN_STEPS_FLOOR), MAX_STEPS_CEILING)
-    return epochs, max_steps
-
-
-def estimate_training_seconds(param_count: int, max_steps: int, use_qlora: bool) -> float:
-    """See module docstring calibration note — heuristic, not measured."""
-    per_step_seconds = (
-        BASE_SECONDS_PER_STEP_PER_BILLION_PARAMS
-        * (param_count / 1e9)
-        * (1.18 if use_qlora else 1.0)  # QLoRA dequant overhead per step
-    )
-    return JOB_LOAD_OVERHEAD_SECONDS + (per_step_seconds * max_steps)
-
-
-def build_training_plan(base_model: str, dataset_size: int, lora_r: int, max_seq_length: int) -> dict:
-    """The single source of truth for 'what will this job cost and which
-    GPU will it use'. Called by BOTH estimate_cost (free preview) and
-    start_training (right before spawning the paid job) so the two numbers
-    can never drift apart. Does not download model weights — only HF
-    config + a torch.device('meta') model for parameter counting.
-    """
-    hf_token = os.environ.get("HF_TOKEN", None)
-    resolved_model = resolve_base_model(base_model, hf_token)
-
-    from transformers import AutoConfig, AutoModelForCausalLM
-    import torch as _torch
-
-    cfg = AutoConfig.from_pretrained(resolved_model, token=hf_token, trust_remote_code=True)
-    with _torch.device("meta"):
-        meta_model = AutoModelForCausalLM.from_config(cfg)
-        param_count = meta_model.num_parameters()
-
-    use_qlora = param_count > QLORA_THRESHOLD_PARAMS
-    batch_size = 1 if use_qlora else 2
-    grad_accum = 8 if use_qlora else 4
-
-    vram = estimate_vram_requirements(param_count, cfg, use_qlora, batch_size, max_seq_length, lora_r)
-    tier = select_gpu_tier(vram["estimated_total_with_margin_gb"])
-
-    if tier is None:
-        return {
-            "status": "unsupported",
-            "reason": "model_too_large",
-            "resolved_model": resolved_model,
-            "param_count_billion": round(param_count / 1e9, 2),
-            "estimated_vram_gb": round(vram["estimated_total_with_margin_gb"], 1),
-            "max_supported_vram_gb": GPU_TIERS[-1]["vram_gb"],
-            "message": "This model is too large for the current platform limits. Try a smaller model.",
-        }
-
-    epochs, max_steps = compute_training_schedule(dataset_size, batch_size, grad_accum)
-    estimated_seconds = estimate_training_seconds(param_count, max_steps, use_qlora)
-    estimated_hours = estimated_seconds / 3600
-    raw_cost_usd = estimated_hours * tier["hourly_cost_usd"]
-    estimated_credits = raw_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD
-
-    family_name, _ = detect_model_family(base_model, getattr(cfg, "model_type", ""))
-    params_b = param_count / 1e9
-
-    # Principled, universal LoRA/QLoRA learning rate tuning:
-    # 1. Gemma family: 1e-4 (Gemma 2 soft-capping and sensitive post-norm)
-    # 2. Small models (<=3.5B): 2e-4 (higher plasticity and fewer adapter params)
-    # 3. Medium models (4B-10B, e.g. Llama 3.1 8B): 1.5e-4
-    # 4. Large models (>10B): 8e-5 (prevents representation drift and instability)
-    if family_name == "gemma":
-        optimal_lr = 0.0001
-    elif params_b <= 3.5:
-        optimal_lr = 0.0002
-    elif params_b <= 10.0:
-        optimal_lr = 0.00015
-    else:
-        optimal_lr = 0.00008
-
-    warmup_steps = max(2, int(max_steps * 0.06))
-    method_name = "QLoRA (4-bit)" if use_qlora else "LoRA (16-bit)"
-
-    return {
-        "status": "ok",
-        "resolved_model": resolved_model,
-        "param_count_billion": round(param_count / 1e9, 2),
-        "use_qlora": use_qlora,
-        "method": method_name,
-        "batch_size": batch_size,
-        "grad_accum": grad_accum,
-        "effective_batch_size": batch_size * grad_accum,
-        "learning_rate": optimal_lr,
-        "warmup_steps": warmup_steps,
-        "gpu_tier": tier["name"],
-        "modal_gpu": tier["modal_gpu"],
-        "estimated_vram_gb": round(vram["estimated_total_with_margin_gb"], 1),
-        "vram_breakdown": {k: round(v, 2) for k, v in vram.items()},
-        "num_train_epochs": epochs,
-        "max_steps": max_steps,
-        "estimated_training_seconds": round(estimated_seconds),
-        "estimated_credits": round(estimated_credits, 2),
-    }
 
 
 # ════════════════════════════════════════════════════════════════════════
-# ENDPOINT 1: FREE cost/tier estimate — no GPU, no charge. Frontend calls
-# this on model selection and on every dataset-size change to show a live
-# price preview before the user commits to anything.
+# CORE GPU TRAINING FUNCTION
 # ════════════════════════════════════════════════════════════════════════
-@app.function(image=planning_image, timeout=60)
-@modal.fastapi_endpoint(method="POST")
-def estimate_cost(item: dict):
-    base_model = item.get("base_model")
-    dataset_size = int(item.get("dataset_size", 100))
-    lora_r = int(item.get("lora_r", 16))
-    max_seq_length = int(item.get("max_seq_length", 2048))
-
-    if not base_model:
-        return {"status": "failed", "error": "Missing base_model"}
-
-    try:
-        plan = build_training_plan(base_model, dataset_size, lora_r, max_seq_length)
-        return plan
-    except Exception as e:
-        return {"status": "failed", "error": f"Could not resolve model '{base_model}': {e}"}
-
-
-# ── Main Training Function ──────────────────────────────────────────────
-# NOTE: gpu= here is only the DEFAULT for local testing / direct calls.
-# start_training below dynamically overrides it per-job via
-# `train_model.with_options(gpu=...)` based on the planned tier — verify
-# this is the current Modal SDK pattern for per-call GPU override before
-# relying on it; Modal's dynamic-resource API has changed across versions.
 @app.function(
     image=training_image,
-    gpu="L4",
-    timeout=3600,
-    volumes={"/model-cache": model_cache},
+    gpu="A10G",
+    timeout=1800,
+    volumes={"/root/.cache/huggingface": model_cache},
 )
 def train_model(
     job_id: str,
     dataset_url: str,
     webhook_url: str,
-    base_model: str = "meta-llama/Llama-3.1-8B-Instruct",
-    system_prompt: str = "",
-    learning_rate: float = 5e-5,
-    # Default max_seq_length increased from 1024 to 2048 to prevent
-    # truncation of longer training completions
-    max_seq_length: int = 2048,
-    lora_r: int = 16,
-    lora_alpha: int = 32,
-    # ── Planned values, computed by build_training_plan() BEFORE this job
-    # was spawned, and shown to the user as the price they confirmed. This
-    # function re-derives them independently as a safety check, but the
-    # SMALLER of (re-derived, planned) always wins for cost-sensitive
-    # fields — the job must never cost the user more than they agreed to.
-    planned_max_steps: int = 200,
-    planned_num_train_epochs: int = 1,
-    planned_gpu_tier_name: str = "L4",
-    max_credit_budget: float = 0.0,  # 0 = no explicit ceiling passed; falls back to planned_max_steps only
+    base_model: str = "facebook/wav2vec2-base",
+    learning_rate: float = 1e-4,
+    epochs: int = 150,
+    batch_size: int = 4,
+    confirmed_credit_hold: float = 0.0,
     r2_endpoint: str = "",
     r2_access_key: str = "",
     r2_secret_key: str = "",
     r2_bucket: str = "",
+    supabase_url: str = "",
+    supabase_key: str = "",
 ):
-    """Fine-tune the user's chosen model with their dataset, save LoRA
-    weights to R2, and report ACTUAL usage (separate from the estimate) so
-    the platform can charge real cost and refund the unused hold."""
-    job_start_time = time.time()
-
-    os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
-
     import torch
+    import numpy as np
+    import soundfile as sf
+    import jiwer
     import requests
-    import boto3
-    import tempfile
-    from datasets import load_dataset
-    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-    from peft import get_peft_model, LoraConfig, prepare_model_for_kbit_training
-    from trl import SFTTrainer, SFTConfig
+    from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor
 
-    hf_token = os.environ.get("HF_TOKEN", None)
-    original_model_id = base_model
-    base_model = resolve_base_model(base_model, hf_token)
-    if base_model != original_model_id:
-        print(f"[Model Factory] No HF token — resolved gated model to ungated mirror: {base_model}")
+    job_start_time = time.time()
+    DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"[Model Factory] Starting CTC training for job {job_id} on {DEVICE}")
 
-    print(f"[Model Factory] Starting training for job: {job_id}")
-    print(f"[Model Factory] User selected model: {original_model_id} -> loading from: {base_model}")
-    print(f"[Model Factory] Dataset URL: {dataset_url}")
-    print(f"[Model Factory] Planned budget: {max_credit_budget} credits, tier={planned_gpu_tier_name}, "
-          f"max_steps={planned_max_steps}, epochs={planned_num_train_epochs}")
-
-    def notify_and_raise(error_message: str, partial_credits_to_charge: float = FAILED_JOB_FLAT_FEE_CREDITS):
-        """Single place that reports failure + partial-usage billing before
-        re-raising, so every failure path (config error, OOM-after-retry,
-        upload error, etc.) reconciles credits consistently."""
+    def notify_failure(error_msg: str):
         elapsed = time.time() - job_start_time
-        try:
-            requests.post(webhook_url, json={
-                "job_id": job_id,
-                "status": "failed",
-                "error": error_message,
-                "actual_gpu_seconds": round(elapsed),
-                "credits_to_charge": partial_credits_to_charge,  # flat fee, not full estimate — refund the rest
-            }, timeout=30)
-        except Exception as e:
-            print(f"[Model Factory] Webhook error notification failed: {e}")
-
-    # ── Step 0: Detect model family + verify plan is still current ───────
-    try:
-        _cfg = AutoConfig.from_pretrained(base_model, token=hf_token, trust_remote_code=True)
-        detected_model_type = getattr(_cfg, "model_type", "") or ""
-    except Exception as cfg_err:
-        notify_and_raise(f"Could not load model config: {cfg_err}")
-        raise
-
-    family_name, family_spec = detect_model_family(base_model, detected_model_type)
-    print(f"[Model Factory] Detected model family: '{family_name}' (model_type={detected_model_type or 'unknown'})")
-
-    param_count = 0
-    try:
-        with torch.device("meta"):
-            meta_model = AutoModelForCausalLM.from_config(_cfg)
-            param_count = meta_model.num_parameters()
-        print(f"[Model Factory] Detected parameter count: ~{param_count / 1e9:.2f}B")
-    except Exception as e:
-        print(f"[Model Factory] Could not estimate parameter count: {e}")
-
-    use_qlora = param_count > QLORA_THRESHOLD_PARAMS
-    if use_qlora:
-        print("[Model Factory] Model > threshold: using QLoRA (4-bit).")
-        train_batch_size = 1
-        grad_accum = 8
-    else:
-        print("[Model Factory] Model <= threshold: using standard 16-bit LoRA.")
-        train_batch_size = 2
-        grad_accum = 4
-
-    # ── Cost-ceiling enforcement: re-derive schedule locally, then take the
-    # SMALLER of (locally re-derived, planned-and-confirmed) for anything
-    # cost-affecting. This protects the user if this job's live parameter
-    # count differs from what the pre-job estimate saw (e.g. a model was
-    # updated on the Hub between estimate and launch).
-    print("[Model Factory] Downloading dataset...")
-    dataset_res = requests.get(dataset_url)
-    dataset_res.raise_for_status()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-        f.write(dataset_res.text)
-        dataset_path = f.name
-    dataset = load_dataset("json", data_files=dataset_path, split="train")
-    print(f"[Model Factory] Loaded {len(dataset)} training examples")
-
-    local_epochs, local_max_steps = compute_training_schedule(len(dataset), train_batch_size, grad_accum)
-    num_train_epochs = min(local_epochs, planned_num_train_epochs) if planned_num_train_epochs else local_epochs
-    max_steps = min(local_max_steps, planned_max_steps) if planned_max_steps else local_max_steps
-    print(f"[Model Factory] Final schedule (min of local vs planned): "
-          f"epochs={num_train_epochs}, max_steps={max_steps}")
-
-    # ── Step 2: Load Base Model ───────────────────────────────────────────
-    print(f"[Model Factory] Loading model: {base_model}...")
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(
-            base_model, cache_dir="/model-cache", token=hf_token, trust_remote_code=True,
-        )
-
-        def load_model(as_qlora: bool):
-            if as_qlora:
-                bnb_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_use_double_quant=True,
-                    bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16,
-                )
-                m = AutoModelForCausalLM.from_pretrained(
-                    base_model, quantization_config=bnb_config, device_map="auto",
-                    attn_implementation="eager", cache_dir="/model-cache",
-                    token=hf_token, trust_remote_code=True,
-                )
-            else:
-                m = AutoModelForCausalLM.from_pretrained(
-                    base_model, dtype=torch.bfloat16, device_map="auto",
-                    attn_implementation="eager", cache_dir="/model-cache",
-                    token=hf_token, trust_remote_code=True,
-                )
-            return m
-
-        model = load_model(use_qlora)
-
-        print(f"[Model Factory] Tokenizer class: {type(tokenizer).__name__}")
-        print(f"[Model Factory] Tokenizer vocab_size: {tokenizer.vocab_size}, model vocab_size: {model.config.vocab_size}")
-
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
-            tokenizer.pad_token_id = tokenizer.eos_token_id
-        model.config.pad_token_id = tokenizer.pad_token_id
-
-        # ── Step 3: Apply LoRA (family-aware target modules) ──────────────
-        # "Linear" substring match (not isinstance(torch.nn.Linear)) so this
-        # also matches bitsandbytes' Linear4bit/Linear8bitLt under QLoRA —
-        # an isinstance-only check silently finds zero modules once the
-        # model is quantized, breaking auto-detection for every family.
-        def detect_target_modules(m):
-            return list(set(
-                name.split(".")[-1]
-                for name, module in m.named_modules()
-                if "Linear" in module.__class__.__name__
-                and "lm_head" not in name
-                and "embed" not in name
-            ))
-
-        auto_detected_modules = detect_target_modules(model)
-        family_targets = family_spec.get("target_modules")
-        if family_targets and family_targets != "auto":
-            present = set(auto_detected_modules)
-            target_modules = [m for m in family_targets if m in present]
-            if not target_modules:
-                print(f"[Model Factory] '{family_name}' target modules not found on this model — "
-                      f"falling back to auto-detected: {auto_detected_modules}")
-                target_modules = auto_detected_modules
-            else:
-                print(f"[Model Factory] Using {family_name}-optimized LoRA target modules: {target_modules}")
-        else:
-            target_modules = auto_detected_modules
-            print(f"[Model Factory] Auto-detected LoRA target modules: {target_modules}")
-
-        def build_peft_model(m, as_qlora):
-            peft_config = LoraConfig(
-                r=lora_r, lora_alpha=lora_alpha, target_modules=target_modules,
-                lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
-            )
-            if as_qlora:
-                m = prepare_model_for_kbit_training(m)
-            m = get_peft_model(m, peft_config)
-            return m
-
-        model = build_peft_model(model, use_qlora)
-        model.print_trainable_parameters()
-
-        # ── Step 4: Format dataset with model's native chat template ──────
-        def _supports_system_role(tok):
-            try:
-                tok.apply_chat_template(
-                    [{"role": "system", "content": "t"}, {"role": "user", "content": "t"}],
-                    tokenize=False,
-                )
-                return True
-            except Exception:
-                return False
-
-        _has_template = getattr(tokenizer, "chat_template", None) is not None
-        _system_ok = _supports_system_role(tokenizer) if _has_template else False
-        print(f"[Model Factory] Chat template: {_has_template}, system role: {_system_ok} "
-              f"(family default: {family_spec.get('system_role')})")
-
-        def format_example(example):
-            prompt = example.get("prompt", "")
-            completion = example.get("completion", "")
-            # System prompt priority: per-row > job-level > none
-            row_system = example.get("system_prompt", "") or system_prompt
-            if _has_template:
-                msgs = []
-                if row_system and _system_ok:
-                    msgs.append({"role": "system", "content": row_system})
-                msgs.append({"role": "user", "content": prompt})
-                msgs.append({"role": "assistant", "content": completion})
+        print(f"[Model Factory] Notifying failure to webhook: {error_msg}")
+        if webhook_url:
+            for attempt in range(1, 4):
                 try:
-                    text = tokenizer.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
-                except Exception:
-                    text = f"### System:\n{row_system}\n\n### User:\n{prompt}\n\n### Assistant:\n{completion}" if row_system else f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
-            else:
-                text = f"### System:\n{row_system}\n\n### User:\n{prompt}\n\n### Assistant:\n{completion}" if row_system else f"### User:\n{prompt}\n\n### Assistant:\n{completion}"
-            return {"text": text}
-
-        formatted_dataset = dataset.map(format_example)
-        cols_to_remove = [c for c in formatted_dataset.column_names if c != "text"]
-        if cols_to_remove:
-            formatted_dataset = formatted_dataset.remove_columns(cols_to_remove)
-        print(f"[Model Factory] Sample formatted text (first 300 chars): {formatted_dataset[0]['text'][:300]}")
-
-        try:
-            from transformers.utils import is_bitsandbytes_available
-            optimizer_name = "adamw_8bit" if is_bitsandbytes_available() else "adamw_torch"
-        except Exception:
-            optimizer_name = "adamw_torch"
-
-        # For LoRA / QLoRA, full fine-tuning learning rates (< 5e-5) cause severe underfitting
-        # because only 0.1%-0.5% of parameters are trainable. A learning rate of 1e-4 to 2e-4 is
-        # standard across all model families (Llama, Gemma, Qwen, Mistral, Phi).
-        effective_lr = max(learning_rate, 0.0001) if learning_rate < 5e-5 else learning_rate
-        warmup_steps = max(2, int(max_steps * 0.06))
-
-        def build_sft_config(batch_size, accum_steps):
-            return SFTConfig(
-                per_device_train_batch_size=batch_size,
-                gradient_accumulation_steps=accum_steps,
-                gradient_checkpointing=True,
-                warmup_steps=warmup_steps,
-                num_train_epochs=num_train_epochs,
-                max_steps=max_steps,
-                learning_rate=effective_lr,
-                fp16=not torch.cuda.is_bf16_supported(),
-                bf16=torch.cuda.is_bf16_supported(),
-                logging_steps=1,
-                optim=optimizer_name,
-                weight_decay=0.01,
-                lr_scheduler_type="cosine",
-                max_grad_norm=0.3,
-                seed=3407,
-                output_dir="/tmp/training_output",
-                report_to="none",
-                dataset_text_field="text",
-                max_length=max_seq_length,
-                packing=False,
-            )
-
-        # ── Step 5: Train, with a bounded OOM fallback ─────────────────────
-        # Attempt 1: planned config as-is.
-        # Attempt 2 (only on OOM): halve batch size / double accumulation.
-        # Attempt 3 (only on OOM again, and only if not already QLoRA):
-        #   reload the model in 4-bit and retry once more.
-        # Any OOM after that fails cleanly with a structured error and the
-        # flat partial-usage fee — never an unbounded retry loop.
-        attempt_batch_size = train_batch_size
-        attempt_accum = grad_accum
-        attempt_qlora = use_qlora
-        last_error = None
-
-        for attempt in range(1, 4):
-            try:
-                print(f"[Model Factory] Training attempt {attempt}: "
-                      f"batch_size={attempt_batch_size}, grad_accum={attempt_accum}, qlora={attempt_qlora}")
-                sft_config = build_sft_config(attempt_batch_size, attempt_accum)
-                trainer = SFTTrainer(
-                    model=model, processing_class=tokenizer,
-                    train_dataset=formatted_dataset, args=sft_config,
-                )
-                trainer.train()
-                print("[Model Factory] Training complete!")
-                break
-            except torch.cuda.OutOfMemoryError as oom_err:
-                last_error = oom_err
-                torch.cuda.empty_cache()
-                print(f"[Model Factory] OOM on attempt {attempt}: {oom_err}")
-
-                if attempt == 1 and attempt_batch_size > 1:
-                    attempt_batch_size = 1
-                    attempt_accum *= 2
-                    print("[Model Factory] Retrying with batch_size=1 and doubled gradient accumulation.")
-                    continue
-                elif attempt <= 2 and not attempt_qlora:
-                    print("[Model Factory] Retrying by reloading model in 4-bit (QLoRA).")
-                    del model
-                    torch.cuda.empty_cache()
-                    model = load_model(as_qlora=True)
-                    if tokenizer.pad_token is None:
-                        tokenizer.pad_token = tokenizer.eos_token
-                        tokenizer.pad_token_id = tokenizer.eos_token_id
-                    model.config.pad_token_id = tokenizer.pad_token_id
-                    target_modules = detect_target_modules(model)  # Linear4bit names differ — redetect
-                    model = build_peft_model(model, as_qlora=True)
-                    attempt_qlora = True
-                    attempt_batch_size = 1
-                    attempt_accum = max(attempt_accum, 8)
-                    continue
-                else:
-                    notify_and_raise(
-                        f"Training failed after retries — model too large for available GPU tier "
-                        f"even at minimum batch size and 4-bit quantization: {oom_err}"
+                    res = requests.post(
+                        webhook_url,
+                        headers={"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"},
+                        json={
+                            "job_id": job_id,
+                            "status": "failed",
+                            "error": str(error_msg),
+                            "actual_gpu_seconds": round(elapsed),
+                            "credits_to_charge": FAILED_JOB_FLAT_FEE_CREDITS,
+                        },
+                        timeout=30,
                     )
-                    raise
+                    if res.status_code == 200:
+                        print(f"[Model Factory] Failure webhook delivered on attempt {attempt}")
+                        break
+                    else:
+                        print(f"[Model Factory] Failure webhook attempt {attempt} returned HTTP {res.status_code}")
+                except Exception as e:
+                    print(f"[Model Factory] Failure webhook attempt {attempt} failed: {e}")
+                time.sleep(2)
 
-        if last_error is not None and attempt == 3:
-            # Loop exhausted without a clean break — should already have
-            # raised above, this is a defensive backstop.
-            notify_and_raise(f"Training failed after all retry attempts: {last_error}")
-            raise last_error
+    try:
+        # ── Step 1: Download and parse dataset ──
+        print(f"[Model Factory] Downloading dataset from {dataset_url}...")
+        local_dataset_path = f"/tmp/dataset_{job_id}.jsonl"
 
-        # ── Step 6: Save & Upload LoRA Weights to R2 ───────────────────────
-        adapter_dir = f"/tmp/adapter_{job_id}"
-        model.save_pretrained(adapter_dir)
-        tokenizer.save_pretrained(adapter_dir)
+        if dataset_url.startswith("http://") or dataset_url.startswith("https://"):
+            urllib.request.urlretrieve(dataset_url, local_dataset_path)
+        else:
+            # Assume R2 storage key
+            s3 = get_s3_client(r2_endpoint, r2_access_key, r2_secret_key)
+            bucket = r2_bucket or os.environ.get("R2_BUCKET", "")
+            s3.download_file(bucket, dataset_url, local_dataset_path)
 
-        print("[Model Factory] Uploading LoRA adapter to Cloudflare R2...")
-        _r2_endpoint = r2_endpoint or os.environ.get("R2_ENDPOINT", "")
-        _r2_access_key = r2_access_key or os.environ.get("AWS_ACCESS_KEY_ID", "")
-        _r2_secret_key = r2_secret_key or os.environ.get("AWS_SECRET_ACCESS_KEY", "")
-        _r2_bucket = r2_bucket or os.environ.get("R2_BUCKET", "")
+        raw_items = []
+        with open(local_dataset_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    raw_items.append(json.loads(line))
 
-        s3 = boto3.client(
-            "s3", endpoint_url=_r2_endpoint, aws_access_key_id=_r2_access_key,
-            aws_secret_access_key=_r2_secret_key, region_name="auto",
+        if not raw_items:
+            raise ValueError("Dataset JSONL is empty")
+
+        print(f"[Model Factory] Parsed {len(raw_items)} dataset items")
+
+        # ── Step 2: Download & preprocess audio clips ──
+        s3 = None
+        bucket = r2_bucket or os.environ.get("R2_BUCKET", "")
+        processed_clips = []
+
+        for idx, item in enumerate(raw_items):
+            clip_id = item.get("audioClipId") or item.get("id") or f"clip_{idx}"
+            audio_url = item.get("audioUrl") or item.get("audio_url")
+            r2_key = item.get("audioR2Key") or item.get("r2Key")
+
+            # Extract phoneme sequence
+            phonemes = []
+            if "phonemes" in item and isinstance(item["phonemes"], list):
+                phonemes = [str(p) for p in item["phonemes"]]
+            elif "qpsSequence" in item and isinstance(item["qpsSequence"], str):
+                phonemes = item["qpsSequence"].split()
+            elif "phonemeLabels" in item and isinstance(item["phonemeLabels"], list):
+                phonemes = [str(l["phoneme"]) for l in item["phonemeLabels"] if "phoneme" in l]
+
+            if not phonemes:
+                print(f"[Model Factory] Skipping clip {clip_id}: no phoneme labels found")
+                continue
+
+            # Fetch audio file
+            raw_audio_path = f"/tmp/{job_id}_{idx}_raw"
+            wav_16k_path = f"/tmp/{job_id}_{idx}_16k.wav"
+
+            downloaded = False
+            if audio_url and (audio_url.startswith("http://") or audio_url.startswith("https://")):
+                try:
+                    urllib.request.urlretrieve(audio_url, raw_audio_path)
+                    downloaded = True
+                except Exception as dl_err:
+                    print(f"[Model Factory] Failed to download audio URL {audio_url}: {dl_err}")
+
+            if not downloaded and r2_key:
+                if s3 is None:
+                    s3 = get_s3_client(r2_endpoint, r2_access_key, r2_secret_key)
+                try:
+                    s3.download_file(bucket, r2_key, raw_audio_path)
+                    downloaded = True
+                except Exception as s3_err:
+                    print(f"[Model Factory] Failed to download from R2 {r2_key}: {s3_err}")
+
+            if not downloaded:
+                print(f"[Model Factory] Could not retrieve audio for clip {clip_id}")
+                continue
+
+            # Normalize to 16kHz mono WAV via ffmpeg
+            res = subprocess.run(
+                [
+                    "ffmpeg", "-y", "-i", raw_audio_path,
+                    "-ar", str(SAMPLE_RATE), "-ac", "1",
+                    wav_16k_path,
+                ],
+                capture_output=True,
+                text=True,
+            )
+            if res.returncode != 0:
+                print(f"[Model Factory] ffmpeg conversion failed for clip {clip_id}: {res.stderr}")
+                continue
+
+            audio_data, sr = sf.read(wav_16k_path)
+            if audio_data.ndim > 1:
+                audio_data = audio_data[:, 0]
+
+            dur_s = len(audio_data) / SAMPLE_RATE
+
+            # Quranic / EveryAyah Bismillah trimming:
+            # If the clip is much longer than expected for its phoneme count,
+            # an introductory Bismillah or recitation was included. Trim from end
+            # so the audio aligns with the target phonemes (exact Test 3 recipe).
+            expected_s = len(phonemes) * 0.4 + 1.5
+            if dur_s > expected_s + 3.0:
+                keep_s = max(expected_s + 1.0, dur_s * 0.35)
+                keep_samples = int(keep_s * SAMPLE_RATE)
+                audio_data = audio_data[-keep_samples:]
+
+            # Pad short clips to minimum 500ms
+            min_samples = int(0.5 * SAMPLE_RATE)
+            if len(audio_data) < min_samples:
+                audio_data = np.pad(audio_data, (0, min_samples - len(audio_data)))
+
+            processed_clips.append({
+                "id": clip_id,
+                "audio": audio_data.astype(np.float32),
+                "phonemes": phonemes,
+                "split": item.get("split", "auto"),
+            })
+
+        if len(processed_clips) < 3:
+            raise ValueError(f"Only {len(processed_clips)} valid audio clips could be loaded (need at least 3)")
+
+        # ── Step 3: Build dynamic vocabulary ──
+        unique_phonemes = sorted(list(set(p for clip in processed_clips for p in clip["phonemes"])))
+        vocab = {"<pad>": 0, "<unk>": 1}
+        for p in unique_phonemes:
+            if p not in vocab:
+                vocab[p] = len(vocab)
+        id_to_phoneme = {v: k for k, v in vocab.items()}
+        vocab_size = len(vocab)
+        print(f"[Model Factory] Vocabulary built: {vocab_size} tokens ({len(unique_phonemes)} distinct phonemes)")
+
+        # ── Step 4: Train/Held-Out Split ──
+        pre_train = [c for c in processed_clips if c["split"] == "train"]
+        pre_eval = [c for c in processed_clips if c["split"] == "eval"]
+
+        if pre_train and pre_eval:
+            train_clips = pre_train
+            heldout_clips = pre_eval
+        else:
+            # Deterministic 80/20 split
+            n_total = len(processed_clips)
+            n_heldout = max(1, int(round(n_total * 0.20))) if n_total >= 5 else 1
+            heldout_clips = processed_clips[-n_heldout:]
+            train_clips = processed_clips[:-n_heldout]
+
+        print(f"[Model Factory] Dataset split: {len(train_clips)} train, {len(heldout_clips)} held-out")
+
+        # ── Step 5: Initialize Model & Optimizer ──
+        print(f"[Model Factory] Loading base checkpoint {base_model}...")
+        fe = Wav2Vec2FeatureExtractor(
+            feature_size=1,
+            sampling_rate=SAMPLE_RATE,
+            padding_value=0.0,
+            do_normalize=True,
+            return_attention_mask=True,
         )
-        for filename in os.listdir(adapter_dir):
-            filepath = os.path.join(adapter_dir, filename)
-            s3_key = f"adapters/{job_id}/{filename}"
-            s3.upload_file(filepath, _r2_bucket, s3_key)
+
+        model = Wav2Vec2ForCTC.from_pretrained(
+            base_model,
+            ctc_loss_reduction="mean",
+            pad_token_id=0,
+            vocab_size=vocab_size,
+            ignore_mismatched_sizes=True,
+        )
+
+        # Frozen feature encoder & zero dropout fine-tuning recipe
+        model.freeze_feature_encoder()
+        model.config.attention_dropout = 0.0
+        model.config.hidden_dropout = 0.0
+        model.config.feat_proj_dropout = 0.0
+        model.config.final_dropout = 0.0
+        model.config.ctc_zero_infinity = True
+        model.config.mask_time_prob = 0.0
+
+        with torch.no_grad():
+            model.lm_head.bias.fill_(0.0)
+        model.to(DEVICE)
+
+        def collate_fn(batch):
+            feats = fe(
+                [item["audio"] for item in batch],
+                sampling_rate=SAMPLE_RATE,
+                return_tensors="pt",
+                padding=True,
+            )
+            seqs = [[vocab.get(p, 1) for p in item["phonemes"]] for item in batch]
+            max_len = max(len(s) for s in seqs)
+            labels = torch.full((len(batch), max_len), -100, dtype=torch.long)
+            for i, seq in enumerate(seqs):
+                labels[i, :len(seq)] = torch.tensor(seq, dtype=torch.long)
+            return {
+                "input_values": feats.input_values.to(DEVICE),
+                "attention_mask": feats.attention_mask.to(DEVICE),
+                "labels": labels.to(DEVICE),
+            }
+
+        # Differentiated learning rates
+        bb_lr = float(learning_rate) if learning_rate else 1e-4
+        hd_lr = bb_lr * 5.0
+
+        backbone_params = [p for n, p in model.named_parameters() if p.requires_grad and "lm_head" not in n]
+        head_params = [p for n, p in model.named_parameters() if p.requires_grad and "lm_head" in n]
+
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": backbone_params, "lr": bb_lr},
+                {"params": head_params, "lr": hd_lr},
+            ],
+            weight_decay=0.01,
+        )
+
+        actual_batch_size = min(batch_size, len(train_clips))
+        num_batches = (len(train_clips) + actual_batch_size - 1) // actual_batch_size
+        num_epochs = max(20, min(epochs, 250))
+        total_steps = num_epochs * num_batches
+
+        scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            optimizer,
+            max_lr=[bb_lr, hd_lr],
+            total_steps=total_steps,
+            pct_start=0.15,
+            anneal_strategy="cos",
+        )
+
+        # ── Step 6: Training Loop ──
+        print(f"[Model Factory] Training {len(train_clips)} clips for {num_epochs} epochs ({total_steps} steps)")
+        model.train()
+        indices = np.arange(len(train_clips))
+        best_loss = float("inf")
+        best_state = None
+
+        for epoch in range(1, num_epochs + 1):
+            np.random.shuffle(indices)
+            batches = [
+                [train_clips[indices[j]] for j in range(i, min(i + actual_batch_size, len(indices)))]
+                for i in range(0, len(indices), actual_batch_size)
+            ]
+
+            epoch_loss = 0.0
+            n_step = 0
+            for batch_data in batches:
+                batch = collate_fn(batch_data)
+                out = model(
+                    input_values=batch["input_values"],
+                    attention_mask=batch["attention_mask"],
+                    labels=batch["labels"],
+                )
+                loss = out.loss
+                if torch.isnan(loss) or torch.isinf(loss):
+                    continue
+
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+
+                epoch_loss += loss.item()
+                n_step += 1
+
+            if n_step > 0:
+                avg = epoch_loss / n_step
+                if avg < best_loss:
+                    best_loss = avg
+                    best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+
+            if epoch == 1 or epoch % 25 == 0 or epoch == num_epochs:
+                print(f"[Model Factory] Epoch {epoch:3d}/{num_epochs} | loss: {avg:.4f}")
+
+        if best_state is not None:
+            model.load_state_dict(best_state)
+            model.to(DEVICE)
+
+        # ── Step 7: GPU Evaluation on Held-Out Split ──
+        print("[Model Factory] Evaluating held-out split on GPU...")
+        model.eval()
+
+        def ctc_greedy_decode(pred_ids):
+            collapsed = []
+            prev = None
+            for t in pred_ids:
+                if t != prev:
+                    collapsed.append(t)
+                    prev = t
+            return [id_to_phoneme[t] for t in collapsed if t != 0 and t in id_to_phoneme]
+
+        all_refs = []
+        all_hyps = []
+        count_ok = 0
+        exact_ok = 0
+        confusions = {}
+
+        with torch.no_grad():
+            for item in heldout_clips:
+                feats = fe(
+                    item["audio"],
+                    sampling_rate=SAMPLE_RATE,
+                    return_tensors="pt",
+                    padding=True,
+                )
+                logits = model(feats.input_values.to(DEVICE)).logits
+                ids = torch.argmax(logits, dim=-1)[0].cpu().tolist()
+                pred = ctc_greedy_decode(ids)
+
+                expected = item["phonemes"]
+                ref_str = " ".join(expected)
+                hyp_str = " ".join(pred)
+
+                all_refs.append(ref_str)
+                all_hyps.append(hyp_str)
+
+                if abs(len(pred) - len(expected)) <= 1:
+                    count_ok += 1
+                if pred == expected:
+                    exact_ok += 1
+
+                tag = "OK" if pred == expected else ("~ " if abs(len(pred) - len(expected)) <= 1 else "X ")
+                print(f"[Model Factory Eval] [{tag}] {item['id']}: expect='{ref_str}' got='{hyp_str}'")
+
+                # Track simple substitution confusions
+                min_len = min(len(expected), len(pred))
+                for idx in range(min_len):
+                    e_p, g_p = expected[idx], pred[idx]
+                    if e_p != g_p:
+                        key = f"{e_p}->{g_p}"
+                        confusions[key] = confusions.get(key, 0) + 1
+
+        n_eval = len(heldout_clips)
+        per = float(jiwer.wer(all_refs, all_hyps)) if all_refs else 0.0
+        cer = float(jiwer.cer(all_refs, all_hyps)) if all_refs else 0.0
+        count_pct = float(count_ok / n_eval * 100) if n_eval else 0.0
+        exact_pct = float(exact_ok / n_eval * 100) if n_eval else 0.0
+
+        confusion_list = []
+        for k, cnt in sorted(confusions.items(), key=lambda x: -x[1])[:10]:
+            exp_p, got_p = k.split("->")
+            confusion_list.append({"expected": exp_p, "got": got_p, "count": cnt})
+
+        total_phonemes = sum(len(c["phonemes"]) for c in heldout_clips)
+
+        eval_result = {
+            "per": round(per, 4),
+            "cer": round(cer, 4),
+            "wer": round(per, 4),  # Standardized for UI
+            "count_match_pct": round(count_pct, 1),
+            "exact_match_pct": round(exact_pct, 1),
+            "total_segments_evaluated": n_eval,
+            "total_phonemes_compared": total_phonemes,
+            "confusion_matrix": confusion_list,
+            "per_tajweed_rule": {},
+            "evaluated_at": datetime.utcnow().isoformat() + "Z",
+            "had_errors": False,
+        }
+
+        print(f"[Model Factory] Evaluation results: PER={per*100:.1f}%, Exact={exact_pct:.1f}%, Count={count_pct:.1f}%")
+
+        # ── Step 8: Save weights & vocab to R2 ──
+        out_dir = f"/tmp/model_{job_id}"
+        os.makedirs(out_dir, exist_ok=True)
+        model.save_pretrained(out_dir)
+        fe.save_pretrained(out_dir)
+        with open(os.path.join(out_dir, "vocab.json"), "w", encoding="utf-8") as f:
+            json.dump(vocab, f, ensure_ascii=False, indent=2)
+
+        print("[Model Factory] Uploading model artifacts to Cloudflare R2...")
+        if s3 is None:
+            s3 = get_s3_client(r2_endpoint, r2_access_key, r2_secret_key)
+
+        for fname in os.listdir(out_dir):
+            fpath = os.path.join(out_dir, fname)
+            s3_key = f"adapters/{job_id}/{fname}"
+            s3.upload_file(fpath, bucket, s3_key)
             print(f"[Model Factory] Uploaded: {s3_key}")
 
-        adapter_r2_prefix = f"adapters/{job_id}"
+        adapter_prefix = f"adapters/{job_id}"
 
-        # ── Step 7: Report ACTUAL usage for billing reconciliation ─────────
+        # ── Step 9: Reconcile usage and notify webhook ──
         elapsed_seconds = time.time() - job_start_time
-        tier = next((t for t in GPU_TIERS if t["name"] == planned_gpu_tier_name), GPU_TIERS[0])
+        tier = GPU_TIERS[1]  # A10G
         actual_cost_usd = (elapsed_seconds / 3600) * tier["hourly_cost_usd"]
-        actual_credits = actual_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD
+        actual_credits = max(10, round(actual_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD))
 
-        print(f"[Model Factory] Notifying webhook: {webhook_url}")
-        try:
-            requests.post(webhook_url, json={
-                "job_id": job_id,
-                "status": "completed",
-                "adapter_prefix": adapter_r2_prefix,
-                "detected_family": family_name,
-                "resolved_base_model": base_model,
-                "actual_gpu_seconds": round(elapsed_seconds),
-                "actual_credits": round(actual_credits, 2),
-                "used_qlora_fallback": attempt_qlora and not use_qlora,  # True if OOM forced a QLoRA reload
-            }, timeout=30)
-        except Exception as e:
-            print(f"[Model Factory] Webhook notification failed (non-fatal): {e}")
+        print(f"[Model Factory] Notifying completion webhook: {webhook_url}")
+        if webhook_url:
+            for attempt in range(1, 4):
+                try:
+                    res = requests.post(
+                        webhook_url,
+                        headers={"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"},
+                        json={
+                            "job_id": job_id,
+                            "status": "completed",
+                            "adapter_prefix": adapter_prefix,
+                            "resolved_base_model": base_model,
+                            "actual_gpu_seconds": round(elapsed_seconds),
+                            "actual_credits": actual_credits,
+                            "eval_result": eval_result,
+                        },
+                        timeout=30,
+                    )
+                    if res.status_code == 200:
+                        print(f"[Model Factory] Completion webhook successfully delivered on attempt {attempt}: HTTP 200")
+                        break
+                    else:
+                        print(f"[Model Factory] Completion webhook attempt {attempt} returned HTTP {res.status_code}: {res.text[:200]}")
+                except Exception as e:
+                    print(f"[Model Factory] Completion webhook attempt {attempt} failed: {e}")
+                time.sleep(2)
 
-        print("[Model Factory] All done!")
-        return {"status": "completed", "adapter_prefix": adapter_r2_prefix, "detected_family": family_name}
+        # ── Step 10: Direct Supabase sync guarantee ──
+        if supabase_url and supabase_key:
+            try:
+                sb_headers = {
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                    "Content-Type": "application/json",
+                    "Prefer": "return=representation",
+                }
+                get_res = requests.get(f"{supabase_url}/rest/v1/jobs?id=eq.{job_id}&select=config,user_id", headers=sb_headers, timeout=15)
+                if get_res.ok and get_res.json():
+                    row = get_res.json()[0]
+                    cfg = row.get("config") or {}
+                    cfg["actual_gpu_seconds"] = round(elapsed_seconds)
+                    cfg["actual_credits"] = actual_credits
+                    cfg["eval_status"] = "completed"
+                    cfg["eval_result"] = eval_result
+                    user_id = row.get("user_id")
+
+                    requests.patch(
+                        f"{supabase_url}/rest/v1/jobs?id=eq.{job_id}",
+                        headers=sb_headers,
+                        json={
+                            "status": "completed",
+                            "result_url": adapter_prefix,
+                            "completed_at": datetime.utcnow().isoformat() + "Z",
+                            "credits_used": actual_credits,
+                            "config": cfg,
+                        },
+                        timeout=15,
+                    )
+                    print(f"[Model Factory] Direct Supabase sync completed for job {job_id}")
+
+                    if user_id and confirmed_credit_hold > 0:
+                        prof_res = requests.get(f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}&select=credits_balance,credits_held", headers=sb_headers, timeout=15)
+                        if prof_res.ok and prof_res.json():
+                            p = prof_res.json()[0]
+                            held = p.get("credits_held", 0)
+                            bal = p.get("credits_balance", 0)
+                            excess = max(0, confirmed_credit_hold - actual_credits)
+                            requests.patch(
+                                f"{supabase_url}/rest/v1/profiles?id=eq.{user_id}",
+                                headers=sb_headers,
+                                json={
+                                    "credits_balance": bal + excess,
+                                    "credits_held": max(0, held - confirmed_credit_hold),
+                                },
+                                timeout=15,
+                            )
+                            print(f"[Model Factory] Direct Supabase billing settled: charged {actual_credits}, refunded {excess}")
+            except Exception as sb_err:
+                print(f"[Model Factory] Direct Supabase sync warning: {sb_err}")
+
+        return {
+            "status": "completed",
+            "adapter_prefix": adapter_prefix,
+            "eval_result": eval_result,
+        }
 
     except Exception as err:
-        print(f"[Model Factory] Training error: {err}")
-        notify_and_raise(str(err))
+        print(f"[Model Factory] Training fatal error: {err}")
+        notify_failure(str(err))
         raise err
 
 
-# ── Web Endpoint to Trigger Training Asynchronously ─────────────────────
+# ════════════════════════════════════════════════════════════════════════
+# PRE-JOB PLANNING & COST ESTIMATION (CPU-ONLY)
+# ════════════════════════════════════════════════════════════════════════
+@app.function(image=planning_image, timeout=60)
+@modal.fastapi_endpoint(method="POST")
+def estimate_cost(item: dict):
+    dataset_size = int(item.get("dataset_size", 50))
+    base_model = item.get("base_model", "facebook/wav2vec2-base")
+
+    # Hardware & parameter characteristics
+    tier = GPU_TIERS[1]  # A10G
+    num_epochs = 150
+    batch_size = 4
+    total_steps = (dataset_size // batch_size + 1) * num_epochs
+
+    # Calibration: ~0.025s per step on A10G + 60s load overhead
+    estimated_seconds = 60.0 + (total_steps * 0.025)
+    estimated_hours = estimated_seconds / 3600
+    raw_cost_usd = estimated_hours * tier["hourly_cost_usd"]
+    estimated_credits = max(25, round(raw_cost_usd * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD))
+
+    return {
+        "status": "ok",
+        "resolved_model": base_model,
+        "gpu_tier": tier["name"],
+        "modal_gpu": tier["modal_gpu"],
+        "estimated_vram_gb": 3.0,
+        "estimated_seconds": round(estimated_seconds),
+        "estimated_credits": estimated_credits,
+        "num_train_epochs": num_epochs,
+        "batch_size": batch_size,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════
+# START TRAINING ENDPOINT
+# ════════════════════════════════════════════════════════════════════════
 @app.function(image=planning_image, timeout=60)
 @modal.fastapi_endpoint(method="POST")
 def start_training(item: dict):
-    """
-    HTTP POST endpoint that plans, validates, and spawns train_model on the
-    appropriate GPU tier. Frontend must have already: shown the user this
-    same plan via estimate_cost, gotten explicit confirmation, and placed a
-    credit hold >= plan['estimated_credits'] BEFORE calling this endpoint.
-    This endpoint does not itself check credit balance — that's the
-    frontend/backend API layer's job — but it DOES re-run the plan and will
-    refuse to start a job whose live plan disagrees with what was passed in
-    (protects against stale prices from a slow user or a changed model).
-    """
     job_id = item.get("job_id")
     dataset_url = item.get("dataset_url")
     webhook_url = item.get("webhook_url")
-    base_model = item.get("base_model", "meta-llama/Llama-3.1-8B-Instruct")
-    dataset_size = int(item.get("dataset_size", 100))
-    raw_learning_rate = item.get("learning_rate")
-    max_seq_length = item.get("max_seq_length", 2048)
-    system_prompt = item.get("system_prompt", "")
-    lora_r = item.get("lora_r", 16)
-    lora_alpha = item.get("lora_alpha", 16)
-    confirmed_credit_hold = item.get("confirmed_credit_hold", 0.0)
+    base_model = item.get("base_model", "facebook/wav2vec2-base")
+    dataset_size = int(item.get("dataset_size", 50))
+    learning_rate = item.get("learning_rate", 1e-4)
+    confirmed_credit_hold = float(item.get("confirmed_credit_hold", 0.0))
     r2_endpoint = item.get("r2_endpoint", "")
     r2_access_key = item.get("r2_access_key", "")
     r2_secret_key = item.get("r2_secret_key", "")
     r2_bucket = item.get("r2_bucket", "")
+    supabase_url = item.get("supabase_url", "")
+    supabase_key = item.get("supabase_key", "")
 
     if not job_id or not dataset_url:
-        return {"error": "Missing job_id or dataset_url", "status": "failed"}
+        return {"status": "failed", "error": "Missing job_id or dataset_url"}
 
-    try:
-        plan = build_training_plan(base_model, dataset_size, lora_r, max_seq_length)
-    except Exception as e:
-        return {"status": "failed", "error": f"Could not plan job: {e}"}
+    tier = GPU_TIERS[1]  # A10G
+    total_steps = (dataset_size // 4 + 1) * 150
+    estimated_seconds = 60.0 + (total_steps * 0.025)
+    estimated_credits = max(25, round((estimated_seconds / 3600) * tier["hourly_cost_usd"] * CREDIT_MARKUP_MULTIPLIER * CREDITS_PER_USD))
 
-    # Use auto-tuned model learning rate unless explicitly customized above threshold
-    learning_rate = raw_learning_rate if (raw_learning_rate and raw_learning_rate >= 5e-5) else plan.get("learning_rate", 0.0001)
-
-    if plan["status"] != "ok":
-        return plan  # e.g. {"status": "unsupported", "reason": "model_too_large", ...}
-
-    if confirmed_credit_hold and confirmed_credit_hold < plan["estimated_credits"]:
-        return {
-            "status": "failed",
-            "error": "insufficient_hold",
-            "message": (
-                f"Confirmed hold ({confirmed_credit_hold} credits) is less than the current "
-                f"estimate ({plan['estimated_credits']} credits) — price may have changed. "
-                f"Re-fetch estimate_cost and reconfirm."
-            ),
-        }
-
-    print(f"[Model Factory Endpoint] Spawning train_model for job {job_id}: "
-          f"model={plan['resolved_model']}, tier={plan['gpu_tier']}, "
-          f"steps={plan['max_steps']}, est_credits={plan['estimated_credits']}")
-
-    call = train_model.with_options(gpu=plan["modal_gpu"]).spawn(
+    print(f"[Model Factory] Spawning train_model for job {job_id} on {tier['name']}")
+    call = train_model.with_options(gpu=tier["modal_gpu"]).spawn(
         job_id=job_id,
         dataset_url=dataset_url,
         webhook_url=webhook_url,
         base_model=base_model,
-        system_prompt=system_prompt,
-        learning_rate=learning_rate,
-        max_seq_length=max_seq_length,
-        lora_r=lora_r,
-        lora_alpha=lora_alpha,
-        planned_max_steps=plan["max_steps"],
-        planned_num_train_epochs=plan["num_train_epochs"],
-        planned_gpu_tier_name=plan["gpu_tier"],
-        max_credit_budget=confirmed_credit_hold or plan["estimated_credits"],
+        learning_rate=float(learning_rate),
+        epochs=150,
+        batch_size=4,
+        confirmed_credit_hold=confirmed_credit_hold or float(estimated_credits),
         r2_endpoint=r2_endpoint,
         r2_access_key=r2_access_key,
         r2_secret_key=r2_secret_key,
         r2_bucket=r2_bucket,
+        supabase_url=supabase_url,
+        supabase_key=supabase_key,
     )
 
     return {
         "status": "started",
         "call_id": call.object_id,
-        "gpu_tier": plan["gpu_tier"],
-        "estimated_credits": plan["estimated_credits"],
+        "gpu_tier": tier["name"],
+        "estimated_credits": estimated_credits,
     }
 
 
-# ── Local test entry point ────────────────────────────────────────────────
-@app.function(image=planning_image)
-@modal.fastapi_endpoint(method="GET")
-def check_job_status(call_id: str):
-    import modal
-    try:
-        call = modal.FunctionCall.from_id(call_id)
-        try:
-            # Poll with a short timeout to see if it's done
-            res = call.get(timeout=2.0)
-            return {"status": "completed", "result": res}
-        except TimeoutError:
-            return {"status": "running"}
-        except Exception as e:
-            return {"status": "failed", "error": str(e)}
-    except Exception as e:
-        return {"status": "error", "error": str(e)}
-
 @app.local_entrypoint()
 def main():
-    print("Modal training backend loaded. Deploy with: modal deploy modal_backend/train.py")
+    print("Modal CTC Training backend loaded.")
+    print("Deploy with: modal deploy modal_backend/train.py")

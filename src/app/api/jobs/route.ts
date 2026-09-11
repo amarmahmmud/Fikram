@@ -125,9 +125,10 @@ export async function POST(req: Request) {
     name:           name || "Untitled Job",
     status:         "pending",
     base_model:     baseModel,
-    method:         method || "lora",
+    method:         (method === "ctc" || !method) ? "lora" : method,
     config:         {
       ...(config || {}),
+      training_method: method || "ctc",
       credits_estimated: finalCreditsToHold,
       credits_held: finalCreditsToHold,
       gpu_tier: liveEstimate?.gpu_tier || "L4",
@@ -187,6 +188,8 @@ export async function POST(req: Request) {
           r2_access_key: process.env.R2_ACCESS_KEY_ID,
           r2_secret_key: process.env.R2_SECRET_ACCESS_KEY,
           r2_bucket: process.env.R2_BUCKET_NAME,
+          supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+          supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY,
         }),
       });
 

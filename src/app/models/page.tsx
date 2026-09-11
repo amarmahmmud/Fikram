@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import styles from "./page.module.css";
-import { MODELS, MODEL_CATEGORIES } from "@/lib/models";
-import type { ModelCategory } from "@/lib/models";
+import { MODELS, ASR_MODEL_CATEGORIES as MODEL_CATEGORIES } from "@/lib/models";
+import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap } from "lucide-react";
@@ -230,11 +230,11 @@ export default function ModelsPage() {
           {/* Categories for Verified Tab */}
           {mainTab === "verified" && (
             <div className={styles.taskFilters}>
-              {MODEL_CATEGORIES.map((cat) => (
+              {MODEL_CATEGORIES.map((cat: { value: string; label: string }) => (
                 <button
                   key={cat.value}
                   className={`btn btn-sm ${activeCategory === cat.value ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setActiveCategory(cat.value)}
+                  onClick={() => setActiveCategory(cat.value as any)}
                 >
                   {cat.label}
                 </button>

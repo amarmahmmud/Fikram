@@ -22,12 +22,13 @@ export async function POST(req: Request) {
     const {
       job_id, status, adapter_prefix, detected_family, resolved_base_model,
       actual_gpu_seconds, actual_credits, credits_to_charge,
-      error: errorMessage, used_qlora_fallback,
+      error: errorMessage, used_qlora_fallback, eval_result,
     } = body;
 
     console.log("Modal webhook received:", {
       job_id, status, adapter_prefix, detected_family,
       actual_gpu_seconds, actual_credits, credits_to_charge,
+      has_eval_result: !!eval_result,
     });
 
     if (!job_id) {
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
         });
       }
 
-      // Update job record
+      // Update job record with actuals and native ASR eval report
       await supabase.from("jobs").update({
         status: "completed",
         result_url: adapter_prefix,
@@ -108,27 +109,30 @@ export async function POST(req: Request) {
           actual_credits: actualCreditsCharged,
           credits_refunded: excessRefund,
           used_qlora_fallback: used_qlora_fallback ?? false,
+          ...(eval_result ? {
+            eval_status: "completed",
+            eval_result: eval_result,
+          } : {}),
         },
       }).eq("id", job_id);
 
-      console.log(`[Webhook] Job ${job_id} completed. Charged: ${actualCreditsCharged}, Refunded: ${excessRefund}`);
+      console.log(`[Webhook] Job ${job_id} completed. Charged: ${actualCreditsCharged}, Refunded: ${excessRefund}, Eval included: ${!!eval_result}`);
 
-      // ── Trigger post-training LLM-as-a-Judge evaluation (non-blocking) ──
-      // If this fails, the job is still "completed" — evaluation is optional.
-      try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
-        const evalUrl = `${appUrl}/api/jobs/${job_id}/evaluate`;
-        // Fire-and-forget: don't await the eval — it can take minutes
-        fetch(evalUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ trigger: "webhook" }),
-        }).catch(err => {
-          console.warn(`[Webhook] Non-blocking eval trigger failed for ${job_id}:`, err);
-        });
-        console.log(`[Webhook] Triggered async evaluation for job ${job_id}`);
-      } catch (evalErr) {
-        console.warn(`[Webhook] Failed to trigger evaluation for ${job_id}:`, evalErr);
+      // Fallback async evaluation only if Modal did not compute eval_result
+      if (!eval_result) {
+        try {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://your-app.vercel.app";
+          const evalUrl = `${appUrl}/api/jobs/${job_id}/evaluate`;
+          fetch(evalUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trigger: "webhook" }),
+          }).catch(err => {
+            console.warn(`[Webhook] Non-blocking eval fallback trigger failed for ${job_id}:`, err);
+          });
+        } catch (evalErr) {
+          console.warn(`[Webhook] Failed to trigger fallback evaluation for ${job_id}:`, evalErr);
+        }
       }
 
     } else {
