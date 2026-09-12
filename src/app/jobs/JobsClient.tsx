@@ -226,7 +226,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [experts, setExperts] = useState<Expert[]>(initialExperts);
   const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"jobs" | "experts">("jobs");
+  const [activeTab, setActiveTab] = useState<"jobs" | "experts">("experts");
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ type: "job" | "expert"; id: string; name: string } | null>(null);
@@ -359,15 +359,6 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
         {/* ── Tabs ── */}
         <div className={styles.tabBar}>
           <button
-            className={`${styles.tab} ${activeTab === "jobs" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("jobs")}
-            role="tab"
-            aria-selected={activeTab === "jobs"}
-          >
-            Fine-Tuning Jobs
-            <span className={styles.tabCount}>{jobs.length}</span>
-          </button>
-          <button
             className={`${styles.tab} ${activeTab === "experts" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("experts")}
             role="tab"
@@ -376,7 +367,16 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             Smart Assistants
             <span className={styles.tabCount}>{experts.length}</span>
           </button>
+          <button
+            className={`${styles.tab}`}
+            disabled
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+          >
+            Fine-Tuning Jobs (Coming Soon)
+            <span className={styles.tabCount}>{jobs.length}</span>
+          </button>
         </div>
+
 
         {/* ── Jobs Tab ── */}
         {activeTab === "jobs" ? (
