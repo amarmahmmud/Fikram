@@ -811,3 +811,78 @@
   }
 }
 
+.creatorSuggestions {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px dashed rgba(199, 125, 255, 0.4);
+  border-radius: 12px;
+  background: rgba(199, 125, 255, 0.05);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.suggestionsHeader {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.suggestionChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.suggestionBtn {
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.suggestionBtn:hover:not(:disabled) {
+  background: rgba(199, 125, 255, 0.1);
+  border-color: rgba(199, 125, 255, 0.5);
+  transform: translateY(-1px);
+}
+.suggestionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.customSuggestion {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  max-width: 400px;
+  margin: 0 auto;
+}
+.customSuggestion input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+.customSuggestion button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--accent-primary);
+  color: #fff;
+  border: none;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: opacity 0.2s;
+}
+.customSuggestion button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

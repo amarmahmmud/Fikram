@@ -220,13 +220,31 @@ function ConfirmModal({
 }
 
 /* ─── Main Component ─── */
-export default function JobsClient({ jobs: initialJobs, experts: initialExperts, currentPage = 1 }: { jobs: Job[]; experts: Expert[]; currentPage?: number }) {
+export default function JobsClient({ jobs: initialJobs, experts: initialExperts }: { jobs: Job[]; experts: Expert[] }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
   const [experts, setExperts] = useState<Expert[]>(initialExperts);
   const [syncing, setSyncing] = useState(false);
   const [activeTab, setActiveTab] = useState<"jobs" | "experts">("experts");
+
+  const [jobsPage, setJobsPage] = useState(1);
+  const [hasMoreJobs, setHasMoreJobs] = useState(initialJobs.length === 50);
+  
+  const [expertsPage, setExpertsPage] = useState(1);
+  const [hasMoreExperts, setHasMoreExperts] = useState(initialExperts.length === 50);
+
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    setJobs(initialJobs);
+    setJobsPage(1);
+    setHasMoreJobs(initialJobs.length === 50);
+    
+    setExperts(initialExperts);
+    setExpertsPage(1);
+    setHasMoreExperts(initialExperts.length === 50);
+  }, [initialJobs, initialExperts]);
 
   // Delete state
   const [deleteTarget, setDeleteTarget] = useState<{ type: "job" | "expert"; id: string; name: string } | null>(null);
@@ -252,6 +270,53 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts,
       console.error("Failed to sync jobs:", err);
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function fetchNextPage() {
+    const isJobs = activeTab === "jobs";
+    if (loadingMore || (isJobs ? !hasMoreJobs : !hasMoreExperts)) return;
+    
+    setLoadingMore(true);
+    try {
+      const page = isJobs ? jobsPage : expertsPage;
+      const from = page * 50;
+      const to = from + 49;
+      
+      const { data, error } = await supabase
+        .from(isJobs ? "jobs" : "experts")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        if (isJobs) {
+          setJobs(prev => {
+            const existingIds = new Set(prev.map(j => j.id));
+            const newItems = data.filter(j => !existingIds.has(j.id));
+            return [...prev, ...(newItems as Job[])];
+          });
+          setJobsPage(p => p + 1);
+          if (data.length < 50) setHasMoreJobs(false);
+        } else {
+          setExperts(prev => {
+            const existingIds = new Set(prev.map(e => e.id));
+            const newItems = data.filter(e => !existingIds.has(e.id));
+            return [...prev, ...(newItems as Expert[])];
+          });
+          setExpertsPage(p => p + 1);
+          if (data.length < 50) setHasMoreExperts(false);
+        }
+      } else {
+        if (isJobs) setHasMoreJobs(false);
+        else setHasMoreExperts(false);
+      }
+    } catch (err) {
+      console.error(`Failed to fetch more ${isJobs ? 'jobs' : 'experts'}:`, err);
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -567,11 +632,15 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts,
       </div>
 
       {/* Pagination Control */}
-      {((activeTab === "jobs" && jobs.length === 50) || (activeTab === "experts" && experts.length === 50)) && (
+      {((activeTab === "jobs" && hasMoreJobs) || (activeTab === "experts" && hasMoreExperts)) && (
         <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
-          <Link href={`/jobs?page=${currentPage + 1}`} className="btn btn-secondary">
-            Load Next Page
-          </Link>
+          <button 
+            onClick={fetchNextPage} 
+            className="btn btn-secondary"
+            disabled={loadingMore}
+          >
+            {loadingMore ? "Loading..." : "Load Next Page"}
+          </button>
         </div>
       )}
 

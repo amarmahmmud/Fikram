@@ -18,15 +18,24 @@ const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-export default function DashboardClient({ profile, jobs: initialJobs, currentPage = 1 }: { profile: Profile | null; jobs: Job[]; currentPage?: number }) {
+export default function DashboardClient({ profile, jobs: initialJobs }: { profile: Profile | null; jobs: Job[] }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(initialJobs.length === 50);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const credits = profile?.credits_balance ?? 0;
   const name = profile?.full_name ?? profile?.email?.split("@")[0] ?? "there";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+
+  useEffect(() => {
+    setJobs(initialJobs);
+    setHasMore(initialJobs.length === 50);
+    setPage(1);
+  }, [initialJobs]);
 
   // Auto-sync jobs on load to ensure honest status
   useEffect(() => {
@@ -52,6 +61,39 @@ export default function DashboardClient({ profile, jobs: initialJobs, currentPag
     await supabase.auth.signOut();
     router.push("/");
     router.refresh();
+  }
+
+  async function fetchNextPage() {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const from = page * 50;
+      const to = from + 49;
+      const { data, error } = await supabase
+        .from("jobs")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setJobs(prev => {
+          // Prevent duplicates by checking ids
+          const existingIds = new Set(prev.map(j => j.id));
+          const newJobs = data.filter(j => !existingIds.has(j.id));
+          return [...prev, ...newJobs];
+        });
+        setPage(p => p + 1);
+        if (data.length < 50) setHasMore(false);
+      } else {
+        setHasMore(false);
+      }
+    } catch (err) {
+      console.error("Failed to fetch more jobs:", err);
+    } finally {
+      setLoadingMore(false);
+    }
   }
 
   const totalJobs     = jobs.length;
@@ -207,11 +249,15 @@ export default function DashboardClient({ profile, jobs: initialJobs, currentPag
           )}
 
           {/* Pagination Control */}
-          {jobs.length === 50 && (
+          {hasMore && (
             <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
-              <Link href={`/dashboard?page=${currentPage + 1}`} className="btn btn-secondary">
-                Load Next Page
-              </Link>
+              <button 
+                onClick={fetchNextPage} 
+                className="btn btn-secondary"
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : "Load Next Page"}
+              </button>
             </div>
           )}
         </div>
