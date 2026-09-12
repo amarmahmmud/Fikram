@@ -21,10 +21,17 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
-import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile } from "@/lib/gemini";
+import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys } from "@/lib/gemini";
 
-const googleApiKey = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-const genAI = new GoogleGenerativeAI(googleApiKey || "");
+let currentEmbedKeyIndex = 0;
+function getEmbeddingModel() {
+  const keys = getGeminiApiKeys();
+  if (keys.length === 0) throw new Error("No Gemini API keys found for embeddings");
+  const key = keys[currentEmbedKeyIndex % keys.length];
+  const genAI = new GoogleGenerativeAI(key);
+  return genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+}
+
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
 
 // ── Media Attachment Types ───────────────────────────────────────────────────
@@ -129,14 +136,42 @@ const EMBEDDING_DIMENSIONS = 768;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * Extracts retry delay from Gemini API 429 errors or falls back to exponential backoff.
+ */
+function getRetryDelay(err: any, attempt: number): number {
+  // 1. Try to extract from structured errorDetails array (Google RPC format)
+  if (err?.errorDetails && Array.isArray(err.errorDetails)) {
+    const retryInfo = err.errorDetails.find(
+      (d: any) => d["@type"] === "type.googleapis.com/google.rpc.RetryInfo"
+    );
+    if (retryInfo?.retryDelay) {
+      const match = retryInfo.retryDelay.match(/([\d.]+)/);
+      if (match) return Math.ceil(parseFloat(match[1]) * 1000);
+    }
+  }
+
+  // 2. Try to extract from the error message string directly
+  if (err?.message) {
+    const match = err.message.match(/retry in ([\d.]+)s/i);
+    if (match) return Math.ceil(parseFloat(match[1]) * 1000);
+  }
+
+  // 3. Fallback to exponential backoff with jitter
+  // attempt=1 => ~8s, attempt=2 => ~16s, attempt=3 => ~32s, attempt=4 => ~64s
+  const baseDelay = Math.pow(2, attempt) * 4000;
+  const jitter = baseDelay * 0.2 * Math.random();
+  return baseDelay + jitter;
+}
+
+/**
  * Generate an embedding vector for a single text string with retry on 429 quota.
  */
 export async function embedText(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
   let attempts = 0;
   while (attempts < 5) {
     attempts++;
     try {
+      const model = getEmbeddingModel();
       const result = await model.embedContent({
         content: { role: "user" as const, parts: [{ text }] },
         outputDimensionality: EMBEDDING_DIMENSIONS,
@@ -144,9 +179,20 @@ export async function embedText(text: string): Promise<number[]> {
       return result.embedding.values;
     } catch (err: any) {
       const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
+      
+      if (isQuota) {
+        const keys = getGeminiApiKeys();
+        if (keys.length > 1) {
+          currentEmbedKeyIndex++;
+          console.warn(`[Embedding] Quota hit on embedText, rotating to key ${currentEmbedKeyIndex % keys.length + 1}/${keys.length}...`);
+          if (attempts < keys.length) continue;
+        }
+      }
+
       if (isQuota && attempts < 5) {
-        console.warn(`[Embedding] Gemini quota hit on embedText, retrying in 8s (attempt ${attempts}/5)...`);
-        await delay(8000);
+        const delayMs = getRetryDelay(err, attempts);
+        console.warn(`[Embedding] Gemini quota hit on embedText, retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempts}/5)...`);
+        await delay(delayMs);
       } else {
         throw err;
       }
@@ -160,7 +206,6 @@ export async function embedText(text: string): Promise<number[]> {
  * Google Gemini batchEmbedContents accepts at most 100 requests per batch and 100 req/min on free tier.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const model = genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
   const BATCH_SIZE = 50;
   const allEmbeddings: number[][] = [];
 
@@ -172,6 +217,7 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
     while (!success && attempts < 5) {
       attempts++;
       try {
+        const model = getEmbeddingModel();
         const result = await model.batchEmbedContents({
           requests: slice.map((text) => ({
             content: { role: "user" as const, parts: [{ text }] },
@@ -182,9 +228,20 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         success = true;
       } catch (err: any) {
         const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
+        
+        if (isQuota) {
+          const keys = getGeminiApiKeys();
+          if (keys.length > 1) {
+            currentEmbedKeyIndex++;
+            console.warn(`[Embedding] Quota hit on batch ${Math.floor(i / BATCH_SIZE) + 1}, rotating to key ${currentEmbedKeyIndex % keys.length + 1}/${keys.length}...`);
+            if (attempts < keys.length) continue;
+          }
+        }
+
         if (isQuota && attempts < 5) {
-          console.warn(`[Embedding] Gemini quota hit on batch ${i / BATCH_SIZE + 1}, retrying in 8s (attempt ${attempts}/5)...`);
-          await delay(8000);
+          const delayMs = getRetryDelay(err, attempts);
+          console.warn(`[Embedding] Gemini quota hit on batch ${Math.floor(i / BATCH_SIZE) + 1}, retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempts}/5)...`);
+          await delay(delayMs);
         } else {
           throw err;
         }
