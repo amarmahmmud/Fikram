@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, RotateCcw } from "lucide-react";
+import { Globe, RotateCcw, Sparkles } from "lucide-react";
 import { ASREvalReport, formatPER, perToGrade } from "@/lib/evaluator";
 import { TAJWEED_RULE_LABELS, TajweedRule } from "@/lib/qps-types";
 
@@ -266,6 +266,20 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           <div className={styles.headerActions}>
             {isCompleted && (
               <>
+                <Link
+                  href={`/playground/${job.id}`}
+                  className="btn btn-sm btn-primary"
+                  style={{
+                    gap: 6,
+                    background: "linear-gradient(135deg, rgba(0, 229, 200, 0.9), rgba(16, 185, 129, 0.9))",
+                    boxShadow: "0 0 16px rgba(0, 229, 200, 0.35)",
+                    color: "#000",
+                    fontWeight: 700,
+                  }}
+                >
+                  <Sparkles size={14} />
+                  Test in Playground
+                </Link>
                 <Link
                   href={`/new-job?retrain=${job.id}`}
                   className="btn btn-sm btn-secondary"
@@ -549,6 +563,27 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
             <div className="card">
               <span className={styles.cardTitle} style={{ display: "block", marginBottom: 16 }}>Actions</span>
               <div className={styles.actionsList}>
+                {isCompleted && (
+                  <Link
+                    href={`/playground/${job.id}`}
+                    className="btn btn-primary w-full"
+                    style={{
+                      textAlign: "center",
+                      gap: 6,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "linear-gradient(135deg, rgba(0, 229, 200, 0.9), rgba(16, 185, 129, 0.9))",
+                      boxShadow: "0 0 16px rgba(0, 229, 200, 0.35)",
+                      color: "#000",
+                      fontWeight: 700,
+                      marginBottom: 4,
+                    }}
+                  >
+                    <Sparkles size={15} />
+                    Launch Test Playground
+                  </Link>
+                )}
                 {(isCompleted || (isFailed && job.dataset_url)) && (
                   <Link
                     href={`/new-job?retrain=${job.id}`}

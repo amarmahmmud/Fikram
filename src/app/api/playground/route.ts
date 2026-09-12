@@ -26,9 +26,42 @@ export async function POST(req: Request) {
       );
     }
 
-    const { jobId, messages, systemPrompt, temperature, maxNewTokens } = await req.json();
-    if (!jobId || !messages || !Array.isArray(messages)) {
-      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    const body = await req.json();
+    const { jobId, messages, systemPrompt, temperature, maxNewTokens, audio_url, audio_base64, expected_phonemes } = body;
+
+    if (!jobId) {
+      return NextResponse.json({ error: "Missing jobId" }, { status: 400 });
+    }
+
+    // Support ASR audio inference mode
+    if (audio_url || audio_base64) {
+      const modalEndpoint =
+        process.env.MODAL_INFER_AUDIO_URL ||
+        "https://amarsuadbusiness--model-factory-trainer-infer-audio.modal.run";
+
+      const modalPayload = {
+        job_id: jobId,
+        audio_url: audio_url || "",
+        audio_base64: audio_base64 || "",
+        expected_phonemes: expected_phonemes || null,
+        r2_endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+        r2_access_key: process.env.R2_ACCESS_KEY_ID || "",
+        r2_secret_key: process.env.R2_SECRET_ACCESS_KEY || "",
+        r2_bucket: process.env.R2_BUCKET_NAME || "model-factory-datasets",
+      };
+
+      const modalRes = await fetch(modalEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(modalPayload),
+      });
+
+      const resJson = await modalRes.json();
+      return NextResponse.json(resJson, { status: modalRes.status });
+    }
+
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: "Invalid request: missing messages or audio" }, { status: 400 });
     }
 
     const { data: job } = await supabase

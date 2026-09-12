@@ -327,7 +327,14 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
           >
             {syncing ? "Syncing..." : "Sync Status"}
           </button>
-          <Link href="/new-job" className="btn btn-secondary btn-sm">+ New Job</Link>
+          <button
+            className="btn btn-secondary btn-sm"
+            disabled
+            style={{ opacity: 0.5, cursor: "not-allowed" }}
+            title="Custom Fine-Tuning is coming soon"
+          >
+            + New Job
+          </button>
         </div>
       </div>
 
@@ -382,7 +389,14 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
               <p className={styles.emptyDesc}>
                 Create your first fine-tuning job to start training a custom AI model on your data.
               </p>
-              <Link href="/new-job" className="btn btn-primary">Create First Job</Link>
+              <button
+                className="btn btn-primary"
+                disabled
+                style={{ opacity: 0.5, cursor: "not-allowed" }}
+                title="Custom Fine-Tuning is coming soon"
+              >
+                Coming Soon
+              </button>
             </div>
           ) : (
             <div className="table-wrap">

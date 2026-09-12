@@ -75,18 +75,19 @@ export default function NewJobPage() {
   // UI Handlers
   // ────────────────────────────────────────────────────────
 
-  const handleLoadBenchmarkDataset = async () => {
+  const handleLoadBenchmarkDataset = async (type: "test3" | "test4" = "test4") => {
     try {
       setError(null);
-      const res = await fetch("/data/test3_quran_dataset.jsonl");
+      const filename = type === "test4" ? "test4_sequence_generalization.jsonl" : "test3_quran_dataset.jsonl";
+      const res = await fetch(`/data/${filename}`);
       if (!res.ok) throw new Error("Could not fetch benchmark dataset");
       const text = await res.text();
       const lines = text.trim().split("\n").filter(Boolean);
       const items = lines.map(l => JSON.parse(l));
       setDatasetItems(items);
-      setDatasetName("test3_quran_dataset.jsonl");
-      setAudioUrl("test3_quran_dataset.jsonl");
-      if (!jobName) setJobName("Quran CTC E2E Verification");
+      setDatasetName(filename);
+      setAudioUrl(filename);
+      setJobName(type === "test4" ? "Quran CTC Sequence Generalization" : "Quran CTC E2E Verification");
       
       setSelectedPresetIndex(0);
       setWizardCtx(prev => ({
@@ -358,21 +359,34 @@ export default function NewJobPage() {
                   80 train clips (5 reciters) + 16 held-out test clips (Saood ash-Shuraym) with verified Arabic phoneme labels.
                 </div>
               </div>
-              <div>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
                 {datasetItems && datasetItems.length > 0 ? (
                   <span className={styles.benchmarkBadge}>
                     <span>✓</span>
-                    <span>96 Clips Ready</span>
+                    <span>{datasetName} ({datasetItems.length} clips)</span>
                   </span>
                 ) : (
-                  <button 
-                    type="button" 
-                    id="load-benchmark-btn"
-                    className={styles.benchmarkBtn}
-                    onClick={handleLoadBenchmarkDataset}
-                  >
-                    Load Benchmark
-                  </button>
+                  <>
+                    <button 
+                      type="button" 
+                      id="load-test4-benchmark-btn"
+                      className={styles.benchmarkBtn}
+                      onClick={() => handleLoadBenchmarkDataset("test4")}
+                      title="Test 4: Disjoint phoneme sequences (novel unseen labels in eval)"
+                    >
+                      Load Test 4 (Sequence Split)
+                    </button>
+                    <button 
+                      type="button" 
+                      id="load-test3-benchmark-btn"
+                      className={styles.btnSecondary}
+                      onClick={() => handleLoadBenchmarkDataset("test3")}
+                      title="Test 3: Cross-speaker generalization (unseen reciter)"
+                      style={{ padding: "0.4rem 0.8rem", fontSize: "0.8rem" }}
+                    >
+                      Load Test 3 (Speaker Split)
+                    </button>
+                  </>
                 )}
               </div>
             </div>

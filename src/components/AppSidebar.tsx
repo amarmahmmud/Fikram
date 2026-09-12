@@ -11,7 +11,6 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/browse",    label: "Browse Models", icon: <Globe size={18} /> },
   { href: "/experts/new", label: "New Assistant", icon: <Sparkles size={18} />, highlight: true },
-  { href: "/new-job",   label: "Fine-Tune", icon: <Wrench size={18} /> },
   { href: "/jobs",      label: "Jobs", icon: <List size={18} /> },
   { href: "/models",    label: "Model Registry", icon: <Layers size={18} /> },
 ];

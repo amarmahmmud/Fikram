@@ -34,6 +34,7 @@ training_image = (
     modal.Image.debian_slim(python_version="3.11")
     .apt_install("ffmpeg", "git")
     .pip_install(
+        "fastapi[standard]",
         "torch>=2.1",
         "torchaudio>=2.1",
         "transformers>=4.40",
@@ -707,6 +708,208 @@ def start_training(item: dict):
         "gpu_tier": tier["name"],
         "estimated_credits": estimated_credits,
     }
+
+
+# In-memory model cache for fast playground inference
+CACHED_MODELS = {}
+
+
+@app.function(
+    image=training_image,
+    gpu="A10G",
+    timeout=60,
+)
+@modal.fastapi_endpoint(method="POST")
+def infer_audio(item: dict) -> dict:
+    """Run CTC phonetic inference on an audio clip using fine-tuned weights from R2."""
+    import base64
+    import json
+    import os
+    import subprocess
+    import tempfile
+    import urllib.request
+    import numpy as np
+    import soundfile as sf
+    import torch
+    import jiwer
+    from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor
+
+    job_id = item.get("job_id", "")
+    audio_url = item.get("audio_url", "")
+    audio_base64 = item.get("audio_base64", "")
+    expected_phonemes = item.get("expected_phonemes", None)
+    r2_endpoint = item.get("r2_endpoint", os.environ.get("R2_ENDPOINT", ""))
+    r2_access_key = item.get("r2_access_key", os.environ.get("R2_ACCESS_KEY_ID", ""))
+    r2_secret_key = item.get("r2_secret_key", os.environ.get("R2_SECRET_ACCESS_KEY", ""))
+    r2_bucket = item.get("r2_bucket", os.environ.get("R2_BUCKET_NAME", "model-factory-datasets"))
+
+    if not job_id:
+        return {"status": "failed", "error": "Missing job_id"}
+    if not audio_url and not audio_base64:
+        return {"status": "failed", "error": "Missing audio_url or audio_base64"}
+
+    raw_path = None
+    wav_16k_path = None
+
+    try:
+        # 1. Download or decode audio
+        with tempfile.NamedTemporaryFile(suffix="_raw", delete=False) as raw_f:
+            raw_path = raw_f.name
+
+        if audio_base64:
+            if "," in audio_base64:
+                audio_base64 = audio_base64.split(",", 1)[1]
+            audio_bytes = base64.b64decode(audio_base64)
+            with open(raw_path, "wb") as f:
+                f.write(audio_bytes)
+        elif audio_url.startswith("http://") or audio_url.startswith("https://"):
+            urllib.request.urlretrieve(audio_url, raw_path)
+        else:
+            return {"status": "failed", "error": "Invalid audio format or URL"}
+
+        # 2. Normalize to 16kHz mono WAV via ffmpeg
+        wav_16k_path = raw_path + "_16k.wav"
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", raw_path, "-ar", "16000", "-ac", "1", wav_16k_path],
+            capture_output=True,
+            check=True,
+        )
+
+        audio_data, sr = sf.read(wav_16k_path)
+        if audio_data.ndim > 1:
+            audio_data = audio_data[:, 0]
+
+        dur_s = len(audio_data) / sr
+
+        # Pad short clips to minimum 500ms
+        min_samples = int(0.5 * 16000)
+        if len(audio_data) < min_samples:
+            audio_data = np.pad(audio_data, (0, min_samples - len(audio_data)))
+
+        # 3. Load or retrieve cached model
+        cache_dir = f"/tmp/cache_model_{job_id}"
+        if job_id not in CACHED_MODELS:
+            os.makedirs(cache_dir, exist_ok=True)
+            s3 = get_s3_client(r2_endpoint, r2_access_key, r2_secret_key)
+            
+            # Download model artifacts
+            artifacts = ["config.json", "vocab.json", "model.safetensors"]
+            for art in artifacts:
+                local_path = os.path.join(cache_dir, art)
+                if not os.path.exists(local_path):
+                    s3_key = f"adapters/{job_id}/{art}"
+                    try:
+                        s3.download_file(r2_bucket, s3_key, local_path)
+                    except Exception as dl_err:
+                        print(f"Warning downloading {art}: {dl_err}")
+
+            with open(os.path.join(cache_dir, "vocab.json"), "r", encoding="utf-8") as vf:
+                vocab = json.load(vf)
+
+            model = Wav2Vec2ForCTC.from_pretrained(cache_dir)
+            model.to("cuda" if torch.cuda.is_available() else "cpu")
+            model.eval()
+
+            fe = Wav2Vec2FeatureExtractor(
+                feature_size=1,
+                sampling_rate=16000,
+                padding_value=0.0,
+                do_normalize=True,
+                return_attention_mask=True,
+            )
+            id_to_phoneme = {v: k for k, v in vocab.items()}
+            CACHED_MODELS[job_id] = (model, fe, vocab, id_to_phoneme)
+
+        model, fe, vocab, id_to_phoneme = CACHED_MODELS[job_id]
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # 4. Run inference
+        with torch.no_grad():
+            feats = fe(audio_data.astype(np.float32), sampling_rate=16000, return_tensors="pt")
+            logits = model(feats.input_values.to(device)).logits
+            ids = torch.argmax(logits, dim=-1)[0].cpu().tolist()
+
+            # CTC greedy decode (collapse repeats, drop blank=0)
+            collapsed = []
+            prev = None
+            for t in ids:
+                if t != prev:
+                    collapsed.append(t)
+                    prev = t
+            pred_phonemes = [id_to_phoneme[t] for t in collapsed if t != 0 and t in id_to_phoneme]
+
+        res = {
+            "status": "success",
+            "job_id": job_id,
+            "duration_seconds": round(dur_s, 2),
+            "phonemes": pred_phonemes,
+            "phoneme_string": " ".join(pred_phonemes),
+            "token_count": len(pred_phonemes),
+        }
+
+        # 5. Optional alignment and accuracy scoring if expected_phonemes provided
+        if expected_phonemes is not None:
+            if isinstance(expected_phonemes, str):
+                exp_list = [p.strip() for p in expected_phonemes.split() if p.strip()]
+            else:
+                exp_list = list(expected_phonemes)
+
+            exp_str = " ".join(exp_list)
+            pred_str = " ".join(pred_phonemes)
+            per = float(jiwer.wer(exp_str, pred_str)) if exp_str else 0.0
+            cer = float(jiwer.cer(exp_str, pred_str)) if exp_str else 0.0
+            exact = (exp_list == pred_phonemes)
+
+            # Alignment via Levenshtein DP
+            m, n = len(exp_list), len(pred_phonemes)
+            dp = [[0] * (n + 1) for _ in range(m + 1)]
+            for i in range(m + 1):
+                dp[i][0] = i
+            for j in range(n + 1):
+                dp[0][j] = j
+            for i in range(1, m + 1):
+                for j in range(1, n + 1):
+                    cost = 0 if exp_list[i - 1] == pred_phonemes[j - 1] else 1
+                    dp[i][j] = min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+
+            alignment = []
+            i, j = m, n
+            while i > 0 or j > 0:
+                if i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] and exp_list[i - 1] == pred_phonemes[j - 1]:
+                    alignment.append({"expected": exp_list[i - 1], "predicted": pred_phonemes[j - 1], "status": "match"})
+                    i -= 1
+                    j -= 1
+                elif i > 0 and j > 0 and dp[i][j] == dp[i - 1][j - 1] + 1:
+                    alignment.append({"expected": exp_list[i - 1], "predicted": pred_phonemes[j - 1], "status": "substitution"})
+                    i -= 1
+                    j -= 1
+                elif i > 0 and (j == 0 or dp[i][j] == dp[i - 1][j] + 1):
+                    alignment.append({"expected": exp_list[i - 1], "predicted": None, "status": "deletion"})
+                    i -= 1
+                else:
+                    alignment.append({"expected": None, "predicted": pred_phonemes[j - 1], "status": "insertion"})
+                    j -= 1
+            alignment.reverse()
+
+            res["evaluation"] = {
+                "expected_phonemes": exp_list,
+                "expected_string": exp_str,
+                "per": round(per, 4),
+                "cer": round(cer, 4),
+                "exact_match": exact,
+                "count_match": abs(len(exp_list) - len(pred_phonemes)) <= 1,
+                "alignment": alignment,
+            }
+
+        return res
+    except Exception as e:
+        print(f"[Model Factory] Inference error: {e}")
+        return {"status": "failed", "error": str(e)}
+    finally:
+        for p in [raw_path, wav_16k_path]:
+            if p and os.path.exists(p):
+                try: os.remove(p)
+                except: pass
 
 
 @app.local_entrypoint()

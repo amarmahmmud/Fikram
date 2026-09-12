@@ -119,9 +119,9 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </Link>
             </div>
 
-            {/* Custom Model — Fine-tuning */}
-            <div className={styles.tierCard}>
-              <div className={styles.tierBadgePremium}>Premium</div>
+            {/* Custom Model — Fine-tuning (Coming Soon) */}
+            <div className={styles.tierCard} style={{ opacity: 0.7, position: "relative" }}>
+              <div className={styles.tierBadgePremium} style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>Coming Soon</div>
               <div className={styles.tierIcon}>◈</div>
               <h3 className={styles.tierTitle}>Custom AI Model</h3>
               <p className={styles.tierDesc}>
@@ -132,16 +132,15 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 <li>✓ Sounds authentically like you in every response</li>
                 <li>✓ Best for creators with an established content library</li>
               </ul>
-              <Link 
-                href="/new-job" 
+              <button
                 className={`btn btn-secondary ${styles.tierBtn}`}
-                style={{ opacity: 0.85 }}
-                title="Available once your assistant has handled 50+ conversations or has 100+ pages of content"
+                disabled
+                style={{ opacity: 0.5, cursor: "not-allowed" }}
               >
-                Start Fine-Tuning →
-              </Link>
+                Coming Soon
+              </button>
               <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 12, textAlign: "center" }}>
-                Takes 10-30 min · Uses credits
+                We&apos;re working on this · Stay tuned
               </p>
             </div>
           </div>
