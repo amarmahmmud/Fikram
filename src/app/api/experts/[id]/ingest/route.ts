@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
+import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 
 // Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
@@ -21,6 +22,15 @@ export async function POST(
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const rateLimitKey = user ? `user_${user.id}` : `ip_${getClientIP(req)}`;
+    const { allowed, resetMs } = checkRateLimit(rateLimitKey, EMBEDDING_LIMIT);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Please try again in ${Math.ceil(resetMs / 1000 / 60)} minutes.` },
+        { status: 429 }
+      );
+    }
 
     // Verify expert belongs to user
     const { data: expert } = await supabase

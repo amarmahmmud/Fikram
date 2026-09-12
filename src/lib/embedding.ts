@@ -17,7 +17,7 @@
 //   "list", "each", "every") pull more chunks than narrow factual queries.
 // - match_threshold left configurable per call.
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
@@ -28,8 +28,7 @@ function getEmbeddingModel() {
   const keys = getGeminiApiKeys();
   if (keys.length === 0) throw new Error("No Gemini API keys found for embeddings");
   const key = keys[currentEmbedKeyIndex % keys.length];
-  const genAI = new GoogleGenerativeAI(key);
-  return genAI.getGenerativeModel({ model: EMBEDDING_MODEL });
+  return new GoogleGenAI({ apiKey: key });
 }
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
@@ -172,11 +171,12 @@ export async function embedText(text: string): Promise<number[]> {
     attempts++;
     try {
       const model = getEmbeddingModel();
-      const result = await model.embedContent({
-        content: { role: "user" as const, parts: [{ text }] },
-        outputDimensionality: EMBEDDING_DIMENSIONS,
-      } as any);
-      return result.embedding.values;
+      const result = await model.models.embedContent({
+        model: EMBEDDING_MODEL,
+        contents: text,
+        config: { outputDimensionality: EMBEDDING_DIMENSIONS },
+      });
+      return result.embeddings?.[0]?.values || [];
     } catch (err: any) {
       const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
       
@@ -218,13 +218,12 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
       attempts++;
       try {
         const model = getEmbeddingModel();
-        const result = await model.batchEmbedContents({
-          requests: slice.map((text) => ({
-            content: { role: "user" as const, parts: [{ text }] },
-            outputDimensionality: EMBEDDING_DIMENSIONS,
-          } as any)),
+        const result = await model.models.embedContent({
+          model: EMBEDDING_MODEL,
+          contents: slice,
+          config: { outputDimensionality: EMBEDDING_DIMENSIONS },
         });
-        allEmbeddings.push(...result.embeddings.map((e: any) => e.values));
+        allEmbeddings.push(...(result.embeddings || []).map((e: any) => e.values));
         success = true;
       } catch (err: any) {
         const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");

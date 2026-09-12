@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, getClientIP, INFERENCE_LIMIT } from "@/lib/rate-limiter";
 
 export async function POST(
   req: NextRequest,
@@ -15,6 +16,15 @@ export async function POST(
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    const rateLimitKey = user ? `user_${user.id}` : `ip_${getClientIP(req)}`;
+    const { allowed, resetMs } = checkRateLimit(rateLimitKey, INFERENCE_LIMIT);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: `Too many requests. Please try again in ${Math.ceil(resetMs / 1000 / 60)} minutes.` },
+        { status: 429 }
+      );
+    }
 
     // 1. Verify job exists and is completed
     const { data: job, error: jobErr } = await supabase

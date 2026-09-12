@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { formatExpertDescription, ReasoningMode } from "@/lib/expert-metadata";
+import { z } from "zod";
+
+const createExpertSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100, "Name is too long"),
+  description: z.string().max(1000, "Description is too long").optional(),
+  systemPrompt: z.string().max(5000, "System prompt is too long").optional(),
+  reasoningMode: z.string().optional(),
+  webSearchEnabled: z.boolean().optional(),
+  category: z.string().max(50).optional(),
+  tags: z.array(z.string().max(30)).max(10).optional(),
+});
 
 // GET /api/experts — list user's experts
 export async function GET() {
@@ -27,12 +38,15 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const { name, description, systemPrompt, reasoningMode, webSearchEnabled, category, tags } = body;
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Name is required" }, { status: 400 });
+  let parsedBody;
+  try {
+    const json = await req.json();
+    parsedBody = createExpertSchema.parse(json);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.errors?.[0]?.message || "Invalid input" }, { status: 400 });
   }
+
+  const { name, description, systemPrompt, reasoningMode, webSearchEnabled, category, tags } = parsedBody;
 
   const finalDescription = formatExpertDescription(description?.trim() || "", {
     category,

@@ -111,6 +111,18 @@ export const AUTH_CHAT_LIMIT: RateLimitConfig = {
 
 /** For fine-tuned model inference (more expensive) */
 export const INFERENCE_LIMIT: RateLimitConfig = {
-  maxRequests: 15,
-  windowMs: 60 * 60 * 1000, // 15 requests per hour
+  maxRequests: 30,
+  windowMs: 60 * 60 * 1000, // 30 requests per hour
+};
+
+/** For creating new Modal jobs (very expensive) */
+export const JOB_CREATION_LIMIT: RateLimitConfig = {
+  maxRequests: 5,
+  windowMs: 60 * 60 * 1000, // 5 requests per hour
+};
+
+/** For generating RAG embeddings */
+export const EMBEDDING_LIMIT: RateLimitConfig = {
+  maxRequests: 50,
+  windowMs: 60 * 60 * 1000, // 50 requests per hour
 };

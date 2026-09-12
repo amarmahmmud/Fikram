@@ -1,6 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { parseExpertMetadata, formatExpertDescription, ReasoningMode } from "@/lib/expert-metadata";
+import { z } from "zod";
+
+const updateExpertSchema = z.object({
+  name: z.string().max(100, "Name is too long").optional(),
+  description: z.string().max(1000, "Description is too long").optional(),
+  systemPrompt: z.string().max(5000, "System prompt is too long").optional(),
+  reasoningMode: z.string().optional(),
+  webSearchEnabled: z.boolean().optional(),
+});
 
 // GET /api/experts/[id] — get expert details, total chunks, and knowledge sources summary
 export async function GET(
@@ -80,8 +89,15 @@ export async function PATCH(
 
     if (!expert) return NextResponse.json({ error: "Expert not found" }, { status: 404 });
 
-    const body = await req.json();
-    const { systemPrompt, reasoningMode, webSearchEnabled, description, name } = body;
+    let parsedBody;
+    try {
+      const json = await req.json();
+      parsedBody = updateExpertSchema.parse(json);
+    } catch (error: any) {
+      return NextResponse.json({ error: error.errors?.[0]?.message || "Invalid input" }, { status: 400 });
+    }
+
+    const { systemPrompt, reasoningMode, webSearchEnabled, description, name } = parsedBody;
 
     const currentMeta = parseExpertMetadata(expert.description || "", expert.name);
     const newDescription = formatExpertDescription(

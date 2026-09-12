@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { MODELS } from "@/lib/models";
+import { checkRateLimit, getClientIP, JOB_CREATION_LIMIT } from "@/lib/rate-limiter";
 
 /**
  * POST /api/jobs — Create and launch a fine-tuning job.
@@ -17,6 +18,15 @@ export async function POST(req: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const rateLimitKey = user ? `user_${user.id}` : `ip_${getClientIP(req)}`;
+  const { allowed, resetMs } = checkRateLimit(rateLimitKey, JOB_CREATION_LIMIT);
+  if (!allowed) {
+    return NextResponse.json(
+      { error: `Too many requests. Please try again in ${Math.ceil(resetMs / 1000 / 60)} minutes.` },
+      { status: 429 }
+    );
+  }
 
   const body = await req.json();
   const { name, baseModel, method, config, datasetUrl, estimatedCredits, datasetSize, systemPrompt } = body;

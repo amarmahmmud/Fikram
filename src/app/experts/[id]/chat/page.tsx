@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import { PublishModal } from "@/components/PublishModal";
 import { KnowledgeModal } from "@/components/KnowledgeModal";
+import { EditAssistantModal } from "@/components/chat/EditAssistantModal";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { apiClient } from "@/lib/apiClient";
 import {
@@ -25,6 +26,7 @@ import {
   Film,
   Mic,
   Square,
+  Settings2,
 } from "lucide-react";
 
 interface Message {
@@ -55,6 +57,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [sending, setSending] = useState(false);
   const [publishModalOpen, setPublishModalOpen] = useState(false);
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [totalChunks, setTotalChunks] = useState(0);
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
@@ -608,6 +611,17 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className={styles.headerActions}>
+            {isOwner && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setEditModalOpen(true)}
+                style={{ gap: 6 }}
+                title="Edit assistant rules and system prompt"
+              >
+                <Settings2 size={16} />
+                Edit Settings
+              </button>
+            )}
             <button
               className="btn btn-secondary btn-sm"
               onClick={() => setSourcesModalOpen(true)}
@@ -869,6 +883,17 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             onSourcesUpdated={loadExpertDetails}
           />
         </>
+      )}
+      {/* Settings Modal */}
+      {editModalOpen && expert && (
+        <EditAssistantModal
+          expertId={expert.id}
+          initialPrompt={expert.system_prompt || ""}
+          onClose={() => setEditModalOpen(false)}
+          onUpdate={(newPrompt) => {
+            setExpert((prev: any) => prev ? { ...prev, system_prompt: newPrompt } : prev);
+          }}
+        />
       )}
     </div>
   );

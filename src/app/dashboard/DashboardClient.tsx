@@ -18,7 +18,7 @@ const STATUS_BADGE: Record<string, { cls: string; label: string }> = {
   cancelled: { cls: "badge-default", label: "Cancelled" },
 };
 
-export default function DashboardClient({ profile, jobs: initialJobs }: { profile: Profile | null; jobs: Job[] }) {
+export default function DashboardClient({ profile, jobs: initialJobs, currentPage = 1 }: { profile: Profile | null; jobs: Job[]; currentPage?: number }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
@@ -203,6 +203,15 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                   </Link>
                 );
               })}
+            </div>
+          )}
+
+          {/* Pagination Control */}
+          {jobs.length === 50 && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
+              <Link href={`/dashboard?page=${currentPage + 1}`} className="btn btn-secondary">
+                Load Next Page
+              </Link>
             </div>
           )}
         </div>

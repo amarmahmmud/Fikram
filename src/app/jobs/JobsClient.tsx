@@ -220,7 +220,7 @@ function ConfirmModal({
 }
 
 /* ─── Main Component ─── */
-export default function JobsClient({ jobs: initialJobs, experts: initialExperts }: { jobs: Job[]; experts: Expert[] }) {
+export default function JobsClient({ jobs: initialJobs, experts: initialExperts, currentPage = 1 }: { jobs: Job[]; experts: Expert[]; currentPage?: number }) {
   const router = useRouter();
   const supabase = createClient();
   const [jobs, setJobs] = useState<Job[]>(initialJobs);
@@ -565,6 +565,15 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
           )
         )}
       </div>
+
+      {/* Pagination Control */}
+      {((activeTab === "jobs" && jobs.length === 50) || (activeTab === "experts" && experts.length === 50)) && (
+        <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
+          <Link href={`/jobs?page=${currentPage + 1}`} className="btn btn-secondary">
+            Load Next Page
+          </Link>
+        </div>
+      )}
 
       {/* ── Confirmation Modal ── */}
       {deleteTarget && (

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
 import { apiClient } from "@/lib/apiClient";
+import { toast } from "sonner";
 
 type Step = 1 | 2 | 3;
 
@@ -71,18 +72,19 @@ export default function NewExpertPage() {
         setExpertId(data.expert.id);
         setStep(2);
       } else {
-        alert(data.error || "Failed to create expert");
+        toast.error(data.error || "Failed to create expert");
       }
-    } catch {
-      alert("Network error — please try again");
+    } catch (error) {
+      toast.error("Network error — please try again");
+    } finally {
+      setCreating(false);
     }
-    setCreating(false);
   }
 
   // AI Prompt Suggestion Helper
   async function handleGeneratePrompt() {
     if (!name.trim()) {
-      alert("Please enter an Expert Name first.");
+      toast.error("Please enter an Expert Name first.");
       return;
     }
     setGeneratingPrompt(true);
@@ -96,12 +98,13 @@ export default function NewExpertPage() {
         setSystemPrompt(res.systemPrompt);
         setShowAiHelper(false);
       } else {
-        alert(res.error || "Could not generate prompt");
+        toast.error(res.error || "Could not generate prompt");
       }
-    } catch {
-      alert("Failed to generate prompt — please try again");
+    } catch (error) {
+      toast.error("Failed to generate prompt — please try again");
+    } finally {
+      setGeneratingPrompt(false);
     }
-    setGeneratingPrompt(false);
   }
 
   // Step 2: Upload & ingest files
@@ -159,12 +162,13 @@ export default function NewExpertPage() {
         setUrlInput("");
         setShowUrlInput(false);
       } else {
-        alert(res.error || "Failed to fetch content from URL");
+        toast.error(res.error || "Failed to fetch content from URL");
       }
-    } catch {
-      alert("Network error fetching URL");
+    } catch (error) {
+      toast.error("Network error fetching URL");
+    } finally {
+      setScrapingUrl(false);
     }
-    setScrapingUrl(false);
   }
 
   function removeFile(index: number) {
