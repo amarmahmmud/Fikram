@@ -21,13 +21,19 @@ const supabase = createClient(
 
 const EVENT_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
 
-async function isProcessed(eventId: string): Promise<boolean> {
-  const exists = await redis.exists(`polar:event:${eventId}`);
-  return exists === 1;
-}
-
-async function markProcessed(eventId: string): Promise<void> {
-  await redis.set(`polar:event:${eventId}`, "1", { ex: EVENT_TTL });
+/**
+ * Atomically claim an event for processing using SET NX (set-if-not-exists).
+ * Returns true if we successfully claimed it (we should process it).
+ * Returns false if another handler already claimed it (skip processing).
+ *
+ * This eliminates the race window that existed with separate
+ * isProcessed() + markProcessed() calls — SET NX is atomic in Redis.
+ */
+async function claimEvent(eventId: string): Promise<boolean> {
+  // SET key value NX EX ttl — only sets if key does NOT exist
+  const result = await redis.set(`polar:event:${eventId}`, "1", { nx: true, ex: EVENT_TTL });
+  // Returns "OK" if set succeeded (we claimed it), null if key already existed
+  return result === "OK";
 }
 
 // ── Atomic credit grant via Supabase RPC ─────────────────────────────────────
@@ -82,15 +88,14 @@ export const POST = Webhooks({
     const order = payload.data;
     const eventId = order.id;
 
-    if (await isProcessed(eventId)) {
-      console.log(`[webhook] Skipping already-processed order.paid: ${eventId}`);
+    if (!(await claimEvent(eventId))) {
+      console.log(`[webhook] Skipping already-claimed order.paid: ${eventId}`);
       return;
     }
 
     const userId = getUserId(order.metadata as Record<string, unknown> | null);
     if (!userId) {
       console.error("[webhook] order.paid missing supabase_user_id in metadata");
-      await markProcessed(eventId);
       return;
     }
 
@@ -99,7 +104,6 @@ export const POST = Webhooks({
 
     if (!productId) {
       console.error("[webhook] order.paid missing productId");
-      await markProcessed(eventId);
       return;
     }
 
@@ -134,7 +138,6 @@ export const POST = Webhooks({
       }
     }
 
-    await markProcessed(eventId);
   },
 
   // ── Subscription active — update plan field ──
@@ -142,20 +145,16 @@ export const POST = Webhooks({
     const sub = payload.data;
     const eventId = sub.id;
 
-    if (await isProcessed(eventId)) return;
+    if (!(await claimEvent(eventId))) return;
 
     const userId = getUserId(sub.metadata as Record<string, unknown> | null);
-    if (!userId) {
-      await markProcessed(eventId);
-      return;
-    }
+    if (!userId) return;
 
     const planName = PRODUCT_PLAN_MAP[sub.productId];
     if (planName) {
       await updateUserPlan(userId, planName);
     }
 
-    await markProcessed(eventId);
   },
 
   // ── Subscription canceled — note it, keep existing credits ──
@@ -163,12 +162,11 @@ export const POST = Webhooks({
     const sub = payload.data;
     const eventId = `canceled:${sub.id}`;
 
-    if (await isProcessed(eventId)) return;
+    if (!(await claimEvent(eventId))) return;
 
     const userId = getUserId(sub.metadata as Record<string, unknown> | null);
     console.log(`[webhook] Subscription canceled for user ${userId ?? "unknown"}. Credits preserved.`);
 
-    await markProcessed(eventId);
   },
 
   // ── Subscription revoked — downgrade to free ──
@@ -176,7 +174,7 @@ export const POST = Webhooks({
     const sub = payload.data;
     const eventId = `revoked:${sub.id}`;
 
-    if (await isProcessed(eventId)) return;
+    if (!(await claimEvent(eventId))) return;
 
     const userId = getUserId(sub.metadata as Record<string, unknown> | null);
     if (userId) {
@@ -184,6 +182,5 @@ export const POST = Webhooks({
       console.log(`[webhook] Subscription revoked for user ${userId}. Plan set to free.`);
     }
 
-    await markProcessed(eventId);
   },
 });

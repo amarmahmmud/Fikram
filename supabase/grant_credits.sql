@@ -7,6 +7,17 @@
 -- This prevents read-then-write race conditions when two webhook events
 -- for the same user land close together.
 
+-- ── Step 1: Add UNIQUE constraint on reference_id ────────────────────────────
+-- This is the database-level second layer of defense beyond the Redis
+-- idempotency check. If two identical webhook deliveries somehow both
+-- get past the Redis SET NX (e.g. Redis is down), the UNIQUE constraint
+-- will cause the second INSERT to fail, preventing double-crediting.
+-- Only non-null reference_ids are constrained (NULLs are always unique in Postgres).
+ALTER TABLE credit_transactions
+  ADD CONSTRAINT credit_transactions_reference_id_unique
+  UNIQUE (reference_id);
+
+-- ── Step 2: The RPC function ─────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION grant_credits(
   p_user_id UUID,
   p_amount INT,
@@ -28,7 +39,10 @@ BEGIN
     RAISE EXCEPTION 'User % not found', p_user_id;
   END IF;
 
-  -- Insert transaction record with the new balance
+  -- Insert transaction record with the new balance.
+  -- If reference_id is non-null and a row with the same reference_id
+  -- already exists, this INSERT will fail with a unique violation,
+  -- and the entire transaction (including the UPDATE above) will roll back.
   INSERT INTO credit_transactions (user_id, type, label, amount, balance_after, reference_id)
     VALUES (p_user_id, p_type, p_label, p_amount, new_balance, p_reference_id);
 END;
