@@ -9,15 +9,14 @@ import type { Database } from "@/lib/supabase/types";
 type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
 // ── Product catalog (displayed in the Buy Credits modal) ──
-// productId values must be filled in once Polar products are created.
 const PRODUCTS = {
   subscriptions: [
-    { name: "Pro Plan", desc: "2,000 credits/month", priceLabel: "$19/mo", productId: "" },
-    { name: "Business Plan", desc: "10,000 credits/month", priceLabel: "$79/mo", productId: "" },
+    { name: "Pro Plan", desc: "2,000 credits/month", priceLabel: "$19/mo", productId: "8f72db21-1114-4a9f-8157-47cb9b2e5000" },
+    { name: "Business Plan", desc: "10,000 credits/month", priceLabel: "$79/mo", productId: "bc6d568a-1f56-42ca-85b6-336b74d5fdae" },
   ],
   topups: [
-    { name: "Starter Pack", desc: "500 credits", priceLabel: "$10", productId: "" },
-    { name: "Power Pack", desc: "2,500 credits", priceLabel: "$40", productId: "" },
+    { name: "Starter Pack", desc: "500 credits", priceLabel: "$10", productId: "50545e08-3bca-4798-a059-e1596bb5204a" },
+    { name: "Power Pack", desc: "2,500 credits", priceLabel: "$40", productId: "bbae00ef-894b-40c1-9eb9-b34369729371" },
   ],
 };
 

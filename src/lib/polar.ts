@@ -25,13 +25,13 @@ export const PLAN_CREDITS: Record<string, number> = {
 // The webhook handler uses this to determine which plan a subscription maps to.
 // Keys are Polar product IDs (UUIDs), values are plan names from the profiles table.
 export const PRODUCT_PLAN_MAP: Record<string, string> = {
-  // "polar_product_id_for_pro": "pro",
-  // "polar_product_id_for_business": "enterprise",
+  "8f72db21-1114-4a9f-8157-47cb9b2e5000": "pro",
+  "bc6d568a-1f56-42ca-85b6-336b74d5fdae": "enterprise",
 };
 
 // ── Map Polar product IDs → one-off credit amounts ──
 // For top-up packs (non-subscription, one-time purchases).
 export const TOPUP_CREDITS: Record<string, number> = {
-  // "polar_product_id_for_starter_pack": 500,
-  // "polar_product_id_for_power_pack": 2500,
+  "50545e08-3bca-4798-a059-e1596bb5204a": 500,   // Starter Pack
+  "bbae00ef-894b-40c1-9eb9-b34369729371": 2500,  // Power Pack
 };
