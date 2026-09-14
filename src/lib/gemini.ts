@@ -35,7 +35,7 @@ function setupGoogleCredentials(): boolean {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     if (!path.isAbsolute(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = path.resolve(
-        process.cwd(),
+        /* turbopackIgnore: true */ process.cwd(),
         process.env.GOOGLE_APPLICATION_CREDENTIALS
       );
     }

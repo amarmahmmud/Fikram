@@ -16,7 +16,7 @@ export async function POST(
     // Rate limiting: use user ID if logged in, IP if anonymous
     const rateLimitKey = user ? `user:${user.id}` : `ip:${getClientIP(req)}`;
     const rateLimitConfig = user ? AUTH_CHAT_LIMIT : ANON_CHAT_LIMIT;
-    const { allowed, remaining, resetMs } = checkRateLimit(rateLimitKey, rateLimitConfig);
+    const { allowed, remaining, resetMs } = await checkRateLimit(rateLimitKey, rateLimitConfig);
 
     if (!allowed) {
       return NextResponse.json(

@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const rateLimitKey = user ? `user_${user.id}` : `ip_${getClientIP(req)}`;
-  const { allowed, resetMs } = checkRateLimit(rateLimitKey, JOB_CREATION_LIMIT);
+  const { allowed, resetMs } = await checkRateLimit(rateLimitKey, JOB_CREATION_LIMIT);
   if (!allowed) {
     return NextResponse.json(
       { error: `Too many requests. Please try again in ${Math.ceil(resetMs / 1000 / 60)} minutes.` },

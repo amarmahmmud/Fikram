@@ -1,18 +1,50 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 
 type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
-export default function CreditsPage() {
+// ── Product catalog (displayed in the Buy Credits modal) ──
+// productId values must be filled in once Polar products are created.
+const PRODUCTS = {
+  subscriptions: [
+    { name: "Pro Plan", desc: "2,000 credits/month", priceLabel: "$19/mo", productId: "" },
+    { name: "Business Plan", desc: "10,000 credits/month", priceLabel: "$79/mo", productId: "" },
+  ],
+  topups: [
+    { name: "Starter Pack", desc: "500 credits", priceLabel: "$10", productId: "" },
+    { name: "Power Pack", desc: "2,500 credits", priceLabel: "$40", productId: "" },
+  ],
+};
+
+// ── Wrapper with Suspense boundary for useSearchParams ──
+export default function CreditsPageWrapper() {
+  return (
+    <Suspense fallback={
+      <div className="page-content" style={{ textAlign: "center", padding: "48px 0", color: "var(--text-muted)" }}>
+        Loading credits…
+      </div>
+    }>
+      <CreditsPageContent />
+    </Suspense>
+  );
+}
+
+function CreditsPageContent() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [balance, setBalance] = useState<number>(0);
   const [held, setHeld] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  const isCheckoutSuccess = searchParams.get("checkout") === "success";
 
   useEffect(() => {
     async function loadData() {
@@ -51,9 +83,8 @@ export default function CreditsPage() {
     loadData();
   }, [supabase]);
 
-  const total = 100; // Free signup tier quota
+  const total = Math.max(100, balance + held); // Dynamic total based on actual balance
   const available = Math.max(0, balance - held);
-  const used = Math.max(0, total - balance);
   const pct = Math.min(100, Math.max(0, Math.round((available / total) * 100)));
 
   /** Map transaction type to a human-readable badge */
@@ -61,7 +92,8 @@ export default function CreditsPage() {
     switch (type) {
       case "signup_bonus": return { label: "SIGNUP BONUS", cls: "badge-success" };
       case "purchase": return { label: "PURCHASE", cls: "badge-success" };
-      case "job_consumed": return { label: "JOB CHARGE", cls: "badge-default" };
+      case "subscription_grant": return { label: "SUBSCRIPTION", cls: "badge-success" };
+      case "job_consumed": return { label: "USAGE", cls: "badge-default" };
       case "job_hold": return { label: "HOLD", cls: "badge-indigo" };
       case "job_refund": return { label: "REFUND", cls: "badge-success" };
       case "refund": return { label: "REFUND", cls: "badge-success" };
@@ -69,16 +101,62 @@ export default function CreditsPage() {
     }
   }
 
+  async function handleCheckout(productId: string) {
+    if (!productId) {
+      alert("This product is not yet configured. Please check back soon.");
+      return;
+    }
+    setCheckoutLoading(productId);
+    try {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Failed to create checkout session");
+      }
+    } catch {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }
+
   return (
     <>
       <div className="topbar">
         <span className="topbar-title">Credits &amp; Billing</span>
-        <button className="btn btn-primary btn-sm" disabled>
-          Buy More Credits <span className="badge badge-default" style={{ fontSize: "0.625rem", marginLeft: 4 }}>Soon</span>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => setShowBuyModal(true)}
+        >
+          Buy More Credits
         </button>
       </div>
 
       <div className="page-content">
+        {/* Checkout success banner */}
+        {isCheckoutSuccess && (
+          <div
+            style={{
+              background: "rgba(16, 185, 129, 0.1)",
+              border: "1px solid rgba(16, 185, 129, 0.3)",
+              borderRadius: "var(--radius-md)",
+              padding: "12px 16px",
+              color: "var(--success)",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              marginBottom: 20,
+            }}
+          >
+            ✓ Payment received — your credits will appear in a moment once the payment is confirmed.
+          </div>
+        )}
+
         {/* Balance card */}
         <div className={styles.balanceCard}>
           <div className={styles.balanceGlow} />
@@ -115,46 +193,35 @@ export default function CreditsPage() {
 
           <div className={styles.creditStats}>
             <div className={styles.creditStat}>
-              <span className={styles.creditStatValue}>{total}</span>
-              <span className={styles.creditStatLabel}>Initial Free Credits</span>
-            </div>
-            <div className={styles.creditStat}>
-              <span className={styles.creditStatValue} style={{ color: "var(--warning)" }}>{used}</span>
-              <span className={styles.creditStatLabel}>Consumed</span>
+              <span className={styles.creditStatValue}>{balance}</span>
+              <span className={styles.creditStatLabel}>Total Balance</span>
             </div>
             {held > 0 && (
               <div className={styles.creditStat}>
                 <span className={styles.creditStatValue} style={{ color: "var(--accent-primary)" }}>{held}</span>
-                <span className={styles.creditStatLabel}>Held (active jobs)</span>
+                <span className={styles.creditStatLabel}>Held (in progress)</span>
               </div>
             )}
             <div className={styles.creditStat}>
               <span className={styles.creditStatValue} style={{ color: "var(--success)" }}>{available}</span>
               <span className={styles.creditStatLabel}>Available</span>
             </div>
-            <div className={styles.creditStat}>
-              <span className={styles.creditStatValue}>~{Math.floor(available / 28)}</span>
-              <span className={styles.creditStatLabel}>Est. Jobs Left</span>
-            </div>
           </div>
         </div>
 
-        {/* Credit estimator */}
+        {/* Credit usage reference — reflects currently live features */}
         <div className={styles.estimatorCard}>
-          <h3 className={styles.sectionTitle}>Fine-Tuning Cost Reference</h3>
+          <h3 className={styles.sectionTitle}>Credit Usage Reference</h3>
           <div className={styles.estimatorGrid}>
             {[
-              { model: "Llama 3.1 8B Instruct", method: "LoRA", cost: "~28 credits", time: "5–15 min", gpu: "L4" },
-              { model: "Mistral 7B Instruct", method: "LoRA", cost: "~25 credits", time: "5–15 min", gpu: "L4" },
-              { model: "Phi-3 Mini 3.8B", method: "LoRA", cost: "~15 credits", time: "4–8 min", gpu: "L4" },
-              { model: "Gemma 2 9B Instruct", method: "QLoRA", cost: "~35 credits", time: "8–20 min", gpu: "A100-40GB" },
-              { model: "Gemma 2 27B Instruct", method: "QLoRA", cost: "~80 credits", time: "15–35 min", gpu: "A100-80GB" },
+              { feature: "AI Expert Chat", desc: "Ask your expert questions", cost: "1 credit/message" },
+              { feature: "Document Ingestion", desc: "Upload & process documents for RAG", cost: "2 credits/document" },
+              { feature: "Playground Inference", desc: "Test models in the playground", cost: "1 credit/request" },
             ].map((e) => (
-              <div key={e.model} className={styles.estimatorRow}>
-                <div className={styles.estimatorModel}>{e.model}</div>
-                <span className="badge badge-indigo">{e.method}</span>
+              <div key={e.feature} className={styles.estimatorRow}>
+                <div className={styles.estimatorModel}>{e.feature}</div>
+                <div className={styles.estimatorTime} style={{ flex: 1 }}>{e.desc}</div>
                 <div className={styles.estimatorCost}>{e.cost}</div>
-                <div className={styles.estimatorTime}>{e.time} ({e.gpu})</div>
               </div>
             ))}
           </div>
@@ -211,6 +278,87 @@ export default function CreditsPage() {
           )}
         </div>
       </div>
+
+      {/* ── Buy Credits Modal ── */}
+      {showBuyModal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+          onClick={() => setShowBuyModal(false)}
+        >
+          <div
+            className="card"
+            style={{ maxWidth: 480, width: "90%", padding: 24 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: "1.125rem", fontWeight: 700, marginBottom: 4, color: "var(--text-primary)" }}>
+              Buy Credits
+            </h3>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: 20 }}>
+              Choose a subscription plan or a one-time top-up pack.
+            </p>
+
+            {/* Subscriptions */}
+            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              Monthly Plans
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
+              {PRODUCTS.subscriptions.map((p) => (
+                <button
+                  key={p.name}
+                  className="btn btn-secondary"
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}
+                  disabled={!p.productId || checkoutLoading === p.productId}
+                  onClick={() => handleCheckout(p.productId)}
+                >
+                  <span>
+                    <strong>{p.name}</strong>
+                    <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.8125rem" }}>{p.desc}</span>
+                  </span>
+                  <span style={{ fontWeight: 700, color: "var(--success)" }}>
+                    {checkoutLoading === p.productId ? "..." : p.priceLabel}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Top-ups */}
+            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+              One-Time Top-Ups
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              {PRODUCTS.topups.map((p) => (
+                <button
+                  key={p.name}
+                  className="btn btn-secondary"
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}
+                  disabled={!p.productId || checkoutLoading === p.productId}
+                  onClick={() => handleCheckout(p.productId)}
+                >
+                  <span>
+                    <strong>{p.name}</strong>
+                    <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.8125rem" }}>{p.desc}</span>
+                  </span>
+                  <span style={{ fontWeight: 700, color: "var(--success)" }}>
+                    {checkoutLoading === p.productId ? "..." : p.priceLabel}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ width: "100%" }}
+              onClick={() => setShowBuyModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }

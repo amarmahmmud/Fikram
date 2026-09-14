@@ -1,9 +1,11 @@
 // ─────────────────────────────────────────────
-// In-Memory Rate Limiter for API Routes
+// Redis-Backed Rate Limiter for API Routes
 // ─────────────────────────────────────────────
-// Simple sliding-window rate limiter using an in-memory Map.
-// Suitable for single-instance deployments. For multi-instance,
-// replace with Redis-based limiter.
+// Fixed-window rate limiter using Upstash Redis.
+// Provides a global limit across all Vercel instances.
+// Previously in-memory — migrated to Redis for multi-instance support.
+
+import { redis } from "./redis";
 
 export interface RateLimitConfig {
   /** Maximum number of requests allowed in the window */
@@ -12,70 +14,49 @@ export interface RateLimitConfig {
   windowMs: number;
 }
 
-interface RateLimitEntry {
-  timestamps: number[];
-}
-
-const store = new Map<string, RateLimitEntry>();
-
-// Clean up expired entries every 5 minutes to prevent memory leaks
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-let lastCleanup = Date.now();
-
-function cleanup(windowMs: number) {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-  lastCleanup = now;
-
-  for (const [key, entry] of store.entries()) {
-    entry.timestamps = entry.timestamps.filter((ts) => now - ts < windowMs);
-    if (entry.timestamps.length === 0) {
-      store.delete(key);
-    }
-  }
-}
-
 /**
  * Check if a request should be rate-limited.
+ * Uses a fixed-window counter in Redis (INCR + EXPIRE).
  *
  * @param key   - Unique identifier (e.g., IP address or user ID)
  * @param config - Rate limit configuration
  * @returns Object with `allowed` boolean and `remaining` count
  */
-export function checkRateLimit(
+export async function checkRateLimit(
   key: string,
   config: RateLimitConfig,
-): { allowed: boolean; remaining: number; resetMs: number } {
-  const now = Date.now();
-  cleanup(config.windowMs);
+): Promise<{ allowed: boolean; remaining: number; resetMs: number }> {
+  const windowSec = Math.ceil(config.windowMs / 1000);
+  const bucket = Math.floor(Date.now() / config.windowMs);
+  const redisKey = `rl:${key}:${bucket}`;
 
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { timestamps: [] };
-    store.set(key, entry);
+  // Atomically increment and get TTL in a pipeline
+  const pipeline = redis.pipeline();
+  pipeline.incr(redisKey);
+  pipeline.ttl(redisKey);
+  const results = await pipeline.exec<[number, number]>();
+
+  const count = results[0];
+  const ttl = results[1];
+
+  // Set expiry on first request in this window
+  if (ttl === -1) {
+    await redis.expire(redisKey, windowSec);
   }
 
-  // Remove timestamps outside the current window
-  entry.timestamps = entry.timestamps.filter(
-    (ts) => now - ts < config.windowMs,
-  );
-
-  if (entry.timestamps.length >= config.maxRequests) {
-    // Calculate when the oldest request in the window will expire
-    const oldestInWindow = entry.timestamps[0];
-    const resetMs = config.windowMs - (now - oldestInWindow);
+  if (count > config.maxRequests) {
+    const resetMs = ttl > 0 ? ttl * 1000 : config.windowMs;
     return {
       allowed: false,
       remaining: 0,
-      resetMs: Math.max(resetMs, 0),
+      resetMs,
     };
   }
 
-  entry.timestamps.push(now);
   return {
     allowed: true,
-    remaining: config.maxRequests - entry.timestamps.length,
-    resetMs: config.windowMs,
+    remaining: Math.max(0, config.maxRequests - count),
+    resetMs: ttl > 0 ? ttl * 1000 : config.windowMs,
   };
 }
 

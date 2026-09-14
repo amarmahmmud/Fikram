@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     // Rate limiting: stricter for inference (GPU-expensive)
     const rateLimitKey = user ? `user:inference:${user.id}` : `ip:inference:${getClientIP(req)}`;
     const rateLimitConfig = user ? AUTH_CHAT_LIMIT : INFERENCE_LIMIT;
-    const { allowed, remaining, resetMs } = checkRateLimit(rateLimitKey, rateLimitConfig);
+    const { allowed, remaining, resetMs } = await checkRateLimit(rateLimitKey, rateLimitConfig);
 
     if (!allowed) {
       return NextResponse.json(

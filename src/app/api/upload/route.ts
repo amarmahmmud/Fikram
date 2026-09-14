@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     // Rate limiting: prevent abuse of the upload endpoint
     const rateLimitKey = user ? `upload_user:${user.id}` : `upload_ip:${getClientIP(req)}`;
     const rateLimitConfig = user ? AUTH_CHAT_LIMIT : ANON_CHAT_LIMIT; // Re-use chat limits for simplicity
-    const { allowed, resetMs } = checkRateLimit(rateLimitKey, rateLimitConfig);
+    const { allowed, resetMs } = await checkRateLimit(rateLimitKey, rateLimitConfig);
 
     if (!allowed) {
       return NextResponse.json(

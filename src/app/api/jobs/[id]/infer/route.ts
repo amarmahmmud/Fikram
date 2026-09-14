@@ -18,7 +18,7 @@ export async function POST(
     } = await supabase.auth.getUser();
 
     const rateLimitKey = user ? `user_${user.id}` : `ip_${getClientIP(req)}`;
-    const { allowed, resetMs } = checkRateLimit(rateLimitKey, INFERENCE_LIMIT);
+    const { allowed, resetMs } = await checkRateLimit(rateLimitKey, INFERENCE_LIMIT);
     if (!allowed) {
       return NextResponse.json(
         { error: `Too many requests. Please try again in ${Math.ceil(resetMs / 1000 / 60)} minutes.` },
