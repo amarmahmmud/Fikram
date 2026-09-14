@@ -11,6 +11,8 @@ import type { Database } from "@/lib/supabase/types";
 type Job = Database["public"]["Tables"]["jobs"]["Row"];
 type Expert = Database["public"]["Tables"]["experts"]["Row"];
 
+const PAGE_SIZE = 50;
+
 const STATUS_MAP: Record<string, { cls: string; label: string }> = {
   completed: { cls: "badge-success", label: "Completed" },
   running:   { cls: "badge-warning", label: "Running" },
@@ -97,6 +99,25 @@ function ChatIcon({ size = 15 }: { size?: number }) {
   );
 }
 
+function ChevronDownIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9" />
+    </svg>
+  );
+}
+
+function CalendarIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
 /* ─── Toast Component ─── */
 function Toast({ message, type, onDismiss }: { message: string; type: "success" | "error" | "warning"; onDismiss: () => void }) {
   const [exiting, setExiting] = useState(false);
@@ -139,6 +160,29 @@ function Toast({ message, type, onDismiss }: { message: string; type: "success" 
       <button className={styles.toastDismiss} onClick={dismiss} aria-label="Dismiss notification">
         <XIcon />
       </button>
+    </div>
+  );
+}
+
+/* ─── Skeleton Card ─── */
+function SkeletonCard() {
+  return (
+    <div className={styles.skeletonCard}>
+      <div className={styles.skeletonHeader}>
+        <div className={styles.skeletonAvatar} />
+        <div className={styles.skeletonLines}>
+          <div className={styles.skeletonLine} />
+          <div className={styles.skeletonLine} />
+        </div>
+      </div>
+      <div className={styles.skeletonBody} />
+      <div className={styles.skeletonFooter}>
+        <div className={styles.skeletonBadge} />
+        <div className={styles.skeletonActions}>
+          <div className={styles.skeletonActionBtn} />
+          <div className={styles.skeletonActionBtn} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -219,6 +263,31 @@ function ConfirmModal({
   );
 }
 
+/* ─── Helper: clean description from bracket config tags ─── */
+function cleanDescription(desc: string | null): string {
+  if (!desc) return "Grounded smart assistant with verified knowledge base.";
+  return desc
+    .replace(/\[(Category|Tags|Mode|WebSearch):[^\]]+\]/gi, "")
+    .trim() || "Grounded smart assistant with verified knowledge base.";
+}
+
+/* ─── Helper: relative date ─── */
+function formatRelativeDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)}w ago`;
+    return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  } catch {
+    return "";
+  }
+}
+
 /* ─── Main Component ─── */
 export default function JobsClient({ jobs: initialJobs, experts: initialExperts }: { jobs: Job[]; experts: Expert[] }) {
   const router = useRouter();
@@ -229,21 +298,26 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
   const [activeTab, setActiveTab] = useState<"jobs" | "experts">("experts");
 
   const [jobsPage, setJobsPage] = useState(1);
-  const [hasMoreJobs, setHasMoreJobs] = useState(initialJobs.length === 50);
+  const [hasMoreJobs, setHasMoreJobs] = useState(initialJobs.length === PAGE_SIZE);
   
   const [expertsPage, setExpertsPage] = useState(1);
-  const [hasMoreExperts, setHasMoreExperts] = useState(initialExperts.length === 50);
+  const [hasMoreExperts, setHasMoreExperts] = useState(initialExperts.length === PAGE_SIZE);
 
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Track which items were loaded after initial render (for entrance animations)
+  const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
+  // Track when all items have been loaded (show the "all loaded" indicator briefly)
+  const [showAllLoaded, setShowAllLoaded] = useState<"jobs" | "experts" | null>(null);
 
   useEffect(() => {
     setJobs(initialJobs);
     setJobsPage(1);
-    setHasMoreJobs(initialJobs.length === 50);
+    setHasMoreJobs(initialJobs.length === PAGE_SIZE);
     
     setExperts(initialExperts);
     setExpertsPage(1);
-    setHasMoreExperts(initialExperts.length === 50);
+    setHasMoreExperts(initialExperts.length === PAGE_SIZE);
   }, [initialJobs, initialExperts]);
 
   // Delete state
@@ -280,8 +354,8 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
     setLoadingMore(true);
     try {
       const page = isJobs ? jobsPage : expertsPage;
-      const from = page * 50;
-      const to = from + 49;
+      const from = page * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
       
       const { data, error } = await supabase
         .from(isJobs ? "jobs" : "experts")
@@ -292,6 +366,8 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
       if (error) throw error;
       
       if (data && data.length > 0) {
+        const loadedIds = new Set(data.map((item: any) => item.id));
+
         if (isJobs) {
           setJobs(prev => {
             const existingIds = new Set(prev.map(j => j.id));
@@ -299,7 +375,11 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             return [...prev, ...(newItems as Job[])];
           });
           setJobsPage(p => p + 1);
-          if (data.length < 50) setHasMoreJobs(false);
+          if (data.length < PAGE_SIZE) {
+            setHasMoreJobs(false);
+            setShowAllLoaded("jobs");
+            setTimeout(() => setShowAllLoaded(null), 4000);
+          }
         } else {
           setExperts(prev => {
             const existingIds = new Set(prev.map(e => e.id));
@@ -307,14 +387,28 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             return [...prev, ...(newItems as Expert[])];
           });
           setExpertsPage(p => p + 1);
-          if (data.length < 50) setHasMoreExperts(false);
+          if (data.length < PAGE_SIZE) {
+            setHasMoreExperts(false);
+            setShowAllLoaded("experts");
+            setTimeout(() => setShowAllLoaded(null), 4000);
+          }
         }
+
+        // Mark new items for entrance animation
+        setNewItemIds(prev => new Set([...prev, ...loadedIds]));
       } else {
-        if (isJobs) setHasMoreJobs(false);
-        else setHasMoreExperts(false);
+        if (isJobs) {
+          setHasMoreJobs(false);
+          setShowAllLoaded("jobs");
+        } else {
+          setHasMoreExperts(false);
+          setShowAllLoaded("experts");
+        }
+        setTimeout(() => setShowAllLoaded(null), 4000);
       }
     } catch (err) {
       console.error(`Failed to fetch more ${isJobs ? 'jobs' : 'experts'}:`, err);
+      setToast({ message: `Failed to load more ${isJobs ? 'jobs' : 'assistants'}. Please try again.`, type: "error" });
     } finally {
       setLoadingMore(false);
     }
@@ -377,6 +471,11 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
   };
 
   const isJobActive = (status: string) => status === "running" || status === "pending";
+
+  // Determine if we should show "all loaded" for the current tab
+  const currentHasMore = activeTab === "jobs" ? hasMoreJobs : hasMoreExperts;
+  const currentShowAllLoaded = showAllLoaded === activeTab;
+  const currentItems = activeTab === "jobs" ? jobs : experts;
 
   return (
     <>
@@ -545,7 +644,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             </div>
           )
         ) : (
-          /* ── Experts Tab ── */
+          /* ── Experts Tab — Card Grid Layout ── */
           experts.length === 0 ? (
             <div className={styles.emptyState}>
               <div className={styles.emptyIcon}>
@@ -558,91 +657,116 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
               <Link href="/experts/new" className="btn btn-primary">Create First Assistant</Link>
             </div>
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Assistant Name</th>
-                    <th>Description</th>
-                    <th>Type</th>
-                    <th>Date Created</th>
-                    <th style={{ textAlign: "right", width: 100 }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {experts.map((exp) => (
-                    <tr
-                      key={exp.id}
-                      className={removingId === exp.id ? styles.rowRemoving : ""}
-                    >
-                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>{exp.name}</td>
-                      <td>
-                        <span style={{
-                          fontSize: "0.8125rem",
-                          color: "var(--text-muted)",
-                          display: "inline-block",
-                          maxWidth: 300,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap"
-                        }}>
-                          {exp.description || "Grounded smart assistant with verified knowledge base."}
-                        </span>
-                      </td>
-                      <td><span className="badge badge-indigo">RAG (Grounded)</span></td>
-                      <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                        {new Date(exp.created_at).toLocaleDateString()}
-                      </td>
-                      <td>
-                        <div className={styles.actionCell}>
-                          {/* Chat button */}
-                          <div className={styles.tooltipWrap}>
-                            <Link
-                              href={`/experts/${exp.id}/chat`}
-                              className={`${styles.actionBtn} ${styles.actionBtnView}`}
-                              aria-label={`Chat with: ${exp.name}`}
-                            >
-                              <ChatIcon />
-                            </Link>
-                            <span className={styles.tooltip}>Open chat</span>
-                          </div>
-
-                          <span className={styles.actionDivider} />
-
-                          {/* Delete button */}
-                          <div className={styles.tooltipWrap}>
-                            <button
-                              className={`${styles.actionBtn} ${styles.actionBtnDelete}`}
-                              onClick={() => setDeleteTarget({ type: "expert", id: exp.id, name: exp.name })}
-                              aria-label={`Remove assistant: ${exp.name}`}
-                            >
-                              <TrashIcon />
-                            </button>
-                            <span className={styles.tooltip}>Remove assistant</span>
-                          </div>
+            <>
+              <div className={styles.cardGrid}>
+                {experts.map((exp, index) => (
+                  <div
+                    key={exp.id}
+                    className={`${styles.expertCard} ${newItemIds.has(exp.id) ? styles.cardEnter : ""} ${removingId === exp.id ? styles.cardRemoving : ""}`}
+                    style={newItemIds.has(exp.id) ? { animationDelay: `${(index % PAGE_SIZE) * 60}ms` } : undefined}
+                  >
+                    {/* Card Header */}
+                    <div className={styles.cardHeader}>
+                      <div className={styles.cardAvatar}>
+                        {exp.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className={styles.cardTitleGroup}>
+                        <div className={styles.cardName} title={exp.name}>{exp.name}</div>
+                        <div className={styles.cardDate}>
+                          <CalendarIcon />
+                          {formatRelativeDate(exp.created_at)}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className={styles.cardDescription}>
+                      {cleanDescription(exp.description)}
+                    </div>
+
+                    {/* Footer */}
+                    <div className={styles.cardFooter}>
+                      <div className={styles.cardTypeBadge}>
+                        <span className={styles.cardTypeDot} />
+                        RAG (Grounded)
+                      </div>
+                      <div className={styles.cardActions}>
+                        <Link
+                          href={`/experts/${exp.id}/chat`}
+                          className={`${styles.cardActionBtn} ${styles.chatBtn}`}
+                          aria-label={`Chat with: ${exp.name}`}
+                        >
+                          <ChatIcon size={13} />
+                          Chat
+                        </Link>
+                        <button
+                          className={`${styles.cardActionBtn} ${styles.deleteBtn}`}
+                          onClick={() => setDeleteTarget({ type: "expert", id: exp.id, name: exp.name })}
+                          aria-label={`Remove assistant: ${exp.name}`}
+                        >
+                          <TrashIcon size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Skeleton loading cards while fetching */}
+                {loadingMore && activeTab === "experts" && (
+                  <>
+                    <SkeletonCard />
+                    <SkeletonCard />
+                    <SkeletonCard />
+                  </>
+                )}
+              </div>
+            </>
           )
         )}
-      </div>
 
-      {/* Pagination Control */}
-      {((activeTab === "jobs" && hasMoreJobs) || (activeTab === "experts" && hasMoreExperts)) && (
-        <div style={{ display: "flex", justifyContent: "center", marginTop: "24px" }}>
-          <button 
-            onClick={fetchNextPage} 
-            className="btn btn-secondary"
-            disabled={loadingMore}
-          >
-            {loadingMore ? "Loading..." : "Load Next Page"}
-          </button>
-        </div>
-      )}
+        {/* ── Pagination Bar ── */}
+        {currentItems.length > 0 && (
+          <div className={styles.paginationBar}>
+            {/* Count indicator */}
+            <div className={styles.paginationInfo}>
+              Showing{" "}
+              <span className={styles.paginationInfoBold}>{currentItems.length}</span>
+              {" "}{activeTab === "experts" ? "assistant" : "job"}{currentItems.length !== 1 ? "s" : ""}
+              {!currentHasMore && !currentShowAllLoaded && (
+                <> · All loaded</>
+              )}
+            </div>
+
+            {/* Load More button */}
+            {currentHasMore && (
+              <button
+                onClick={fetchNextPage}
+                className={styles.loadMoreBtn}
+                disabled={loadingMore}
+              >
+                <span className={styles.loadMoreBtnText}>
+                  {loadingMore ? "Loading..." : "Load More"}
+                </span>
+                <span className={styles.loadMoreIcon}>
+                  {loadingMore ? (
+                    <span className={styles.spinner} />
+                  ) : (
+                    <ChevronDownIcon size={16} />
+                  )}
+                </span>
+              </button>
+            )}
+
+            {/* All loaded indicator (shows briefly after last page loads) */}
+            {currentShowAllLoaded && (
+              <div className={styles.allLoadedIndicator}>
+                <CheckCircleIcon size={14} />
+                All {activeTab === "experts" ? "assistants" : "jobs"} loaded
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* ── Confirmation Modal ── */}
       {deleteTarget && (
