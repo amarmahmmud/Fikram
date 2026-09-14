@@ -13,9 +13,16 @@
 -- get past the Redis SET NX (e.g. Redis is down), the UNIQUE constraint
 -- will cause the second INSERT to fail, preventing double-crediting.
 -- Only non-null reference_ids are constrained (NULLs are always unique in Postgres).
-ALTER TABLE credit_transactions
-  ADD CONSTRAINT credit_transactions_reference_id_unique
-  UNIQUE (reference_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'credit_transactions_reference_id_unique'
+  ) THEN
+    ALTER TABLE credit_transactions
+      ADD CONSTRAINT credit_transactions_reference_id_unique
+      UNIQUE (reference_id);
+  END IF;
+END $$;
 
 -- ── Step 2: The RPC function ─────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION grant_credits(
