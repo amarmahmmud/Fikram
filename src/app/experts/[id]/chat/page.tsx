@@ -63,17 +63,6 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Creator Suggestion State
-  const [customSuggestion, setCustomSuggestion] = useState("");
-  const [isUpdatingRules, setIsUpdatingRules] = useState(false);
-
-  const SUGGESTIONS = [
-    "Make responses shorter and more concise",
-    "Use a highly professional tone",
-    "Do not mention you are an AI",
-    "Always cite sources when available",
-    "Act like a tutor (don't give direct answers)"
-  ];
 
   // Sidebar and Conversation state
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -261,31 +250,6 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  const handleApplySuggestion = async (suggestionText: string) => {
-    if (!suggestionText.trim() || !expert) return;
-    setIsUpdatingRules(true);
-    try {
-      const currentPrompt = expert.system_prompt || "";
-      const newPrompt = currentPrompt ? `${currentPrompt}\n- ${suggestionText}` : `- ${suggestionText}`;
-      
-      const res = await apiClient.patch<{ ok: boolean; error?: string }>(
-        `/api/experts/${expertId}`,
-        { systemPrompt: newPrompt }
-      );
-      
-      if (res.ok) {
-        setExpert({ ...expert, system_prompt: newPrompt });
-        setCustomSuggestion("");
-        // Optional: show a small toast, or let the user know it was updated
-      } else {
-        alert(res.error || "Failed to update assistant");
-      }
-    } catch (e) {
-      alert("Network error");
-    } finally {
-      setIsUpdatingRules(false);
-    }
-  };
 
   /** Send message */
   async function handleSend() {
@@ -783,42 +747,6 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             </div>
           ))}
 
-          {/* Suggestions List for Creators */}
-          {isOwner && messages.length === 1 && (
-            <div className={styles.creatorSuggestions}>
-              <h4 className={styles.suggestionsHeader}>Refine your assistant's behavior:</h4>
-              <div className={styles.suggestionChips}>
-                {SUGGESTIONS.map((sug, idx) => (
-                  <button 
-                    key={idx} 
-                    className={styles.suggestionBtn} 
-                    onClick={() => handleApplySuggestion(sug)}
-                    disabled={isUpdatingRules}
-                  >
-                    {sug}
-                  </button>
-                ))}
-              </div>
-              <div className={styles.customSuggestion}>
-                <input 
-                  type="text" 
-                  placeholder="Or type a custom rule..." 
-                  value={customSuggestion}
-                  onChange={(e) => setCustomSuggestion(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleApplySuggestion(customSuggestion);
-                  }}
-                  disabled={isUpdatingRules}
-                />
-                <button 
-                  onClick={() => handleApplySuggestion(customSuggestion)}
-                  disabled={!customSuggestion.trim() || isUpdatingRules}
-                >
-                  Add
-                </button>
-              </div>
-            </div>
-          )}
 
           {sending && (
             <div className={`${styles.messageBubble} ${styles.modelBubble}`}>
