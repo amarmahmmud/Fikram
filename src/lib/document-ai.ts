@@ -4,6 +4,9 @@
 // Uses the Document OCR processor for fast, reliable PDF text extraction.
 // ~2-5 seconds for most PDFs, handles scanned/image PDFs via OCR.
 // Cost: $1.50 per 1,000 pages.
+//
+// Large PDFs (>30 pages) are automatically split into parallel batches
+// since Document AI online processing has a 30-page-per-request limit.
 
 import { GoogleAuth } from "google-auth-library";
 import path from "path";
@@ -12,6 +15,7 @@ import os from "os";
 
 const LOCATION = process.env.DOCUMENT_AI_LOCATION || "us";
 const PROCESSOR_ID = process.env.DOCUMENT_AI_PROCESSOR_ID || "b7d0bb5a0038c456";
+const PAGES_PER_BATCH = 30;
 
 /**
  * Ensures GCP credentials are available for Document AI auth.
@@ -37,8 +41,48 @@ function ensureCredentials() {
 }
 
 /**
+ * Call Document AI for a specific set of pages (or all pages if none specified).
+ */
+async function callDocumentAI(
+  pdfBase64: string,
+  token: string,
+  endpoint: string,
+  pages?: number[]
+): Promise<string> {
+  const body: any = {
+    rawDocument: {
+      content: pdfBase64,
+      mimeType: "application/pdf",
+    },
+  };
+
+  if (pages) {
+    body.processOptions = {
+      individualPageSelector: { pages },
+    };
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Document AI error (${response.status}): ${errorBody}`);
+  }
+
+  const result = await response.json();
+  return result.document?.text || "";
+}
+
+/**
  * Extract text from a PDF buffer using Google Document AI OCR.
- * Returns the full extracted text with structure preserved.
+ * Automatically batches large PDFs (>30 pages) into parallel requests.
  */
 export async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
   ensureCredentials();
@@ -55,28 +99,42 @@ export async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
   });
   const client = await auth.getClient();
   const tokenResponse = await client.getAccessToken();
+  const token = tokenResponse.token!;
+  const pdfBase64 = pdfBuffer.toString("base64");
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${tokenResponse.token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      rawDocument: {
-        content: pdfBuffer.toString("base64"),
-        mimeType: "application/pdf",
-      },
-    }),
-  });
+  // Try processing all pages at once first (fast path for small PDFs)
+  try {
+    return await callDocumentAI(pdfBase64, token, endpoint);
+  } catch (err: any) {
+    // If it's not a page limit error, rethrow
+    if (!err.message?.includes("PAGE_LIMIT_EXCEEDED")) {
+      throw err;
+    }
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Document AI error (${response.status}): ${errorBody}`);
+    // Extract total page count from the error
+    const pageMatch = err.message.match(/"pages":\s*"(\d+)"/);
+    const totalPages = pageMatch ? parseInt(pageMatch[1], 10) : 0;
+    if (!totalPages) throw err;
+
+    console.log(`[Document AI] PDF has ${totalPages} pages, splitting into batches of ${PAGES_PER_BATCH}...`);
+
+    // Build batches of page numbers (1-indexed)
+    const batches: number[][] = [];
+    for (let start = 1; start <= totalPages; start += PAGES_PER_BATCH) {
+      const batch: number[] = [];
+      for (let p = start; p < start + PAGES_PER_BATCH && p <= totalPages; p++) {
+        batch.push(p);
+      }
+      batches.push(batch);
+    }
+
+    // Process all batches in parallel
+    const results = await Promise.all(
+      batches.map((pages) => callDocumentAI(pdfBase64, token, endpoint, pages))
+    );
+
+    return results.join("\n");
   }
-
-  const result = await response.json();
-  return result.document?.text || "";
 }
 
 /**
