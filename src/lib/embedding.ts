@@ -249,16 +249,19 @@ export async function embedText(text: string): Promise<number[]> {
  * Google Gemini batchEmbedContents accepts at most 100 requests per batch and 100 req/min on free tier.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const BATCH_SIZE = 25;
+  const BATCH_SIZE = 10;
+  const DELAY_BETWEEN_BATCHES = 300;
+  const MAX_RETRIES = 4;
   const allEmbeddings: number[][] = [];
+  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
+
+  console.log(`[Embedding] Processing ${texts.length} texts in ${totalBatches} batches of ${BATCH_SIZE}`);
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
     const slice = texts.slice(i, i + BATCH_SIZE);
-    let attempts = 0;
-    let success = false;
 
-    while (!success && attempts < 5) {
-      attempts++;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
         const model = getEmbeddingModel();
         const result = await model.models.embedContent({
@@ -266,36 +269,33 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
           contents: slice,
           config: { outputDimensionality: EMBEDDING_DIMENSIONS },
         });
-        const batchEmbeddings = (result.embeddings || []).map((e: any) => e.values);
-        // Validate this batch returned the correct count
-        if (batchEmbeddings.length !== slice.length) {
-          throw new Error(
-            `Embedding batch returned ${batchEmbeddings.length}/${slice.length} results`
-          );
-        }
-        allEmbeddings.push(...batchEmbeddings);
-        success = true;
-      } catch (err: any) {
-        const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
-        const isPartial = err.message?.includes("Embedding batch returned");
-        
-        if (isQuota || isPartial) {
-          const keys = getGeminiApiKeys();
-          if (keys.length > 1) {
-            currentEmbedKeyIndex++;
-            console.warn(`[Embedding] Quota hit on batch ${Math.floor(i / BATCH_SIZE) + 1}, rotating to key ${currentEmbedKeyIndex % keys.length + 1}/${keys.length}...`);
-            if (attempts < keys.length) continue;
-          }
+
+        const embeddings = (result.embeddings || []).map((e: any) => e.values);
+
+        if (embeddings.length !== slice.length) {
+          throw new Error(`Batch ${batchNum}: got ${embeddings.length}/${slice.length} embeddings`);
         }
 
-        if (isQuota && attempts < 5) {
-          const delayMs = getRetryDelay(err, attempts);
-          console.warn(`[Embedding] Gemini quota hit on batch ${Math.floor(i / BATCH_SIZE) + 1}, retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempts}/5)...`);
-          await delay(delayMs);
+        allEmbeddings.push(...embeddings);
+        break; // success
+      } catch (err: any) {
+        console.warn(`[Embedding] Batch ${batchNum}/${totalBatches} attempt ${attempt}/${MAX_RETRIES}: ${err.message?.substring(0, 150)}`);
+
+        if (attempt < MAX_RETRIES) {
+          const keys = getGeminiApiKeys();
+          if (keys.length > 1) {
+            currentEmbedKeyIndex = (currentEmbedKeyIndex + 1) % keys.length;
+          }
+          await delay(Math.pow(2, attempt - 1) * 1000);
         } else {
-          throw err;
+          throw new Error(`Embedding failed on batch ${batchNum}/${totalBatches}: ${err.message}`);
         }
       }
+    }
+
+    // Delay between batches to avoid rate limits
+    if (i + BATCH_SIZE < texts.length) {
+      await delay(DELAY_BETWEEN_BATCHES);
     }
   }
 
@@ -304,8 +304,8 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
 // ── Section-aware chunking ────────────────────────────────────────────────────
 
-const CHUNK_SIZE = 2000;    // char soft-cap within a section (larger = fewer chunks = faster embedding)
-const CHUNK_OVERLAP = 200;  // overlap between sub-chunks of the same section
+const CHUNK_SIZE = 4000;    // char soft-cap (larger = fewer chunks = fits in 60s Vercel timeout)
+const CHUNK_OVERLAP = 300;  // overlap between sub-chunks
 
 export interface SectionChunk {
   content: string;
