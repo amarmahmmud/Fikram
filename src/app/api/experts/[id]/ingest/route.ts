@@ -4,6 +4,7 @@ import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
+import { getIngestCreditCost, checkCreditBalance, deductCredits } from "@/lib/credits";
 
 // Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
 const MAX_FILE_SIZES: Record<string, number> = {
@@ -57,6 +58,31 @@ export async function POST(
 
     const isMedia = isMediaMimeType(mimeType || "application/octet-stream");
     const mediaCategory = isMedia ? getMediaCategory(mimeType) : "text";
+
+    // ── Credit check & deduction ──────────────────────────────────────────
+    const { cost, action } = getIngestCreditCost(mimeType || "text/plain", isMedia);
+    const { allowed: hasCredits, balance } = await checkCreditBalance(user.id, cost);
+    if (!hasCredits) {
+      return NextResponse.json(
+        {
+          error: "Insufficient credits",
+          credits_required: cost,
+          credits_balance: balance,
+          message: `Uploading this ${mediaCategory} costs ${cost} credit${cost > 1 ? "s" : ""}. You have ${balance} remaining.`,
+        },
+        { status: 402 },
+      );
+    }
+
+    const deducted = await deductCredits(
+      user.id,
+      cost,
+      action,
+      `Ingest ${mediaCategory}: ${filename}`,
+    );
+    if (!deducted) {
+      return NextResponse.json({ error: "Failed to process credits" }, { status: 500 });
+    }
 
     let text = "";
 

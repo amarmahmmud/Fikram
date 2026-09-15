@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateRAGResponse, isMediaMimeType, type MediaAttachment } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 import { parseExpertMetadata } from "@/lib/expert-metadata";
+import { getChatCreditCost, checkCreditBalance, deductCredits } from "@/lib/credits";
 
 export async function POST(
   req: Request,
@@ -66,6 +67,37 @@ export async function POST(
     // Access check: owner or published
     if ((!user || expert.user_id !== user.id) && !expert.is_published) {
       return NextResponse.json({ error: "Expert not found" }, { status: 404 });
+    }
+
+    // ── Credit check (authenticated non-owner users only) ──────────────────
+    const isOwner = user && expert.user_id === user.id;
+    if (user && !isOwner) {
+      const hasMedia = mediaAttachments.length > 0;
+      const mediaMime = hasMedia ? mediaAttachments[0].mimeType : undefined;
+      const { cost, action } = getChatCreditCost(hasMedia, mediaMime);
+
+      const { allowed: hasCredits, balance } = await checkCreditBalance(user.id, cost);
+      if (!hasCredits) {
+        return NextResponse.json(
+          {
+            error: "Insufficient credits",
+            credits_required: cost,
+            credits_balance: balance,
+            message: `This message costs ${cost} credit${cost > 1 ? "s" : ""}. You have ${balance} remaining.`,
+          },
+          { status: 402 },
+        );
+      }
+
+      const deducted = await deductCredits(
+        user.id,
+        cost,
+        action,
+        `Chat: ${expert.name}${hasMedia ? ` (${mediaMime?.split("/")[0]})` : ""}`,
+      );
+      if (!deducted) {
+        return NextResponse.json({ error: "Failed to process credits" }, { status: 500 });
+      }
     }
 
     // Check expert has ingested content
