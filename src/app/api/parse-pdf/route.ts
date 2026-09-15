@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PDFParse, VerbosityLevel } from "pdf-parse";
+import { extractText, getDocumentProxy } from "unpdf";
 
 export async function POST(req: Request) {
   try {
@@ -11,16 +11,10 @@ export async function POST(req: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
+    const { text } = await extractText(pdf, { mergePages: true });
     
-    // pdf-parse v2: pass data in constructor, getText() returns TextResult
-    const parser = new PDFParse({
-      data: new Uint8Array(buffer),
-      verbosity: VerbosityLevel.ERRORS,
-    });
-    const result = await parser.getText();
-    
-    return NextResponse.json({ text: result.text });
+    return NextResponse.json({ text });
   } catch (error: any) {
     console.error("PDF Parsing Error:", error?.message ?? error);
     return NextResponse.json({ error: "Failed to parse PDF: " + (error?.message ?? "Unknown error") }, { status: 500 });

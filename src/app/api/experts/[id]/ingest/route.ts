@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
-// pdf-parse is dynamically imported below to avoid crashing the module on Vercel
+// unpdf is dynamically imported below for PDF text extraction (serverless-safe)
 import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 // Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
@@ -114,23 +114,17 @@ export async function POST(
 
       console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);
     } else if (filename.toLowerCase().endsWith(".pdf")) {
-      // ── PDF: existing text extraction ──────────────────────────────────
+      // ── PDF: text extraction via unpdf (serverless-safe, no DOM deps) ───
       if (!url) {
-        // Fallback for direct data upload for text
         return NextResponse.json({ error: "PDF ingestion requires a file URL in the new architecture" }, { status: 400 });
       }
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch PDF from storage");
       const arrayBuffer = await res.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      // Dynamic import to avoid crashing the module on Vercel
-      const { PDFParse, VerbosityLevel } = await import("pdf-parse");
-      const parser = new PDFParse({
-        data: new Uint8Array(buffer),
-        verbosity: VerbosityLevel.ERRORS,
-      });
-      const result = await parser.getText();
-      text = result.text;
+      const { extractText, getDocumentProxy } = await import("unpdf");
+      const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
+      const { text: pdfText } = await extractText(pdf, { mergePages: true });
+      text = pdfText;
     } else {
       // ── Plain text, markdown, CSV, etc. ────────────────────────────────
       if (url) {
