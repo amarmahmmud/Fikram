@@ -5,6 +5,9 @@ import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@
 import { parseExpertMetadata } from "@/lib/expert-metadata";
 import { getChatCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
+// Allow up to 60s for RAG generation (Vercel Hobby max)
+export const maxDuration = 60;
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

@@ -6,6 +6,8 @@ import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter
 import { PDFParse, VerbosityLevel } from "pdf-parse";
 import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
+// Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
+export const maxDuration = 60;
 // Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
 const MAX_FILE_SIZES: Record<string, number> = {
   text: 4 * 1024 * 1024,     // 4MB for text/PDF
