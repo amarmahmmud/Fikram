@@ -86,7 +86,7 @@ function getGenAIClientForKey(apiKey: string): GoogleGenAI {
 function getEnterpriseClient(): GoogleGenAI {
   setupGoogleCredentials();
   const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
+  const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
   return new GoogleGenAI({
     vertexai: true,
     project: project,
@@ -161,8 +161,12 @@ export async function generateWithModelFallback(
             config: Object.keys(config).length > 0 ? config : undefined,
           });
 
-          // result.text may be a getter (string) or a function depending on the SDK version
-          const rawText = result.text;
+          // result.text may be a getter (string) or a function depending on the SDK version.
+          // In Vertex AI mode, text lives inside candidates[0].content.parts[0].text instead.
+          let rawText = result.text;
+          if (rawText === undefined || rawText === null) {
+            rawText = (result as any).candidates?.[0]?.content?.parts?.[0]?.text;
+          }
           const textOutput = (typeof rawText === "function" ? (rawText as () => string)() : rawText) || "";
 
           // Advance key index for natural load-balancing across requests
