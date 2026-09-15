@@ -5,58 +5,56 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import styles from "./landing.module.css";
 import { FikraLogo } from "@/components/FikraLogo";
 
-const HERO_MODELS = [
-  "Llama 3.1 8B",
-  "Mistral 7B",
-  "Gemma 2 9B",
-  "Phi-3 Mini",
-  "Qwen2 7B",
-  "DeepSeek-R1",
-  "CodeLlama 13B",
-  "Falcon 7B",
+const HERO_USE_CASES = [
+  "Medical Consultants",
+  "Legal Advisors",
+  "Fitness Coaches",
+  "Course Creators",
+  "Financial Analysts",
+  "Tech Support Teams",
+  "Real Estate Agents",
+  "Marketing Strategists",
 ];
 
 const FEATURES = [
   {
-    badge: "Fine-Tuning",
-    title: "1-Click Model Customization",
-    desc: "Train on your proprietary data using state-of-the-art LoRA/QLoRA techniques without writing any boilerplate code.",
+    badge: "Instant Setup",
+    title: "Knowledge Base in 30 Seconds",
+    desc: "Upload your PDFs, documents, or course materials. Our AI automatically extracts, indexes, and makes your knowledge searchable.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m12 14 9-5-9-5-9 5 9 5z" />
-        <path d="m12 14 9-5-9-5-9 5 9 5z" />
-        <path d="m5 10 7 4 7-4" />
-        <path d="m5 14 7 4 7-4" />
+        <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+        <polyline points="13 2 13 9 20 9" />
       </svg>
     )
   },
   {
-    badge: "Deployment",
-    title: "Instant Global Inference",
-    desc: "Push your fine-tuned or base models to edge-optimized inference endpoints with autoscaling and zero cold starts.",
+    badge: "Citations",
+    title: "Answers You Can Trust",
+    desc: "Every response is grounded in your actual content with source citations. No hallucinations — just accurate, verifiable answers.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2v20" />
-        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+        <path d="m9 12 2 2 4-4" />
       </svg>
     )
   },
   {
-    badge: "Observability",
-    title: "Real-time Metrics & Logging",
-    desc: "Monitor training loss, evaluation metrics, and API endpoint health in an intuitive, beautifully designed dashboard.",
+    badge: "Multimodal",
+    title: "Beyond Text — Images, Audio & Video",
+    desc: "Upload images, audio files, or video content. Your AI assistant understands and answers questions across all media types.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="18" x="3" y="3" rx="2" />
-        <path d="M3 9h18" />
-        <path d="M9 21V9" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
       </svg>
     )
   },
   {
-    badge: "Security",
-    title: "Enterprise-grade Isolation",
-    desc: "Your data and weights remain entirely yours. Deploy in isolated VPCs with end-to-end encryption and compliance.",
+    badge: "Privacy",
+    title: "Your Data, Your AI",
+    desc: "Your content stays private and secure. Each assistant is isolated to your account with enterprise-grade encryption.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -70,17 +68,17 @@ const STEPS = [
   {
     num: "01",
     title: "Upload Your Content",
-    desc: "Drop your PDFs, documents, or course materials. Our system extracts and indexes your knowledge automatically.",
+    desc: "Drop your PDFs, images, audio, or video files. Our AI extracts and indexes every piece of knowledge automatically.",
   },
   {
     num: "02",
-    title: "Choose Your Approach",
-    desc: "Create a Smart Assistant for instant, accurate Q&A — or train a Custom Model for a fully personalized AI.",
+    title: "AI Builds Your Knowledge Base",
+    desc: "In under 30 seconds, your content is transformed into a searchable knowledge base with intelligent embeddings.",
   },
   {
     num: "03",
-    title: "Publish & Share",
-    desc: "Your AI is ready. Share it with your audience, embed it on your site, or keep it private for your team.",
+    title: "Chat & Share",
+    desc: "Ask your AI anything about your content. Get accurate, citation-backed answers instantly. Share it with your audience.",
   },
 ];
 
@@ -105,20 +103,20 @@ const LIGHTWEIGHT_MODELS = [
 ];
 
 const STATS = [
-  { value: "500+", label: "Supported Models" },
-  { value: "100", label: "Free Credits at Signup" },
-  { value: "< 2min", label: "Avg Setup Time" },
-  { value: "99.9%", label: "Platform Uptime" }
+  { value: "30s", label: "Avg Setup Time" },
+  { value: "50", label: "Free Credits at Signup" },
+  { value: "∞", label: "Document Types" },
+  { value: "99.9%", label: "Answer Accuracy" }
 ];
 
 const LOG_LINES = [
-  { text: "✓ Dataset validated (1,240 rows)", type: "success" },
-  { text: "→ LoRA adapters initialized", type: "info" },
-  { text: "  Epoch 1/3 — loss: 1.42", type: "dim" },
-  { text: "  Epoch 2/3 — loss: 0.87", type: "dim" },
-  { text: "  Epoch 3/3 — loss: 0.61", type: "dim" },
-  { text: "✓ Model saved to storage", type: "success" },
-  { text: "✓ Ready to deploy or download", type: "success" },
+  { text: '✓ Uploaded "nutrition-guide.pdf" (42 pages)', type: "success" },
+  { text: "→ Extracting and embedding knowledge...", type: "info" },
+  { text: "  127 knowledge chunks indexed", type: "dim" },
+  { text: '? "What foods are best for recovery?"', type: "info" },
+  { text: "  Found 3 relevant sources...", type: "dim" },
+  { text: "✓ Answer generated with citations [p.12, p.34]", type: "success" },
+  { text: "✓ Assistant ready to share", type: "success" },
 ];
 
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
@@ -215,7 +213,7 @@ function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, d
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [modelIdx, setModelIdx] = useState(0);
+  const [useCaseIdx, setUseCaseIdx] = useState(0);
   const [visibleLogs, setVisibleLogs] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
   const heroCardRef = useRef<HTMLDivElement>(null);
@@ -227,7 +225,7 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => setModelIdx((i) => (i + 1) % HERO_MODELS.length), 2400);
+    const t = setInterval(() => setUseCaseIdx((i) => (i + 1) % HERO_USE_CASES.length), 2400);
     return () => clearInterval(t);
   }, []);
 
@@ -322,18 +320,17 @@ export default function LandingPage() {
           </h1>
 
           <p className={styles.heroSubline}>
-            Fikram is the platform where experts create AI assistants powered by their
-            own knowledge. Upload your content, get an intelligent assistant in seconds —
-            or train a fully custom model.
+            Upload your documents, and get an intelligent AI assistant powered by your
+            own knowledge — ready in seconds. No code, no ML expertise needed.
           </p>
 
-          {/* Animated model ticker */}
+          {/* Animated use-case ticker */}
           <div className={styles.modelTicker}>
-            <span className={styles.modelTickerLabel}>Supports</span>
-            <span key={modelIdx} className={styles.modelTickerName}>
-              {HERO_MODELS[modelIdx]}
+            <span className={styles.modelTickerLabel}>Built for</span>
+            <span key={useCaseIdx} className={styles.modelTickerName}>
+              {HERO_USE_CASES[useCaseIdx]}
             </span>
-            <span className={styles.modelTickerSuffix}>and 500+ more</span>
+            <span className={styles.modelTickerSuffix}>and many more</span>
           </div>
 
           <div className={styles.heroCta}>
@@ -346,7 +343,7 @@ export default function LandingPage() {
           </div>
 
           <p className={styles.heroNote}>
-            No credit card required · Smart Assistants are free · Cancel anytime
+            No credit card required · 50 free credits · Ready in 30 seconds
           </p>
         </div>
 
@@ -357,39 +354,39 @@ export default function LandingPage() {
               <div className="terminal-dot red" />
               <div className="terminal-dot yellow" />
               <div className="terminal-dot green" />
-              <span className={styles.heroCardTitle}>Fine-Tuning Job #1847</span>
+              <span className={styles.heroCardTitle}>Smart Assistant — Live Demo</span>
               <span className="badge badge-success" style={{ marginLeft: "auto" }}>
                 <span className="status-dot done" />
-                Completed
+                Ready
               </span>
             </div>
             <div className={styles.heroCardBody}>
               <div className={styles.heroCardRow}>
-                <span className={styles.heroCardLabel}>Base Model</span>
+                <span className={styles.heroCardLabel}>Assistant</span>
                 <span className={styles.heroCardValue}>
-                  <span key={modelIdx} className={styles.valueSwap}>{HERO_MODELS[modelIdx]}</span>
+                  <span key={useCaseIdx} className={styles.valueSwap}>{HERO_USE_CASES[useCaseIdx]}</span>
                 </span>
               </div>
               <div className={styles.heroCardRow}>
-                <span className={styles.heroCardLabel}>Method</span>
-                <span className={styles.heroCardValue}>LoRA (auto-selected)</span>
+                <span className={styles.heroCardLabel}>Knowledge Base</span>
+                <span className={styles.heroCardValue}>42 pages indexed</span>
               </div>
               <div className={styles.heroCardRow}>
-                <span className={styles.heroCardLabel}>Dataset</span>
-                <span className={styles.heroCardValue}>1,240 examples</span>
+                <span className={styles.heroCardLabel}>Accuracy</span>
+                <span className={styles.heroCardValue}>Citation-backed</span>
               </div>
               <div className={styles.heroCardRow}>
-                <span className={styles.heroCardLabel}>Training time</span>
-                <span className={styles.heroCardValue}>14 min 32s</span>
+                <span className={styles.heroCardLabel}>Media Support</span>
+                <span className={styles.heroCardValue}>PDF, Images, Audio, Video</span>
               </div>
               <div className={styles.heroCardRow}>
                 <span className={styles.heroCardLabel}>Credits used</span>
-                <span className={styles.heroCardValue}>28 / 100</span>
+                <span className={styles.heroCardValue}>6 / 50</span>
               </div>
 
               <div className={styles.heroProgressSection}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span className={styles.heroCardLabel}>Training Progress</span>
+                  <span className={styles.heroCardLabel}>Knowledge Indexed</span>
                   <span className={styles.heroCardValue}>{progressWidth}%</span>
                 </div>
                 <div className="progress-bar">
@@ -426,19 +423,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Model Ecosystem Showcase ── */}
+      {/* ── Coming Soon: Fine-Tuning Teaser ── */}
       <section className={styles.showcaseSection} ref={observeReveal}>
         <div className={styles.showcaseGlow} />
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
-            <span className="section-label">Ecosystem</span>
-            <h2>Built on the world&apos;s best<br />open-source models</h2>
-            <p>Fine-tune or deploy from the leading model providers — all from one unified platform.</p>
+            <span className="section-label">Coming Soon</span>
+            <h2>Custom AI Model Training<br />is on the way</h2>
+            <p>Train models that capture your unique voice and expertise using LoRA fine-tuning on GPU clusters. Stay tuned.</p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
             <div>
-              <div style={{ paddingLeft: '24px', marginBottom: '12px', opacity: 0.6, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Frontier Models</div>
+              <div style={{ paddingLeft: '24px', marginBottom: '12px', opacity: 0.6, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Supported Model Providers</div>
               <MarqueeRow items={FRONTIER_MODELS} direction={1} />
             </div>
             <div>
@@ -493,8 +490,8 @@ export default function LandingPage() {
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">How It Works</span>
-            <h2>Three steps to your<br />custom AI model</h2>
-            <p>No ML expertise. No infrastructure headaches. Just describe your goal and let our AI do the heavy lifting.</p>
+            <h2>Three steps to your<br />AI-powered assistant</h2>
+            <p>No ML expertise. No infrastructure headaches. Upload your content and start chatting in seconds.</p>
           </div>
 
           <div className={styles.stepsGrid}>
@@ -517,17 +514,17 @@ export default function LandingPage() {
             <span className="section-label">Pricing</span>
             <h2 style={{ marginTop: 18 }}>Start free.<br />Scale when you&apos;re ready.</h2>
             <p style={{ marginTop: 18, fontSize: "1.0625rem" }}>
-              Get 100 free credits when you sign up — enough to fine-tune 2–3 real models.
-              No credit card. No commitment.
+              Get 50 free credits when you sign up — enough to create your first AI assistant
+              and chat 45+ times. No credit card. No commitment.
             </p>
 
             <div className={styles.pricingFeatures}>
               {[
-                "100 free credits on signup",
-                "AI-guided fine-tuning wizard",
-                "Llama, Mistral, Phi & more",
-                "Real-time training logs",
-                "Download model weights",
+                "50 free credits on signup",
+                "Upload PDFs, images, audio & video",
+                "Citation-backed AI answers",
+                "Multimodal chat support",
+                "Private knowledge base",
                 "No credit card required",
               ].map((f) => (
                 <div key={f} className={styles.pricingFeature}>
@@ -542,7 +539,7 @@ export default function LandingPage() {
             </Link>
 
             <p style={{ marginTop: 18, fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Paid plans with more credits coming soon. Early users get priority access.
+              Pro plans with more credits & custom model training coming soon. Early users get priority access.
             </p>
           </div>
         </div>
