@@ -140,31 +140,36 @@ export async function deductCredits(
   action: RagAction,
   label: string,
   referenceId?: string,
-): Promise<boolean> {
-  if (amount <= 0) return true;
+): Promise<{ success: boolean; error?: string }> {
+  if (amount <= 0) return { success: true };
 
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const { allowed } = await checkCreditBalance(userId, amount);
-  if (!allowed) {
-    return false;
+    const { allowed } = await checkCreditBalance(userId, amount);
+    if (!allowed) {
+      return { success: false, error: "Insufficient credits" };
+    }
+
+    // Use grant_credits with negative amount for atomic deduction
+    // Type assertion: grant_credits is a manually-created RPC not in auto-generated types
+    const { error } = await (supabase.rpc as any)("grant_credits", {
+      p_user_id: userId,
+      p_amount: -amount,
+      p_type: action,
+      p_label: label,
+      p_reference_id: referenceId || null,
+    });
+
+    if (error) {
+      console.error(`[Credits] Failed to deduct ${amount} credits for ${action}:`, error);
+      return { success: false, error: `RPC grant_credits failed: ${error.message || JSON.stringify(error)}` };
+    }
+
+    console.log(`[Credits] Deducted ${amount} credits from user ${userId} for ${action}: ${label}`);
+    return { success: true };
+  } catch (err: any) {
+    console.error(`[Credits] Exception in deductCredits:`, err);
+    return { success: false, error: `Credits exception: ${err.message}` };
   }
-
-  // Use grant_credits with negative amount for atomic deduction
-  // Type assertion: grant_credits is a manually-created RPC not in auto-generated types
-  const { error } = await (supabase.rpc as any)("grant_credits", {
-    p_user_id: userId,
-    p_amount: -amount,
-    p_type: action,
-    p_label: label,
-    p_reference_id: referenceId || null,
-  });
-
-  if (error) {
-    console.error(`[Credits] Failed to deduct ${amount} credits for ${action}:`, error);
-    return false;
-  }
-
-  console.log(`[Credits] Deducted ${amount} credits from user ${userId} for ${action}: ${label}`);
-  return true;
 }

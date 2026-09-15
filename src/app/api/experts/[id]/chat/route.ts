@@ -98,8 +98,8 @@ export async function POST(
         action,
         `Chat: ${expert.name}${hasMedia ? ` (${mediaMime?.split("/")[0]})` : ""}`,
       );
-      if (!deducted) {
-        return NextResponse.json({ error: "Failed to process credits" }, { status: 500 });
+      if (!deducted.success) {
+        return NextResponse.json({ error: `Failed to process credits: ${deducted.error}` }, { status: 500 });
       }
     }
 

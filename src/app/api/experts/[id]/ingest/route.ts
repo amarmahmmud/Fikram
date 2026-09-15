@@ -82,8 +82,8 @@ export async function POST(
       action,
       `Ingest ${mediaCategory}: ${filename}`,
     );
-    if (!deducted) {
-      return NextResponse.json({ error: "Failed to process credits" }, { status: 500 });
+    if (!deducted.success) {
+      return NextResponse.json({ error: `Failed to process credits: ${deducted.error}` }, { status: 500 });
     }
 
     let text = "";
