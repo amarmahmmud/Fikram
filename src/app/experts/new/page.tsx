@@ -219,6 +219,14 @@ export default function NewExpertPage() {
             filename: file.name,
           }),
         });
+        if (!res.ok) {
+          const text = await res.text();
+          let errMsg = `Server returned ${res.status}`;
+          try { errMsg = JSON.parse(text).error || errMsg; } catch { errMsg = text || errMsg; }
+          if (res.status === 504) errMsg = "Processing timed out. File is too large for the current plan.";
+          throw new Error(errMsg);
+        }
+        
         const data = await res.json();
 
         if (data.ok) {
@@ -235,11 +243,12 @@ export default function NewExpertPage() {
             )
           );
         }
-      } catch {
+      } catch (err: any) {
+        console.error("Upload error for file", files[i].file.name, err);
         hasErrors = true;
         setFiles((prev) =>
           prev.map((f, idx) =>
-            idx === i ? { ...f, status: "error", error: "Upload failed" } : f
+            idx === i ? { ...f, status: "error", error: err.message || "Upload failed" } : f
           )
         );
       }
