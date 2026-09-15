@@ -61,7 +61,7 @@ begin
 
   -- Log the signup bonus credit transaction
   insert into public.credit_transactions (user_id, type, label, amount, balance_after)
-  values (new.id, 'signup_bonus', 'Signup Bonus — Welcome to Model Factory!', 100, 100)
+  values (new.id, 'signup_bonus', 'Signup Bonus — Welcome to Model Factory!', 50, 50)
   on conflict do nothing;
 
   return new;

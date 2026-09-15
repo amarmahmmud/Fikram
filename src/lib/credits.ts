@@ -17,7 +17,7 @@ export type UserTier = "free" | "paid";
 /**
  * Determine if a user is on the free or paid tier.
  * Paid = has an active subscription plan (pro/enterprise) or any purchase transaction.
- * Free = everyone else (including the 100 signup credits).
+ * Free = everyone else (including the 50 signup credits).
  */
 export async function getUserTier(userId: string): Promise<{ tier: UserTier; plan: string }> {
   const supabase = await createClient();
