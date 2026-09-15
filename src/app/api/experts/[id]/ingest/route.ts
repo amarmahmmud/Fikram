@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
-import { PDFParse, VerbosityLevel } from "pdf-parse";
+// pdf-parse is dynamically imported below to avoid crashing the module on Vercel
 import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 // Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
@@ -123,6 +123,8 @@ export async function POST(
       if (!res.ok) throw new Error("Failed to fetch PDF from storage");
       const arrayBuffer = await res.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
+      // Dynamic import to avoid crashing the module on Vercel
+      const { PDFParse, VerbosityLevel } = await import("pdf-parse");
       const parser = new PDFParse({
         data: new Uint8Array(buffer),
         verbosity: VerbosityLevel.ERRORS,
