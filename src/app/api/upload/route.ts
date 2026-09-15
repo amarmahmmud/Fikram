@@ -4,14 +4,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 
-const s3 = new S3Client({
-  region: "auto",
-  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+// S3 client initialized inside the handler to catch config errors
 
 export async function POST(req: Request) {
   try {
@@ -33,8 +26,20 @@ export async function POST(req: Request) {
     const { filename, contentType } = await req.json();
     if (!filename) return NextResponse.json({ error: "Filename is required" }, { status: 400 });
 
-    const bucket = process.env.R2_BUCKET_NAME!;
-    
+    const bucket = process.env.R2_BUCKET_NAME;
+    if (!bucket || !process.env.CLOUDFLARE_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
+      throw new Error("Missing Cloudflare R2 environment variables");
+    }
+
+    const s3 = new S3Client({
+      region: "auto",
+      endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: process.env.R2_ACCESS_KEY_ID,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+
     // Create a safe, unique file key organized by user (or temp directory for anonymous)
     const safeName = filename.replace(/[^a-zA-Z0-9.\-_]/g, "");
     const fileKey = user 
@@ -57,8 +62,8 @@ export async function POST(req: Request) {
     const downloadUrl = await getSignedUrl(s3, getCommand, { expiresIn: 7 * 24 * 60 * 60 });
 
     return NextResponse.json({ ok: true, uploadUrl, downloadUrl, fileKey });
-  } catch (err: unknown) {
+  } catch (err: any) {
     console.error("Upload API error:", err);
-    return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
+    return NextResponse.json({ error: `Failed to generate upload URL: ${err.message || 'Unknown error'}` }, { status: 500 });
   }
 }
