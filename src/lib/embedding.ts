@@ -114,8 +114,16 @@ export async function describeMediaWithGemini({
   let fileUri: string | null = null;
 
   if (url) {
-    fileUri = await uploadFileFromUrl(url, mimeType);
-    parts.push({ fileData: { fileUri, mimeType } });
+    // Download the file and send as inline base64 data.
+    // This avoids the Gemini File API cross-key permission issue:
+    // files uploaded with one API key can't be accessed by another key
+    // during generation (due to round-robin key rotation).
+    // Safe because Vercel already limits uploads to ~4.5MB.
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Failed to download file from storage: ${res.statusText}`);
+    const arrayBuffer = await res.arrayBuffer();
+    const base64Data = Buffer.from(arrayBuffer).toString("base64");
+    parts.push({ inlineData: { data: base64Data, mimeType } });
   } else if (data) {
     parts.push({ inlineData: { data, mimeType } });
   } else {
@@ -147,15 +155,8 @@ export async function describeMediaWithGemini({
       useEnterprise,
     });
     
-    if (fileUri) {
-      deleteGeminiFile(fileUri).catch(console.error);
-    }
-    
     return result.text();
   } catch (err) {
-    if (fileUri) {
-      deleteGeminiFile(fileUri).catch(console.error);
-    }
     throw err;
   }
 }
