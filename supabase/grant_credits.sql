@@ -25,6 +25,13 @@ BEGIN
 END $$;
 
 -- ── Step 2: The RPC function ─────────────────────────────────────────────────
+-- IMPORTANT: We must explicitly DROP the old TEXT-signature overload first.
+-- CREATE OR REPLACE only replaces when parameter types match exactly.
+-- Changing p_reference_id from TEXT to UUID creates a NEW overload instead of
+-- replacing the old one, leaving two ambiguous functions. Drop both possible
+-- old signatures to be safe.
+DROP FUNCTION IF EXISTS public.grant_credits(uuid, integer, text, text, text);
+
 CREATE OR REPLACE FUNCTION grant_credits(
   p_user_id UUID,
   p_amount INT,
