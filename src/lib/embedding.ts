@@ -124,10 +124,19 @@ export async function describeMediaWithGemini({
 
   const isVideo = mimeType.startsWith("video/");
   const isAudio = mimeType.startsWith("audio/");
+  const isPdf = mimeType === "application/pdf";
 
-  let prompt = `Describe the contents of this ${isVideo ? "video" : isAudio ? "audio" : "image"} in high detail. `;
-  prompt += `Include all spoken words, visible text (OCR), key subjects, and important events. `;
-  prompt += `Format the output as a clear, structured document that can be used for a knowledge base.`;
+  let prompt: string;
+  if (isPdf) {
+    prompt = `Extract ALL text content from this PDF document verbatim. `;
+    prompt += `Preserve the document's structure: headings, paragraphs, lists, tables, and any visible text. `;
+    prompt += `If the PDF contains scanned/image pages, use OCR to extract the text. `;
+    prompt += `Output the full extracted text as a clean, structured document. Do NOT summarize or paraphrase — extract the actual content.`;
+  } else {
+    prompt = `Describe the contents of this ${isVideo ? "video" : isAudio ? "audio" : "image"} in high detail. `;
+    prompt += `Include all spoken words, visible text (OCR), key subjects, and important events. `;
+    prompt += `Format the output as a clear, structured document that can be used for a knowledge base.`;
+  }
 
   parts.push({ text: prompt });
 

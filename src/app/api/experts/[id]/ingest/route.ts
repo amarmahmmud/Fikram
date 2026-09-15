@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
-// unpdf is dynamically imported below for PDF text extraction (serverless-safe)
 import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 // Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
@@ -58,11 +57,12 @@ export async function POST(
       return NextResponse.json({ error: "File URL or content data is required" }, { status: 400 });
     }
 
+    const isPdf = filename.toLowerCase().endsWith(".pdf");
     const isMedia = isMediaMimeType(mimeType || "application/octet-stream");
-    const mediaCategory = isMedia ? getMediaCategory(mimeType) : "text";
+    const mediaCategory = isMedia ? getMediaCategory(mimeType) : isPdf ? "document" : "text";
 
     // ── Credit check & deduction ──────────────────────────────────────────
-    const { cost, action } = getIngestCreditCost(mimeType || "text/plain", isMedia);
+    const { cost, action } = getIngestCreditCost(mimeType || "text/plain", isMedia || isPdf);
     const { allowed: hasCredits, balance } = await checkCreditBalance(user.id, cost);
     if (!hasCredits) {
       return NextResponse.json(
@@ -88,8 +88,12 @@ export async function POST(
 
     let text = "";
 
-    if (isMedia) {
-      // ── Media file: use Gemini to describe/transcribe ──────────────────
+    if (isMedia || isPdf) {
+      // ── Media/PDF: use Gemini to extract content ──────────────────────
+      // Gemini natively supports PDF, image, audio, and video input.
+      // This is more reliable than any pdfjs-based library on Vercel serverless
+      // and also handles scanned/image-based PDFs via Gemini's OCR.
+      const effectiveMimeType = isPdf ? "application/pdf" : mimeType;
       console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via Gemini`);
 
       const { tier } = await getUserTier(user.id);
@@ -98,7 +102,7 @@ export async function POST(
       text = await describeMediaWithGemini({
         url,
         data,
-        mimeType,
+        mimeType: effectiveMimeType,
         filename,
         useEnterprise,
       });
@@ -113,30 +117,6 @@ export async function POST(
       text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
 
       console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);
-    } else if (filename.toLowerCase().endsWith(".pdf")) {
-      // ── PDF: text extraction via unpdf (serverless-safe, no DOM deps) ───
-      if (!url) {
-        return NextResponse.json({ error: "PDF ingestion requires a file URL in the new architecture" }, { status: 400 });
-      }
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch PDF from storage");
-      const arrayBuffer = await res.arrayBuffer();
-      const { getDocumentProxy } = await import("unpdf");
-      const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
-      // Extract text page-by-page using pdfjs directly (unpdf's extractText
-      // has a bug where getTextContent().items can be undefined on Vercel)
-      const pages: string[] = [];
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        const items = (content as any).items ?? [];
-        const pageText = items
-          .filter((item: any) => item.str != null)
-          .map((item: any) => item.str + (item.hasEOL ? "\n" : ""))
-          .join("");
-        pages.push(pageText);
-      }
-      text = pages.join("\n");
     } else {
       // ── Plain text, markdown, CSV, etc. ────────────────────────────────
       if (url) {
