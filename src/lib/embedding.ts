@@ -245,61 +245,41 @@ export async function embedText(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embeddings for multiple texts in batch with sub-batching and retry on 429 quota.
- * Google Gemini batchEmbedContents accepts at most 100 requests per batch and 100 req/min on free tier.
+ * Generate embeddings for multiple texts using parallel individual calls.
+ * The Gemini embedContent API only handles one text per call — "batch" arrays
+ * get treated as a single content and return 1 embedding. So we parallelize
+ * individual calls with a concurrency limit for speed.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const BATCH_SIZE = 10;
-  const DELAY_BETWEEN_BATCHES = 300;
-  const MAX_RETRIES = 4;
-  const allEmbeddings: number[][] = [];
-  const totalBatches = Math.ceil(texts.length / BATCH_SIZE);
+  const CONCURRENCY = 5;
+  const results: number[][] = new Array(texts.length);
+  let completed = 0;
 
-  console.log(`[Embedding] Processing ${texts.length} texts in ${totalBatches} batches of ${BATCH_SIZE}`);
+  console.log(`[Embedding] Embedding ${texts.length} texts (concurrency: ${CONCURRENCY})`);
 
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
-    const slice = texts.slice(i, i + BATCH_SIZE);
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
-        const model = getEmbeddingModel();
-        const result = await model.models.embedContent({
-          model: EMBEDDING_MODEL,
-          contents: slice,
-          config: { outputDimensionality: EMBEDDING_DIMENSIONS },
-        });
-
-        const embeddings = (result.embeddings || []).map((e: any) => e.values);
-
-        if (embeddings.length !== slice.length) {
-          throw new Error(`Batch ${batchNum}: got ${embeddings.length}/${slice.length} embeddings`);
-        }
-
-        allEmbeddings.push(...embeddings);
-        break; // success
-      } catch (err: any) {
-        console.warn(`[Embedding] Batch ${batchNum}/${totalBatches} attempt ${attempt}/${MAX_RETRIES}: ${err.message?.substring(0, 150)}`);
-
-        if (attempt < MAX_RETRIES) {
-          const keys = getGeminiApiKeys();
-          if (keys.length > 1) {
-            currentEmbedKeyIndex = (currentEmbedKeyIndex + 1) % keys.length;
+  // Process in waves of CONCURRENCY parallel requests
+  for (let i = 0; i < texts.length; i += CONCURRENCY) {
+    const wave = texts.slice(i, i + CONCURRENCY);
+    const waveResults = await Promise.all(
+      wave.map((text, j) =>
+        embedText(text).then((embedding) => {
+          results[i + j] = embedding;
+          completed++;
+          if (completed % 20 === 0 || completed === texts.length) {
+            console.log(`[Embedding] Progress: ${completed}/${texts.length}`);
           }
-          await delay(Math.pow(2, attempt - 1) * 1000);
-        } else {
-          throw new Error(`Embedding failed on batch ${batchNum}/${totalBatches}: ${err.message}`);
-        }
-      }
-    }
-
-    // Delay between batches to avoid rate limits
-    if (i + BATCH_SIZE < texts.length) {
-      await delay(DELAY_BETWEEN_BATCHES);
-    }
+        })
+      )
+    );
   }
 
-  return allEmbeddings;
+  // Validate all embeddings were generated
+  const missing = results.filter((r) => !r || r.length === 0).length;
+  if (missing > 0) {
+    throw new Error(`${missing}/${texts.length} texts failed to embed`);
+  }
+
+  return results;
 }
 
 // ── Section-aware chunking ────────────────────────────────────────────────────
