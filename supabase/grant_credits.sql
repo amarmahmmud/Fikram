@@ -30,7 +30,7 @@ CREATE OR REPLACE FUNCTION grant_credits(
   p_amount INT,
   p_type TEXT,
   p_label TEXT,
-  p_reference_id TEXT DEFAULT NULL
+  p_reference_id UUID DEFAULT NULL
 ) RETURNS void AS $$
 DECLARE
   new_balance INT;

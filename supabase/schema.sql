@@ -143,7 +143,7 @@ create policy "Public can view published jobs"
 create table if not exists public.credit_transactions (
   id            uuid default gen_random_uuid() primary key,
   user_id       uuid references public.profiles(id) on delete cascade not null,
-  type          text check (type in ('signup_bonus','purchase','job_consumed','refund','job_hold','job_refund')),
+  type          text check (type in ('signup_bonus','purchase','job_consumed','refund','job_hold','job_refund','ingest_text','ingest_image','ingest_audio','ingest_video','chat_text','chat_with_image','chat_with_audio','chat_with_video')),
   label         text not null,
   amount        integer not null,
   balance_after integer not null,
