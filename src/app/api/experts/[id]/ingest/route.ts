@@ -121,10 +121,22 @@ export async function POST(
       const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch PDF from storage");
       const arrayBuffer = await res.arrayBuffer();
-      const { extractText, getDocumentProxy } = await import("unpdf");
+      const { getDocumentProxy } = await import("unpdf");
       const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
-      const { text: pdfText } = await extractText(pdf, { mergePages: true });
-      text = pdfText;
+      // Extract text page-by-page using pdfjs directly (unpdf's extractText
+      // has a bug where getTextContent().items can be undefined on Vercel)
+      const pages: string[] = [];
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const items = (content as any).items ?? [];
+        const pageText = items
+          .filter((item: any) => item.str != null)
+          .map((item: any) => item.str + (item.hasEOL ? "\n" : ""))
+          .join("");
+        pages.push(pageText);
+      }
+      text = pages.join("\n");
     } else {
       // ── Plain text, markdown, CSV, etc. ────────────────────────────────
       if (url) {

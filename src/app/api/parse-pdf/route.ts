@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { extractText, getDocumentProxy } from "unpdf";
+import { getDocumentProxy } from "unpdf";
 
 export async function POST(req: Request) {
   try {
@@ -12,7 +12,20 @@ export async function POST(req: Request) {
 
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await getDocumentProxy(new Uint8Array(arrayBuffer));
-    const { text } = await extractText(pdf, { mergePages: true });
+
+    // Extract text page-by-page using pdfjs directly
+    const pages: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const items = (content as any).items ?? [];
+      const pageText = items
+        .filter((item: any) => item.str != null)
+        .map((item: any) => item.str + (item.hasEOL ? "\n" : ""))
+        .join("");
+      pages.push(pageText);
+    }
+    const text = pages.join("\n");
     
     return NextResponse.json({ text });
   } catch (error: any) {
