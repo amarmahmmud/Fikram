@@ -112,18 +112,16 @@ export async function describeMediaWithGemini({
 }): Promise<string> {
   const parts: any[] = [];
   let fileUri: string | null = null;
+  let pinnedApiKey: string | undefined;
 
   if (url) {
-    // Download the file and send as inline base64 data.
-    // This avoids the Gemini File API cross-key permission issue:
-    // files uploaded with one API key can't be accessed by another key
-    // during generation (due to round-robin key rotation).
-    // Safe because Vercel already limits uploads to ~4.5MB.
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to download file from storage: ${res.statusText}`);
-    const arrayBuffer = await res.arrayBuffer();
-    const base64Data = Buffer.from(arrayBuffer).toString("base64");
-    parts.push({ inlineData: { data: base64Data, mimeType } });
+    // Upload via Gemini File API (handles large files without timeout).
+    // The upload returns the API key it used — we pin the generation request
+    // to the same key, since Gemini files are scoped per API key.
+    const upload = await uploadFileFromUrl(url, mimeType);
+    fileUri = upload.fileUri;
+    pinnedApiKey = upload.apiKey || undefined;
+    parts.push({ fileData: { fileUri, mimeType } });
   } else if (data) {
     parts.push({ inlineData: { data, mimeType } });
   } else {
@@ -153,10 +151,18 @@ export async function describeMediaWithGemini({
       systemInstruction: "You are an expert transcriber and visual analyst. Your job is to convert media into highly accurate, detailed textual knowledge bases.",
       generationConfig: { temperature: 0.1 },
       useEnterprise,
+      pinnedApiKey,
     });
+    
+    if (fileUri) {
+      deleteGeminiFile(fileUri).catch(console.error);
+    }
     
     return result.text();
   } catch (err) {
+    if (fileUri) {
+      deleteGeminiFile(fileUri).catch(console.error);
+    }
     throw err;
   }
 }
@@ -913,7 +919,7 @@ ${finalGroundingBlock}`;
       if (attachment.url) {
         try {
           console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
-          const fileUri = await uploadFileFromUrl(attachment.url, attachment.mimeType);
+          const { fileUri } = await uploadFileFromUrl(attachment.url, attachment.mimeType);
           uploadedUris.push(fileUri);
           userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
         } catch (err: any) {

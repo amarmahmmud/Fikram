@@ -20,6 +20,12 @@ export interface ResilientGenerateOptions {
    * and paid-tier users through Vertex AI (covered by their payment).
    */
   useEnterprise?: boolean;
+  /**
+   * Pin generation to a specific API key. Used when a file was uploaded
+   * to the Gemini File API with this key — files are scoped per key,
+   * so the same key must be used for generation.
+   */
+  pinnedApiKey?: string;
 }
 
 /**
@@ -182,10 +188,10 @@ export async function generateWithModelFallback(
   for (const modelName of models) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       // If we have multiple keys, we try across available keys before sleeping
-      const keysToTryCount = useEnterprise ? 1 : Math.max(1, keys.length);
+      const keysToTryCount = (useEnterprise || options.pinnedApiKey) ? 1 : Math.max(1, keys.length);
 
       for (let keyAttempt = 0; keyAttempt < keysToTryCount; keyAttempt++) {
-        const activeKey = useEnterprise ? "" : keys[currentKeyIndex % keys.length];
+        const activeKey = useEnterprise ? "" : (options.pinnedApiKey || keys[currentKeyIndex % keys.length]);
         const client = useEnterprise ? getEnterpriseClient() : getGenAIClientForKey(activeKey);
 
         try {
@@ -276,7 +282,7 @@ export async function generateWithModelFallback(
  * Downloads a file from a URL to a temporary local file, uploads it to Gemini File API,
  * polls until it becomes ACTIVE, and returns the file URI.
  */
-export async function uploadFileFromUrl(url: string, mimeType: string): Promise<string> {
+export async function uploadFileFromUrl(url: string, mimeType: string): Promise<{ fileUri: string; apiKey: string }> {
   const os = await import("os");
   const fs = await import("fs");
   const path = await import("path");
@@ -288,16 +294,8 @@ export async function uploadFileFromUrl(url: string, mimeType: string): Promise<
   // Create temp file path
   const tempPath = path.join(os.tmpdir(), `gemini-upload-${Date.now()}-${Math.random().toString(36).substring(7)}`);
   
-  // Stream to disk
-  const fileStream = fs.createWriteStream(tempPath);
-  
-  // @ts-ignore - native fetch response body to Node stream
+  // Write to disk
   await new Promise((resolve, reject) => {
-    // We can use node's native readable stream from Web Streams API
-    // Actually, simple array buffer is safer for smallish files (up to 50MB) if streaming is complex, 
-    // but arrayBuffer still uses memory. 
-    // Let's use array buffer for simplicity and to avoid polyfill issues, 50MB ArrayBuffer is OK locally,
-    // just avoid Base64 stringification.
     res.arrayBuffer().then(buffer => {
       fs.writeFileSync(tempPath, Buffer.from(buffer));
       resolve(true);
@@ -331,7 +329,7 @@ export async function uploadFileFromUrl(url: string, mimeType: string): Promise<
     }
 
     console.log(`[Gemini File API] File ${file.name} is ACTIVE`);
-    return file.uri!;
+    return { fileUri: file.uri!, apiKey: activeKey };
   } finally {
     // Always cleanup the local temp file
     if (fs.existsSync(tempPath)) {
