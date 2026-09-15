@@ -15,7 +15,7 @@ import os from "os";
 
 const LOCATION = process.env.DOCUMENT_AI_LOCATION || "us";
 const PROCESSOR_ID = process.env.DOCUMENT_AI_PROCESSOR_ID || "b7d0bb5a0038c456";
-const PAGES_PER_BATCH = 30;
+const PAGES_PER_BATCH = 15;
 
 /**
  * Ensures GCP credentials are available for Document AI auth.
@@ -54,6 +54,9 @@ async function callDocumentAI(
       content: pdfBase64,
       mimeType: "application/pdf",
     },
+    // "imageless mode" — only return text, skip page image rendering.
+    // This doubles the per-request page limit (15 → 30) and is faster.
+    fieldMask: "text",
   };
 
   if (pages) {
