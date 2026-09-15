@@ -24,7 +24,7 @@ create table if not exists public.profiles (
   full_name   text,
   avatar_url  text,
   plan        text default 'free' check (plan in ('free','personal','pro','enterprise')),
-  credits_balance integer default 100 not null,
+  credits_balance integer default 50 not null,
   credits_held    integer default 0 not null,
   created_at  timestamptz default now()
 );
@@ -43,7 +43,7 @@ create policy "Users can view own profile"
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
--- Auto-create profile on signup and give 100 free credits
+-- Auto-create profile on signup and give 50 free credits
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public
 as $$
@@ -54,7 +54,7 @@ begin
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
     new.raw_user_meta_data->>'avatar_url',
-    100,
+    50,
     0
   )
   on conflict (id) do nothing;
