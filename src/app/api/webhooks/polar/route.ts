@@ -12,10 +12,17 @@ import { PLAN_CREDITS, PRODUCT_PLAN_MAP, TOPUP_CREDITS } from "@/lib/polar";
 import { createClient } from "@supabase/supabase-js";
 
 // Use service role for webhook — no user session available
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-);
+// Lazy-init to avoid crashing at build time (env vars aren't available during Next.js build)
+let _supabase: ReturnType<typeof createClient> | null = null;
+function getSupabase() {
+  if (!_supabase) {
+    _supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    );
+  }
+  return _supabase;
+}
 
 // ── Idempotency ──────────────────────────────────────────────────────────────
 
@@ -45,7 +52,7 @@ async function grantCredits(
   label: string,
   referenceId?: string,
 ) {
-  const { error } = await supabase.rpc("grant_credits", {
+  const { error } = await (getSupabase().rpc as any)("grant_credits", {
     p_user_id: userId,
     p_amount: amount,
     p_type: type,
@@ -60,7 +67,7 @@ async function grantCredits(
 }
 
 async function updateUserPlan(userId: string, plan: string) {
-  const { error } = await supabase
+  const { error } = await (getSupabase() as any)
     .from("profiles")
     .update({ plan })
     .eq("id", userId);
