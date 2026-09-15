@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateRAGResponse, isMediaMimeType, type MediaAttachment } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 import { parseExpertMetadata } from "@/lib/expert-metadata";
-import { getChatCreditCost, checkCreditBalance, deductCredits } from "@/lib/credits";
+import { getChatCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 export async function POST(
   req: Request,
@@ -183,6 +183,10 @@ export async function POST(
     // Parse expert configuration metadata (mode, web search, etc.)
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
+    // Determine if the user should get enterprise routing
+    const { tier } = user ? await getUserTier(user.id) : { tier: "free" as const };
+    const useEnterprise = shouldUseEnterprise(tier);
+
     // Run RAG pipeline — automatically routes to Gemini if media attachments present
     const result = await generateRAGResponse(
       message.trim(),
@@ -193,6 +197,7 @@ export async function POST(
         reasoningMode: metadata.reasoningMode,
         webSearchEnabled: metadata.webSearchEnabled,
         mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
+        useEnterprise,
       }
     );
 

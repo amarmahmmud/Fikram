@@ -78,11 +78,14 @@ export async function describeMediaWithGemini({
   data,
   mimeType,
   filename,
+  useEnterprise,
 }: {
   url?: string;
   data?: string;
   mimeType: string;
   filename: string;
+  /** Route through Vertex AI (paid) or free API keys */
+  useEnterprise?: boolean;
 }): Promise<string> {
   const parts: any[] = [];
   let fileUri: string | null = null;
@@ -109,6 +112,7 @@ export async function describeMediaWithGemini({
     const result = await generateWithModelFallback([{ role: "user", parts }], {
       systemInstruction: "You are an expert transcriber and visual analyst. Your job is to convert media into highly accurate, detailed textual knowledge bases.",
       generationConfig: { temperature: 0.1 },
+      useEnterprise,
     });
     
     if (fileUri) {
@@ -581,6 +585,8 @@ export interface GenerateRAGOptions {
   webSearchEnabled?: boolean;
   /** When present, routes generation to Gemini instead of Groq for multimodal processing. */
   mediaAttachments?: MediaAttachment[];
+  /** Route Gemini calls through Vertex AI (paid) or free API keys. */
+  useEnterprise?: boolean;
 }
 
 export interface RAGResponse {
@@ -900,6 +906,7 @@ ${finalGroundingBlock}`;
           temperature: mode === "evaluative" ? 0.25 : 0.3,
           ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
         },
+        useEnterprise: options?.useEnterprise,
       });
 
       draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";

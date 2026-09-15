@@ -4,7 +4,7 @@ import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
 import { PDFParse, VerbosityLevel } from "pdf-parse";
-import { getIngestCreditCost, checkCreditBalance, deductCredits } from "@/lib/credits";
+import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 // Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
 const MAX_FILE_SIZES: Record<string, number> = {
@@ -90,11 +90,15 @@ export async function POST(
       // ── Media file: use Gemini to describe/transcribe ──────────────────
       console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via Gemini`);
 
+      const { tier } = await getUserTier(user.id);
+      const useEnterprise = shouldUseEnterprise(tier);
+
       text = await describeMediaWithGemini({
         url,
         data,
         mimeType,
         filename,
+        useEnterprise,
       });
 
       if (!text.trim()) {

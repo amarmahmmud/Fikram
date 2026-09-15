@@ -10,6 +10,16 @@ export interface ResilientGenerateOptions {
   generationConfig?: any;
   preferredModels?: string[];
   maxRetriesPerModel?: number;
+  /**
+   * Per-call override for API routing.
+   * - true  → Vertex AI Enterprise (paid, reliable, SLA)
+   * - false → Free Gemini API keys (free, rate-limited)
+   * - undefined → falls back to GOOGLE_GENAI_USE_ENTERPRISE env var
+   *
+   * Use this to route free-tier users through free keys ($0 cost)
+   * and paid-tier users through Vertex AI (covered by their payment).
+   */
+  useEnterprise?: boolean;
 }
 
 /**
@@ -123,7 +133,8 @@ export async function generateWithModelFallback(
   contentsOrRequest: any,
   options: ResilientGenerateOptions = {}
 ) {
-  const useEnterprise = process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true";
+  // Per-call override takes precedence, then env var fallback
+  const useEnterprise = options.useEnterprise ?? (process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true");
   const keys = useEnterprise ? [] : getGeminiApiKeys();
 
   if (!useEnterprise && keys.length === 0) {

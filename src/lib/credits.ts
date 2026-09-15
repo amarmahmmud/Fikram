@@ -1,11 +1,50 @@
 // ─────────────────────────────────────────────
-// RAG Credit System
+// RAG Credit System — Two-Tier Architecture
 // ─────────────────────────────────────────────
-// Centralized credit management for RAG operations.
-// Uses the existing grant_credits RPC (which supports negative amounts)
-// to atomically deduct credits and record transactions.
+// Free users  → Free Gemini API keys + Groq free tier = $0 cost
+// Paid users  → Vertex AI Enterprise + Groq = premium, reliable, covered by their payment
+//
+// Credits serve different purposes per tier:
+// - Free tier:  usage cap to prevent abuse (platform cost = $0)
+// - Paid tier:  payment unit that covers API cost + profit margin
 
 import { createClient } from "@/lib/supabase/server";
+
+// ── User Tier Detection ──────────────────────────────────────────────────────
+
+export type UserTier = "free" | "paid";
+
+/**
+ * Determine if a user is on the free or paid tier.
+ * Paid = has an active subscription plan (pro/enterprise) or any purchase transaction.
+ * Free = everyone else (including the 100 signup credits).
+ */
+export async function getUserTier(userId: string): Promise<{ tier: UserTier; plan: string }> {
+  const supabase = await createClient();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan")
+    .eq("id", userId)
+    .single();
+
+  const plan = (profile as any)?.plan || "free";
+
+  // Any plan other than "free" is a paid user
+  if (plan !== "free") {
+    return { tier: "paid", plan };
+  }
+
+  return { tier: "free", plan: "free" };
+}
+
+/**
+ * Quick check: should this user's API calls go through the paid Vertex AI path?
+ * Returns true only for paid-tier users.
+ */
+export function shouldUseEnterprise(tier: UserTier): boolean {
+  return tier === "paid";
+}
 
 // ── Credit Cost Table ────────────────────────────────────────────────────────
 
@@ -19,9 +58,9 @@ export const RAG_CREDIT_COSTS = {
 
   // Chat messages
   chat_text: 1,        // text-only chat (Groq, essentially free but gates abuse)
-  chat_with_image: 2,  // chat with image attachment (Vertex AI)
-  chat_with_audio: 5,  // chat with audio attachment (Vertex AI)
-  chat_with_video: 5,  // chat with video attachment (Vertex AI)
+  chat_with_image: 2,  // chat with image attachment
+  chat_with_audio: 5,  // chat with audio attachment
+  chat_with_video: 5,  // chat with video attachment
 } as const;
 
 export type RagAction = keyof typeof RAG_CREDIT_COSTS;
@@ -39,7 +78,6 @@ export function getIngestCreditCost(mimeType: string, isMedia: boolean): { cost:
   if (mimeType.startsWith("audio/")) {
     return { cost: RAG_CREDIT_COSTS.ingest_audio, action: "ingest_audio" };
   }
-  // image or other media
   return { cost: RAG_CREDIT_COSTS.ingest_image, action: "ingest_image" };
 }
 
@@ -56,7 +94,6 @@ export function getChatCreditCost(hasMedia: boolean, mimeType?: string): { cost:
   if (mimeType.startsWith("audio/")) {
     return { cost: RAG_CREDIT_COSTS.chat_with_audio, action: "chat_with_audio" };
   }
-  // image
   return { cost: RAG_CREDIT_COSTS.chat_with_image, action: "chat_with_image" };
 }
 
@@ -104,19 +141,17 @@ export async function deductCredits(
   label: string,
   referenceId?: string,
 ): Promise<boolean> {
-  if (amount <= 0) return true; // No cost, no deduction needed
+  if (amount <= 0) return true;
 
   const supabase = await createClient();
 
-  // Double-check balance before deducting (race-safe via RPC)
   const { allowed } = await checkCreditBalance(userId, amount);
   if (!allowed) {
     return false;
   }
 
   // Use grant_credits with negative amount for atomic deduction
-  // Use type assertion since grant_credits is a manually-created RPC
-  // not included in the auto-generated Supabase types
+  // Type assertion: grant_credits is a manually-created RPC not in auto-generated types
   const { error } = await (supabase.rpc as any)("grant_credits", {
     p_user_id: userId,
     p_amount: -amount,
