@@ -30,8 +30,31 @@ function getEmbeddingModel() {
   const key = keys[currentEmbedKeyIndex % keys.length];
   return new GoogleGenAI({ apiKey: key });
 }
+// ── Groq Key Rotation (doubles effective RPM) ────────────────────────────────
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY! });
+function getGroqApiKeys(): string[] {
+  const keysStr = process.env.GROQ_API_KEYS;
+  if (keysStr) {
+    return keysStr.split(",").map((k) => k.trim()).filter(Boolean);
+  }
+  const single = process.env.GROQ_API_KEY;
+  if (single) return [single];
+  return [];
+}
+
+let currentGroqKeyIndex = 0;
+
+/**
+ * Get a Groq client with round-robin key rotation.
+ * Each call advances to the next key for natural load balancing.
+ */
+function getGroqClient(): Groq {
+  const keys = getGroqApiKeys();
+  if (keys.length === 0) throw new Error("No Groq API keys configured (GROQ_API_KEYS or GROQ_API_KEY)");
+  const key = keys[currentGroqKeyIndex % keys.length];
+  currentGroqKeyIndex = (currentGroqKeyIndex + 1) % keys.length;
+  return new Groq({ apiKey: key });
+}
 
 // ── Media Attachment Types ───────────────────────────────────────────────────
 
@@ -646,7 +669,7 @@ DRAFT:
 ${draft}`;
 
   try {
-    const result = await groq.chat.completions.create({
+    const result = await getGroqClient().chat.completions.create({
       messages: [{ role: "user", content: verifierPrompt }],
       model: "openai/gpt-oss-120b",
       temperature: 0,
@@ -675,7 +698,7 @@ ${violations.map((v: any, i: number) => `${i + 1}. Fix the claim "${v.claim}" wi
 DRAFT:
 ${draft}`;
 
-    const patched = await groq.chat.completions.create({
+    const patched = await getGroqClient().chat.completions.create({
       messages: [{ role: "user", content: patchPrompt }],
       model: "openai/gpt-oss-120b",
       temperature: 0,
@@ -933,7 +956,7 @@ ${finalGroundingBlock}`;
 
     groqHistory.push({ role: "user", content: query });
 
-    const completion = await groq.chat.completions.create({
+    const completion = await getGroqClient().chat.completions.create({
       messages: groqHistory,
       model: "openai/gpt-oss-120b",
       temperature: mode === "evaluative" ? 0.25 : 0.3,

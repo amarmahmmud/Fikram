@@ -40,8 +40,10 @@ function normalizeContents(contentsOrRequest: any): any {
 
 import path from "path";
 import fs from "fs";
+import os from "os";
 
 function setupGoogleCredentials(): boolean {
+  // ── Strategy 1: File-based credentials (local development) ──────────────
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     if (!path.isAbsolute(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = path.resolve(
@@ -49,9 +51,30 @@ function setupGoogleCredentials(): boolean {
         process.env.GOOGLE_APPLICATION_CREDENTIALS
       );
     }
-    return fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS);
+    if (fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+      return true;
+    }
   }
 
+  // ── Strategy 2: JSON env var (Vercel / serverless) ──────────────────────
+  // On Vercel there's no filesystem, so we read the JSON from an env var
+  // and write it to a temp file that the GCP SDK can discover.
+  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (credentialsJson) {
+    try {
+      const tmpPath = path.join(os.tmpdir(), "gcp-key.json");
+      if (!fs.existsSync(tmpPath)) {
+        fs.writeFileSync(tmpPath, credentialsJson, { mode: 0o600 });
+      }
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
+      return true;
+    } catch (err) {
+      console.error("[GCP] Failed to write credentials from GOOGLE_APPLICATION_CREDENTIALS_JSON:", err);
+      return false;
+    }
+  }
+
+  // ── Strategy 3: Default file path fallback ──────────────────────────────
   const defaultKeyPath = path.resolve(process.cwd(), "gcp-key.json");
   if (fs.existsSync(defaultKeyPath)) {
     process.env.GOOGLE_APPLICATION_CREDENTIALS = defaultKeyPath;
