@@ -249,7 +249,7 @@ export async function embedText(text: string): Promise<number[]> {
  * Google Gemini batchEmbedContents accepts at most 100 requests per batch and 100 req/min on free tier.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const BATCH_SIZE = 50;
+  const BATCH_SIZE = 25;
   const allEmbeddings: number[][] = [];
 
   for (let i = 0; i < texts.length; i += BATCH_SIZE) {
@@ -266,12 +266,20 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
           contents: slice,
           config: { outputDimensionality: EMBEDDING_DIMENSIONS },
         });
-        allEmbeddings.push(...(result.embeddings || []).map((e: any) => e.values));
+        const batchEmbeddings = (result.embeddings || []).map((e: any) => e.values);
+        // Validate this batch returned the correct count
+        if (batchEmbeddings.length !== slice.length) {
+          throw new Error(
+            `Embedding batch returned ${batchEmbeddings.length}/${slice.length} results`
+          );
+        }
+        allEmbeddings.push(...batchEmbeddings);
         success = true;
       } catch (err: any) {
         const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
+        const isPartial = err.message?.includes("Embedding batch returned");
         
-        if (isQuota) {
+        if (isQuota || isPartial) {
           const keys = getGeminiApiKeys();
           if (keys.length > 1) {
             currentEmbedKeyIndex++;
@@ -296,8 +304,8 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
 
 // ── Section-aware chunking ────────────────────────────────────────────────────
 
-const CHUNK_SIZE = 800;     // char soft-cap within a section
-const CHUNK_OVERLAP = 100;  // overlap between sub-chunks of the same section
+const CHUNK_SIZE = 2000;    // char soft-cap within a section (larger = fewer chunks = faster embedding)
+const CHUNK_OVERLAP = 200;  // overlap between sub-chunks of the same section
 
 export interface SectionChunk {
   content: string;
