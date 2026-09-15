@@ -26,38 +26,50 @@ export async function checkRateLimit(
   key: string,
   config: RateLimitConfig,
 ): Promise<{ allowed: boolean; remaining: number; resetMs: number }> {
-  const windowSec = Math.ceil(config.windowMs / 1000);
-  const bucket = Math.floor(Date.now() / config.windowMs);
-  const redisKey = `rl:${key}:${bucket}`;
-
-  // Atomically increment and get TTL in a pipeline
-  const pipeline = redis.pipeline();
-  pipeline.incr(redisKey);
-  pipeline.ttl(redisKey);
-  const results = await pipeline.exec<[number, number]>();
-
-  const count = results[0];
-  const ttl = results[1];
-
-  // Set expiry on first request in this window
-  if (ttl === -1) {
-    await redis.expire(redisKey, windowSec);
+  // Gracefully skip rate limiting if Redis is not configured
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    console.warn("[rate-limiter] Redis not configured — skipping rate limit check");
+    return { allowed: true, remaining: config.maxRequests, resetMs: config.windowMs };
   }
 
-  if (count > config.maxRequests) {
-    const resetMs = ttl > 0 ? ttl * 1000 : config.windowMs;
+  try {
+    const windowSec = Math.ceil(config.windowMs / 1000);
+    const bucket = Math.floor(Date.now() / config.windowMs);
+    const redisKey = `rl:${key}:${bucket}`;
+
+    // Atomically increment and get TTL in a pipeline
+    const pipeline = redis.pipeline();
+    pipeline.incr(redisKey);
+    pipeline.ttl(redisKey);
+    const results = await pipeline.exec<[number, number]>();
+
+    const count = results[0];
+    const ttl = results[1];
+
+    // Set expiry on first request in this window
+    if (ttl === -1) {
+      await redis.expire(redisKey, windowSec);
+    }
+
+    if (count > config.maxRequests) {
+      const resetMs = ttl > 0 ? ttl * 1000 : config.windowMs;
+      return {
+        allowed: false,
+        remaining: 0,
+        resetMs,
+      };
+    }
+
     return {
-      allowed: false,
-      remaining: 0,
-      resetMs,
+      allowed: true,
+      remaining: Math.max(0, config.maxRequests - count),
+      resetMs: ttl > 0 ? ttl * 1000 : config.windowMs,
     };
+  } catch (err) {
+    // If Redis fails, allow the request but log the error
+    console.error("[rate-limiter] Redis error, allowing request:", err);
+    return { allowed: true, remaining: config.maxRequests, resetMs: config.windowMs };
   }
-
-  return {
-    allowed: true,
-    remaining: Math.max(0, config.maxRequests - count),
-    resetMs: ttl > 0 ? ttl * 1000 : config.windowMs,
-  };
 }
 
 /**
