@@ -131,6 +131,175 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
+  position: relative;
+}
+
+/* ── Starry Night Sky ──
+   3 layers of stars via box-shadow (no DOM bloat).
+   Each layer has different star sizes, densities, and twinkle speeds.
+   GPU-accelerated: only animates opacity + transform. */
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Layer 1: Tiny distant stars (dense, faint, slow twinkle) */
+body::before {
+  background: transparent;
+  box-shadow:
+    /* ~80 tiny stars scattered across viewport */
+    24px 31px 0 0.3px rgba(255,255,255,0.5),
+    67px 89px 0 0.3px rgba(255,255,255,0.4),
+    130px 52px 0 0.2px rgba(255,255,255,0.6),
+    195px 140px 0 0.3px rgba(255,255,255,0.35),
+    260px 78px 0 0.2px rgba(255,255,255,0.5),
+    310px 200px 0 0.3px rgba(255,255,255,0.3),
+    380px 42px 0 0.2px rgba(255,255,255,0.55),
+    420px 160px 0 0.3px rgba(255,255,255,0.4),
+    490px 95px 0 0.2px rgba(255,255,255,0.5),
+    550px 230px 0 0.3px rgba(255,255,255,0.35),
+    620px 65px 0 0.3px rgba(255,255,255,0.45),
+    680px 180px 0 0.2px rgba(255,255,255,0.5),
+    750px 38px 0 0.3px rgba(255,255,255,0.4),
+    810px 120px 0 0.2px rgba(255,255,255,0.55),
+    870px 210px 0 0.3px rgba(255,255,255,0.3),
+    940px 55px 0 0.2px rgba(255,255,255,0.5),
+    1010px 170px 0 0.3px rgba(255,255,255,0.4),
+    1070px 90px 0 0.2px rgba(255,255,255,0.6),
+    1140px 240px 0 0.3px rgba(255,255,255,0.35),
+    1200px 48px 0 0.2px rgba(255,255,255,0.5),
+    1260px 155px 0 0.3px rgba(255,255,255,0.45),
+    1320px 70px 0 0.2px rgba(255,255,255,0.5),
+    1380px 195px 0 0.3px rgba(255,255,255,0.35),
+    45px 280px 0 0.3px rgba(255,255,255,0.5),
+    110px 340px 0 0.2px rgba(255,255,255,0.4),
+    190px 400px 0 0.3px rgba(255,255,255,0.55),
+    275px 320px 0 0.2px rgba(255,255,255,0.5),
+    340px 450px 0 0.3px rgba(255,255,255,0.3),
+    430px 370px 0 0.2px rgba(255,255,255,0.5),
+    500px 500px 0 0.3px rgba(255,255,255,0.4),
+    580px 420px 0 0.2px rgba(255,255,255,0.55),
+    660px 350px 0 0.3px rgba(255,255,255,0.35),
+    730px 490px 0 0.2px rgba(255,255,255,0.5),
+    810px 380px 0 0.3px rgba(255,255,255,0.4),
+    890px 440px 0 0.2px rgba(255,255,255,0.5),
+    970px 360px 0 0.3px rgba(255,255,255,0.45),
+    1050px 410px 0 0.2px rgba(255,255,255,0.5),
+    1130px 480px 0 0.3px rgba(255,255,255,0.35),
+    55px 550px 0 0.2px rgba(255,255,255,0.5),
+    170px 620px 0 0.3px rgba(255,255,255,0.4),
+    280px 580px 0 0.2px rgba(255,255,255,0.55),
+    400px 650px 0 0.3px rgba(255,255,255,0.3),
+    520px 600px 0 0.2px rgba(255,255,255,0.5),
+    640px 680px 0 0.3px rgba(255,255,255,0.45),
+    760px 620px 0 0.2px rgba(255,255,255,0.5),
+    880px 570px 0 0.3px rgba(255,255,255,0.35),
+    1000px 650px 0 0.2px rgba(255,255,255,0.5),
+    1120px 590px 0 0.3px rgba(255,255,255,0.4),
+    90px 720px 0 0.2px rgba(255,255,255,0.5),
+    230px 780px 0 0.3px rgba(255,255,255,0.45),
+    370px 740px 0 0.2px rgba(255,255,255,0.5),
+    510px 810px 0 0.3px rgba(255,255,255,0.35),
+    650px 760px 0 0.2px rgba(255,255,255,0.55),
+    790px 830px 0 0.3px rgba(255,255,255,0.4),
+    930px 780px 0 0.2px rgba(255,255,255,0.5),
+    1070px 720px 0 0.3px rgba(255,255,255,0.45),
+    1200px 800px 0 0.2px rgba(255,255,255,0.5);
+  animation: starTwinkle1 6s ease-in-out infinite alternate;
+  will-change: opacity;
+}
+
+/* Layer 2: Medium stars + bright accent stars (sparser, brighter) */
+body::after {
+  background: transparent;
+  box-shadow:
+    /* Medium white stars */
+    83px 116px 0 0.6px rgba(255,255,255,0.7),
+    247px 67px 0 0.5px rgba(255,255,255,0.6),
+    412px 192px 0 0.6px rgba(255,255,255,0.65),
+    578px 43px 0 0.5px rgba(255,255,255,0.7),
+    730px 168px 0 0.6px rgba(255,255,255,0.6),
+    900px 92px 0 0.5px rgba(255,255,255,0.7),
+    1065px 210px 0 0.6px rgba(255,255,255,0.6),
+    1220px 130px 0 0.5px rgba(255,255,255,0.65),
+    155px 340px 0 0.6px rgba(255,255,255,0.7),
+    440px 420px 0 0.5px rgba(255,255,255,0.6),
+    710px 380px 0 0.6px rgba(255,255,255,0.7),
+    980px 460px 0 0.5px rgba(255,255,255,0.65),
+    1260px 350px 0 0.6px rgba(255,255,255,0.6),
+    90px 560px 0 0.5px rgba(255,255,255,0.7),
+    350px 640px 0 0.6px rgba(255,255,255,0.6),
+    620px 580px 0 0.5px rgba(255,255,255,0.7),
+    890px 670px 0 0.6px rgba(255,255,255,0.65),
+    1150px 610px 0 0.5px rgba(255,255,255,0.7),
+    200px 750px 0 0.6px rgba(255,255,255,0.6),
+    530px 800px 0 0.5px rgba(255,255,255,0.65),
+    830px 770px 0 0.6px rgba(255,255,255,0.7),
+    1100px 830px 0 0.5px rgba(255,255,255,0.6),
+    /* Accent cyan stars — subtle glow matching your brand */
+    320px 120px 0 1px rgba(0,229,200,0.35),
+    760px 290px 0 1px rgba(0,229,200,0.3),
+    1180px 450px 0 1px rgba(0,229,200,0.25),
+    480px 680px 0 1px rgba(0,229,200,0.3),
+    950px 780px 0 1px rgba(0,229,200,0.35),
+    /* Accent violet stars */
+    580px 180px 0 0.8px rgba(199,125,255,0.25),
+    1020px 340px 0 0.8px rgba(199,125,255,0.2),
+    210px 520px 0 0.8px rgba(199,125,255,0.25),
+    840px 620px 0 0.8px rgba(199,125,255,0.2);
+  animation: starTwinkle2 8s ease-in-out infinite alternate;
+  will-change: opacity;
+}
+
+/* Cosmic nebula glow — very subtle radial gradients */
+.starfield-nebula {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 15%, rgba(0,229,200,0.04) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 35% at 80% 25%, rgba(199,125,255,0.03) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 50% at 50% 80%, rgba(0,229,200,0.02) 0%, transparent 60%);
+}
+
+/* Twinkle animations — GPU-only (opacity) */
+@keyframes starTwinkle1 {
+  0%   { opacity: 0.6; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.7; }
+}
+
+@keyframes starTwinkle2 {
+  0%   { opacity: 0.5; }
+  50%  { opacity: 0.9; }
+  100% { opacity: 0.6; }
+}
+
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* Ensure content sits above the stars */
+body > * {
+  position: relative;
+  z-index: 1;
 }
 
 img, video { max-width: 100%; display: block; }

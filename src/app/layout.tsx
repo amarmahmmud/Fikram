@@ -37,6 +37,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <div className="starfield-nebula" aria-hidden="true" />
         {children}
         <Toaster theme="dark" position="bottom-right" />
       </body>
