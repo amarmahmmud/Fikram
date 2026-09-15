@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
+import { extractPdfTextFromUrl, extractPdfText } from "@/lib/document-ai";
 import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
 
 // Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
@@ -88,12 +89,26 @@ export async function POST(
 
     let text = "";
 
-    if (isMedia || isPdf) {
-      // ── Media/PDF: use Gemini to extract content ──────────────────────
-      // Gemini natively supports PDF, image, audio, and video input.
-      // This is more reliable than any pdfjs-based library on Vercel serverless
-      // and also handles scanned/image-based PDFs via Gemini's OCR.
-      const effectiveMimeType = isPdf ? "application/pdf" : mimeType;
+    if (isPdf) {
+      // ── PDF: use Google Document AI for fast OCR-based extraction ─────
+      // ~2-5 seconds, handles both digital and scanned PDFs.
+      console.log(`[Ingest] Processing PDF "${filename}" via Document AI`);
+
+      if (url) {
+        text = await extractPdfTextFromUrl(url);
+      } else if (data) {
+        text = await extractPdfText(Buffer.from(data, "base64"));
+      }
+
+      if (!text.trim()) {
+        return NextResponse.json({
+          error: "Could not extract text from this PDF. The file may be empty or corrupted.",
+        }, { status: 422 });
+      }
+
+      console.log(`[Ingest] Document AI extracted ${text.length} chars from "${filename}"`);
+    } else if (isMedia) {
+      // ── Media (image/audio/video): use Gemini to describe/transcribe ──
       console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via Gemini`);
 
       const { tier } = await getUserTier(user.id);
@@ -102,7 +117,7 @@ export async function POST(
       text = await describeMediaWithGemini({
         url,
         data,
-        mimeType: effectiveMimeType,
+        mimeType,
         filename,
         useEnterprise,
       });
@@ -113,7 +128,6 @@ export async function POST(
         }, { status: 422 });
       }
 
-      // Prepend a metadata header so chunks know their origin
       text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
 
       console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);

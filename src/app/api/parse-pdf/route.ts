@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { describeMediaWithGemini } from "@/lib/embedding";
+import { extractPdfText } from "@/lib/document-ai";
 
 export async function POST(req: Request) {
   try {
@@ -11,13 +11,7 @@ export async function POST(req: Request) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const data = Buffer.from(arrayBuffer).toString("base64");
-
-    const text = await describeMediaWithGemini({
-      data,
-      mimeType: "application/pdf",
-      filename: file.name || "document.pdf",
-    });
+    const text = await extractPdfText(Buffer.from(arrayBuffer));
     
     return NextResponse.json({ text });
   } catch (error: any) {

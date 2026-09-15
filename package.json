@@ -29,6 +29,7 @@
     "replicate": "^1.4.0",
     "simple-icons": "^16.28.0",
     "sonner": "^2.0.8",
+    "unpdf": "^1.8.1",
     "wavesurfer.js": "^7.8.0",
     "zod": "^4.6.2"
   },
