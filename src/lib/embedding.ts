@@ -475,12 +475,21 @@ export async function ingestDocument(
 
   const embeddings = await embedTexts(chunks.map((c) => c.content));
 
+  // Validate embedding count matches chunk count (partial results from quota
+  // issues would cause undefined access later)
+  if (embeddings.length !== chunks.length) {
+    throw new Error(
+      `Embedding count mismatch: got ${embeddings.length} embeddings for ${chunks.length} chunks. ` +
+      `This usually means the embedding API hit quota limits. Please try again.`
+    );
+  }
+
   console.log(`[RAG] Embedded ${embeddings.length} chunks`);
 
   const rows = chunks.map((chunk, i) => ({
     expert_id: expertId,
     content: chunk.content,
-    embedding: `[${embeddings[i].join(",")}]`,
+    embedding: `[${(embeddings[i] || []).join(",")}]`,
     source_filename: filename,
     chunk_index: i,
     section_title: chunk.sectionTitle,
