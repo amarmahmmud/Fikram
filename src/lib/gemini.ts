@@ -1,5 +1,36 @@
 import { GoogleGenAI } from "@google/genai";
 
+// ── Error Classification ─────────────────────────────────────────────────────
+
+/**
+ * Check if a Gemini API error is transient (rate limit, overload, timeout)
+ * vs. permanent (invalid request, auth failure, etc.).
+ * Exported so the AI Gateway can use this to decide whether to escalate.
+ */
+export function isTransientError(err: any): boolean {
+  const msg = err?.message || "";
+  const status = err?.status;
+  return (
+    status === 503 ||
+    status === 429 ||
+    status === 502 ||
+    status === 504 ||
+    msg.includes("503") ||
+    msg.includes("429") ||
+    msg.includes("502") ||
+    msg.includes("504") ||
+    msg.includes("high demand") ||
+    msg.includes("overloaded") ||
+    msg.includes("Resource has been exhausted") ||
+    msg.includes("fetch failed") ||
+    msg.includes("Timeout") ||
+    msg.includes("timeout") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("ECONNRESET") ||
+    err?.code === "UND_ERR_CONNECT_TIMEOUT"
+  );
+}
+
 export const RESILIENT_GEMINI_MODELS = [
   "gemini-3.5-flash",
   "gemini-3.6-flash",
@@ -122,7 +153,7 @@ function getGenAIClientForKey(apiKey: string): GoogleGenAI {
   return client;
 }
 
-function getEnterpriseClient(): GoogleGenAI {
+export function getEnterpriseClient(): GoogleGenAI {
   setupGoogleCredentials();
   const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
   const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
@@ -227,24 +258,7 @@ export async function generateWithModelFallback(
           const msg = err?.message || "";
           const status = err?.status;
 
-          const isTransient =
-            status === 503 ||
-            status === 429 ||
-            status === 502 ||
-            status === 504 ||
-            msg.includes("503") ||
-            msg.includes("429") ||
-            msg.includes("502") ||
-            msg.includes("504") ||
-            msg.includes("high demand") ||
-            msg.includes("overloaded") ||
-            msg.includes("Resource has been exhausted") ||
-            msg.includes("fetch failed") ||
-            msg.includes("Timeout") ||
-            msg.includes("timeout") ||
-            msg.includes("ETIMEDOUT") ||
-            msg.includes("ECONNRESET") ||
-            err?.code === "UND_ERR_CONNECT_TIMEOUT";
+          const isTransient = isTransientError(err);
 
           if (isTransient) {
             if (!useEnterprise && keys.length > 1) {

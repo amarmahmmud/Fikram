@@ -21,7 +21,8 @@ import { GoogleGenAI } from "@google/genai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
-import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys } from "@/lib/gemini";
+import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
+import { trackVertexSpend } from "@/lib/vertex-budget";
 
 let currentEmbedKeyIndex = 0;
 function getEmbeddingModel() {
@@ -237,7 +238,25 @@ export async function embedText(text: string): Promise<number[]> {
         console.warn(`[Embedding] Gemini quota hit on embedText, retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempts}/5)...`);
         await delay(delayMs);
       } else {
-        throw err;
+        // ── Vertex AI fallback for embeddings (extremely cheap, always allowed) ──
+        // Embedding calls cost ~$0.000025 per 1K chars on Vertex AI, so we
+        // always allow this fallback without budget checks.
+        try {
+          console.warn(`[Embedding] Free keys exhausted, falling back to Vertex AI for embedding...`);
+          const enterpriseClient = getEnterpriseClient();
+          const result = await enterpriseClient.models.embedContent({
+            model: EMBEDDING_MODEL,
+            contents: text,
+            config: { outputDimensionality: EMBEDDING_DIMENSIONS },
+          });
+          // Track the spend (non-blocking, fire-and-forget)
+          trackVertexSpend("embed_text", Math.ceil(text.length / 1000)).catch(console.error);
+          console.log(`[Embedding] Vertex AI fallback succeeded`);
+          return result.embeddings?.[0]?.values || [];
+        } catch (vertexErr: any) {
+          console.error(`[Embedding] Vertex AI fallback also failed:`, vertexErr.message);
+          throw err; // Throw the original error for better diagnostics
+        }
       }
     }
   }

@@ -39,10 +39,12 @@ export async function getUserTier(userId: string): Promise<{ tier: UserTier; pla
 }
 
 /**
- * Quick check: should this user's API calls go through the paid Vertex AI path?
- * Returns true only for paid-tier users.
+ * Quick check: should this user's API calls ALWAYS go through Vertex AI?
+ * Returns true only for paid-tier users. Free users may still be routed
+ * to Vertex AI via the AI Gateway's fallback logic, but only when free
+ * providers fail and the monthly budget allows it.
  */
-export function shouldUseEnterprise(tier: UserTier): boolean {
+export function shouldAlwaysUseEnterprise(tier: UserTier): boolean {
   return tier === "paid";
 }
 

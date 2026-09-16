@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { generateRAGResponse, isMediaMimeType, type MediaAttachment } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 import { parseExpertMetadata } from "@/lib/expert-metadata";
-import { getChatCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
+import { getChatCreditCost, checkCreditBalance, deductCredits, getUserTier } from "@/lib/credits";
+import { routeRequest, classifyChatTask } from "@/lib/ai-gateway";
 
 // Allow up to 60s for RAG generation (Vercel Hobby max)
 export const maxDuration = 60;
@@ -186,9 +187,15 @@ export async function POST(
     // Parse expert configuration metadata (mode, web search, etc.)
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
-    // Determine if the user should get enterprise routing
+    // AI Gateway: determine routing based on user tier, media, and circuit breaker
     const { tier } = user ? await getUserTier(user.id) : { tier: "free" as const };
-    const useEnterprise = shouldUseEnterprise(tier);
+    const primaryMimeType = mediaAttachments.length > 0 ? mediaAttachments[0].mimeType : undefined;
+    const chatTask = classifyChatTask(mediaAttachments.length > 0, primaryMimeType);
+    const decision = await routeRequest(chatTask, tier);
+
+    console.log(
+      `[Expert Chat] Route decision: ${decision.provider} → ${decision.fallback || "none"} | Reason: ${decision.reason}`,
+    );
 
     // Run RAG pipeline — automatically routes to Gemini if media attachments present
     const result = await generateRAGResponse(
@@ -200,7 +207,7 @@ export async function POST(
         reasoningMode: metadata.reasoningMode,
         webSearchEnabled: metadata.webSearchEnabled,
         mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
-        useEnterprise,
+        useEnterprise: decision.useEnterprise,
       }
     );
 

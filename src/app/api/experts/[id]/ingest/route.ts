@@ -4,7 +4,14 @@ import { ingestDocument } from "@/lib/embedding";
 import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
 import { extractPdfTextFromUrl, extractPdfText } from "@/lib/document-ai";
-import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier, shouldUseEnterprise } from "@/lib/credits";
+import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier } from "@/lib/credits";
+import {
+  routeRequest,
+  executeWithFallback,
+  classifyIngestTask,
+  taskToVertexOp,
+  type Provider,
+} from "@/lib/ai-gateway";
 
 // Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
 export const maxDuration = 60;
@@ -87,18 +94,62 @@ export async function POST(
       return NextResponse.json({ error: `Failed to process credits: ${deducted.error}` }, { status: 500 });
     }
 
+    // ── AI Gateway: Determine routing ─────────────────────────────────────
+    const { tier } = await getUserTier(user.id);
+    const task = classifyIngestTask(mimeType || "text/plain", filename);
+    const decision = await routeRequest(task, tier);
+    const vertexOp = taskToVertexOp(task);
+
+    console.log(
+      `[Ingest] Route decision: ${decision.provider} → ${decision.fallback || "none"} → ${decision.secondFallback || "none"} | Reason: ${decision.reason}`,
+    );
+
     let text = "";
+    let usedProvider: Provider = decision.provider;
 
     if (isPdf) {
-      // ── PDF: use Google Document AI for fast OCR-based extraction ─────
-      // ~2-5 seconds, handles both digital and scanned PDFs.
-      console.log(`[Ingest] Processing PDF "${filename}" via Document AI`);
+      // ── PDF: Document AI → Gemini free → Vertex AI cascade ─────────
+      console.log(`[Ingest] Processing PDF "${filename}" via AI Gateway`);
 
-      if (url) {
-        text = await extractPdfTextFromUrl(url);
-      } else if (data) {
-        text = await extractPdfText(Buffer.from(data, "base64"));
-      }
+      const result = await executeWithFallback<string>({
+        decision,
+        primaryFn: async () => {
+          // Document AI path
+          if (url) {
+            return await extractPdfTextFromUrl(url);
+          } else if (data) {
+            return await extractPdfText(Buffer.from(data, "base64"));
+          }
+          throw new Error("No URL or data for PDF");
+        },
+        fallbackFn: decision.fallback ? async () => {
+          // Gemini free or Vertex AI fallback — use Gemini to describe the PDF
+          console.log(`[Ingest] PDF fallback: using ${decision.fallback} for "${filename}"`);
+          return await describeMediaWithGemini({
+            url,
+            data,
+            mimeType: "application/pdf",
+            filename,
+            useEnterprise: decision.fallback === "vertex-ai",
+          });
+        } : undefined,
+        secondFallbackFn: decision.secondFallback ? async () => {
+          // Vertex AI as last resort
+          console.log(`[Ingest] PDF second fallback: using Vertex AI for "${filename}"`);
+          return await describeMediaWithGemini({
+            url,
+            data,
+            mimeType: "application/pdf",
+            filename,
+            useEnterprise: true,
+          });
+        } : undefined,
+        vertexOp,
+        vertexUnits: 1,
+      });
+
+      text = result.result;
+      usedProvider = result.usedProvider;
 
       if (!text.trim()) {
         return NextResponse.json({
@@ -106,31 +157,47 @@ export async function POST(
         }, { status: 422 });
       }
 
-      console.log(`[Ingest] Document AI extracted ${text.length} chars from "${filename}"`);
+      console.log(`[Ingest] Extracted ${text.length} chars from "${filename}" via ${usedProvider}`);
     } else if (isMedia) {
-      // ── Media (image/audio/video): use Gemini to describe/transcribe ──
-      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via Gemini`);
+      // ── Media (image/audio/video): Gemini free → Vertex AI cascade ──
+      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via AI Gateway`);
 
-      const { tier } = await getUserTier(user.id);
-      const useEnterprise = shouldUseEnterprise(tier);
-
-      text = await describeMediaWithGemini({
-        url,
-        data,
-        mimeType,
-        filename,
-        useEnterprise,
+      const result = await executeWithFallback<string>({
+        decision,
+        primaryFn: async () => {
+          return await describeMediaWithGemini({
+            url,
+            data,
+            mimeType,
+            filename,
+            useEnterprise: decision.useEnterprise,
+          });
+        },
+        fallbackFn: decision.fallback ? async () => {
+          console.log(`[Ingest] Media fallback: using ${decision.fallback} for "${filename}"`);
+          return await describeMediaWithGemini({
+            url,
+            data,
+            mimeType,
+            filename,
+            useEnterprise: decision.fallback === "vertex-ai",
+          });
+        } : undefined,
+        vertexOp,
+        vertexUnits: 1,
       });
+
+      text = result.result;
+      usedProvider = result.usedProvider;
 
       if (!text.trim()) {
         return NextResponse.json({
-          error: `Gemini could not extract content from this ${mediaCategory} file. Please try a different file.`,
+          error: `Could not extract content from this ${mediaCategory} file. Please try a different file.`,
         }, { status: 422 });
       }
 
       text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
-
-      console.log(`[Ingest] Gemini extracted ${text.length} chars from ${mediaCategory} "${filename}"`);
+      console.log(`[Ingest] Extracted ${text.length} chars from ${mediaCategory} "${filename}" via ${usedProvider}`);
     } else {
       // ── Plain text, markdown, CSV, etc. ────────────────────────────────
       if (url) {
@@ -146,7 +213,7 @@ export async function POST(
       return NextResponse.json({ error: "File contains no extractable text" }, { status: 422 });
     }
 
-    console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars, type: ${mediaCategory})`);
+    console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars, type: ${mediaCategory}, provider: ${usedProvider})`);
 
     // Chunk, embed, and store
     const result = await ingestDocument(expertId, text, filename);
@@ -157,6 +224,7 @@ export async function POST(
       textLength: text.length,
       chunksStored: result.chunksStored,
       mediaType: mediaCategory,
+      provider: usedProvider,
     });
   } catch (err: any) {
     console.error("[Ingest] Error:", err);
@@ -166,4 +234,3 @@ export async function POST(
     );
   }
 }
-
