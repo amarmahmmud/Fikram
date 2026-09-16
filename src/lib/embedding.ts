@@ -988,51 +988,106 @@ ${finalGroundingBlock}`;
 
     groqHistory.push({ role: "user", content: query });
 
-    const completion = await getGroqClient().chat.completions.create({
-      messages: groqHistory,
-      model: "openai/gpt-oss-120b",
-      temperature: mode === "evaluative" ? 0.25 : 0.3,
-      max_completion_tokens: 4096,
-      ...(mode === "evaluative" ? { response_format: { type: "json_object" } } : {}),
-    });
+    try {
+      const completion = await getGroqClient().chat.completions.create({
+        messages: groqHistory,
+        model: "openai/gpt-oss-120b",
+        temperature: mode === "evaluative" ? 0.25 : 0.3,
+        max_completion_tokens: 4096,
+      });
 
-    draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+      draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
+    } catch (groqErr: any) {
+      console.warn("[RAG] Groq generation error, checking recovery:", groqErr?.message);
+
+      // 1. If Groq threw json_validate_failed, retrieve the failed generation
+      let recoveredText: string | undefined = groqErr?.error?.failed_generation;
+      if (!recoveredText && typeof groqErr?.message === "string") {
+        try {
+          const parsed = JSON.parse(groqErr.message.replace(/^[0-9]+\s*/, ""));
+          recoveredText = parsed?.error?.failed_generation;
+        } catch {}
+      }
+
+      if (recoveredText) {
+        draft = recoveredText.trim();
+      } else {
+        // 2. Fallback to Gemini text generation
+        console.log("[RAG] Falling back to Gemini for text generation...");
+        try {
+          const geminiFallback = await generateWithModelFallback(
+            [
+              {
+                role: "user",
+                parts: [{ text: `${groundedSystemPrompt}\n\nUser Message:\n${query}` }],
+              },
+            ],
+            {
+              generationConfig: {
+                maxOutputTokens: 4096,
+                temperature: mode === "evaluative" ? 0.25 : 0.3,
+              },
+            }
+          );
+          draft = geminiFallback.text()?.trim() ?? "I couldn't generate a response.";
+        } catch (geminiErr: any) {
+          console.error("[RAG] Both Groq and Gemini fallback failed:", geminiErr);
+          throw groqErr;
+        }
+      }
+    }
   }
 
   // Re-assemble JSON into markdown if in evaluative mode
   if (mode === "evaluative") {
     try {
-      const parsed = JSON.parse(draft.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim());
-      
-      let totalScore = 0;
-      let scorecardMd = "## 🚀 QUICK‑LOOK SCORECARD\n| Dimension | Score (0‑10) | Why you’re getting that number |\n|-----------|--------------|--------------------------------|\n";
-      
-      const scorecardData = Array.isArray(parsed.scorecard) ? parsed.scorecard : [];
-      
-      // Enforce all 10 dimensions are present, even if LLM missed one
-      for (const dim of RUBRIC_DIMENSIONS) {
-        const row = scorecardData.find((r: any) => r.dimension === dim) || { score: 3, reasoning: "No specific details provided; scored conservatively based on concept requirements." };
-        const score = typeof row.score === 'number' ? row.score : parseInt(String(row.score), 10) || 0;
-        totalScore += score;
-        scorecardMd += `| ${dim} | ${score} | ${row.reasoning.replace(/\n/g, ' ')} |\n`;
+      let jsonStr = draft.trim();
+      const codeBlockMatch = draft.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+      if (codeBlockMatch) {
+        jsonStr = codeBlockMatch[1].trim();
+      } else {
+        const firstBrace = draft.indexOf("{");
+        const lastBrace = draft.lastIndexOf("}");
+        if (firstBrace !== -1 && lastBrace > firstBrace) {
+          jsonStr = draft.slice(firstBrace, lastBrace + 1).trim();
+        }
       }
-      
-      const totalVerdict = parsed.total_verdict ? parsed.total_verdict.replace(/\n/g, ' ') : "";
-      scorecardMd += `| **Total** | **${totalScore} / 100** | **${totalVerdict}** |\n---\n`;
-      
-      // Strip any headings the LLM may have snuck into content fields (we hardcode them)
-      const stripHeadings = (text: string) => text.replace(/^##\s*[🔥📉🛠️].*\n?/gm, '').trim();
-      const roastContent = stripHeadings(parsed.roast || "");
-      const graveyardContent = stripHeadings(parsed.graveyard || "");
-      const pivotContent = stripHeadings(parsed.pivot || "");
-      
-      draft = `${scorecardMd}\n## 🔥 ROAST\n${roastContent}\n\n---\n\n## 📉 WHY SIMILAR STARTUPS HAVE DIED\n${graveyardContent}\n\n---\n\n## 🛠️ CONSTRUCTIVE PIVOT\n${pivotContent}`.trim();
-      
-      // Clean up any duplicate horizontal rules
-      draft = draft.replace(/(?:\n\s*---\s*){2,}/g, '\n\n---');
-    } catch (e: any) {
-      console.error("[RAG] Failed to parse evaluative JSON output:", e.message);
-      // draft remains the raw string which might look ugly but won't crash
+
+      const parsed = JSON.parse(jsonStr);
+
+      if (parsed.scorecard || parsed.total_verdict || parsed.roast) {
+        let totalScore = 0;
+        let scorecardMd = "## 🚀 QUICK‑LOOK SCORECARD\n| Dimension | Score (0‑10) | Why you’re getting that number |\n|-----------|--------------|--------------------------------|\n";
+
+        const scorecardData = Array.isArray(parsed.scorecard) ? parsed.scorecard : [];
+
+        // Enforce all 10 dimensions are present, even if LLM missed one
+        for (const dim of RUBRIC_DIMENSIONS) {
+          const row = scorecardData.find((r: any) => r.dimension === dim) || {
+            score: 3,
+            reasoning: "No specific details provided; scored conservatively based on concept requirements.",
+          };
+          const score = typeof row.score === "number" ? row.score : parseInt(String(row.score), 10) || 0;
+          totalScore += score;
+          scorecardMd += `| ${dim} | ${score} | ${String(row.reasoning || "").replace(/\n/g, " ")} |\n`;
+        }
+
+        const totalVerdict = parsed.total_verdict ? String(parsed.total_verdict).replace(/\n/g, " ") : "";
+        scorecardMd += `| **Total** | **${totalScore} / 100** | **${totalVerdict}** |\n---\n`;
+
+        // Strip any headings the LLM may have snuck into content fields
+        const stripHeadings = (text: string) => text.replace(/^##\s*[🔥📉🛠️].*\n?/gm, "").trim();
+        const roastContent = stripHeadings(parsed.roast || "");
+        const graveyardContent = stripHeadings(parsed.graveyard || "");
+        const pivotContent = stripHeadings(parsed.pivot || "");
+
+        draft = `${scorecardMd}\n## 🔥 ROAST\n${roastContent}\n\n---\n\n## 📉 WHY SIMILAR STARTUPS HAVE DIED\n${graveyardContent}\n\n---\n\n## 🛠️ CONSTRUCTIVE PIVOT\n${pivotContent}`.trim();
+
+        // Clean up any duplicate horizontal rules
+        draft = draft.replace(/(?:\n\s*---\s*){2,}/g, "\n\n---");
+      }
+    } catch {
+      // Natural conversational text remains intact as clean markdown/text
     }
   }
 

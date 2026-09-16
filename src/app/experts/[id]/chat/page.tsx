@@ -64,10 +64,17 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [currentUser, setCurrentUser] = useState<any>(null);
 
 
-  // Sidebar and Conversation state
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Sidebar and Conversation state (collapsed by default on mobile)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
+
+  // Auto-expand sidebar on desktop devices
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth > 768) {
+      setSidebarOpen(true);
+    }
+  }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
   
@@ -122,7 +129,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       setExpert(data);
     }
     return data;
-  }, [expertId, supabase]);
+  }, [expertId]);
 
   /** Fetch past conversations list */
   const loadConversations = useCallback(async () => {
@@ -148,44 +155,18 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     return [];
   }, [expertId]);
 
-  // Check auth user and load data
-  useEffect(() => {
-    async function init() {
-      const { data: { user } } = await supabase.auth.getUser();
-      setCurrentUser(user);
-
-      const exp = await loadExpertDetails();
-      if (exp) {
-        const convs = await loadConversations();
-        if (convs.length > 0) {
-          // Load most recent conversation
-          await selectConversation(convs[0].id);
-        } else {
-          setMessages([getInitialWelcomeMessage(exp)]);
-        }
-
-        // Trigger chat count increment
-        apiClient.post("/api/community/chat-count", { targetId: expertId, targetType: "expert" })
-          .catch(console.error);
-      }
-      setLoading(false);
-    }
-    init();
-  }, [expertId, loadExpertDetails, loadConversations, getInitialWelcomeMessage, supabase.auth]);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
-
   /** Select and load a conversation */
-  async function selectConversation(convId: string) {
+  const selectConversation = useCallback(async (convId: string, currentExpert?: any) => {
     setActiveConvId(convId);
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
+    const exp = currentExpert || expert;
     try {
       const res = await apiClient.get<any>(`/api/experts/${expertId}/conversations/${convId}`);
       if (res.ok && Array.isArray(res.messages)) {
-        if (res.messages.length === 0 && expert) {
-          setMessages([getInitialWelcomeMessage(expert)]);
+        if (res.messages.length === 0 && exp) {
+          setMessages([getInitialWelcomeMessage(exp)]);
         } else {
           setMessages(
             res.messages.map((m: any) => ({
@@ -212,14 +193,55 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       }
     } catch {}
 
-    if (expert) {
-      setMessages([getInitialWelcomeMessage(expert)]);
+    if (exp) {
+      setMessages([getInitialWelcomeMessage(exp)]);
     }
-  }
+  }, [expertId, expert, getInitialWelcomeMessage]);
+
+  // Check auth user and load data
+  useEffect(() => {
+    let mounted = true;
+    async function init() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (mounted) setCurrentUser(user);
+
+        const exp = await loadExpertDetails();
+        if (exp && mounted) {
+          const convs = await loadConversations();
+          if (convs.length > 0) {
+            // Load most recent conversation
+            await selectConversation(convs[0].id, exp);
+          } else {
+            setMessages([getInitialWelcomeMessage(exp)]);
+          }
+
+          // Trigger chat count increment
+          apiClient.post("/api/community/chat-count", { targetId: expertId, targetType: "expert" })
+            .catch(console.error);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+    init();
+
+    return () => {
+      mounted = false;
+    };
+  }, [expertId]);
+
+  // Auto-scroll on new messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, sending]);
 
   /** Start a new chat */
   function handleNewChat() {
     setActiveConvId(null);
+    if (typeof window !== "undefined" && window.innerWidth <= 768) {
+      setSidebarOpen(false);
+    }
     if (expert) {
       setMessages([getInitialWelcomeMessage(expert)]);
     }
@@ -511,16 +533,34 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   if (!expert) {
     return (
       <div className={styles.loading}>
-        <p>Expert not found.</p>
-        <Link href="/dashboard" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-          ← Back to Dashboard
-        </Link>
+        <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🤖</div>
+        <h3 style={{ marginBottom: 8, color: "var(--text-primary)", fontSize: "1.25rem", fontWeight: 600 }}>
+          Assistant Not Found
+        </h3>
+        <p style={{ color: "var(--text-secondary)", maxWidth: 420, textAlign: "center", fontSize: "0.875rem", lineHeight: 1.5 }}>
+          This assistant may be private, under review, or the link may have expired.
+        </p>
+        <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
+          <Link href="/browse" className="btn btn-primary btn-sm">
+            Browse Assistants
+          </Link>
+          <Link href="/" className="btn btn-secondary btn-sm">
+            Home
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={styles.chatContainer}>
+      {/* ──────────────── Mobile Sidebar Backdrop Overlay ──────────────── */}
+      <div
+        className={`${styles.sidebarBackdrop} ${sidebarOpen ? styles.backdropActive : ""}`}
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
       {/* ──────────────── Left Sidebar: Chat History ──────────────── */}
       <aside className={`${styles.sidebar} ${!sidebarOpen ? styles.sidebarCollapsed : ""}`}>
         <div className={styles.sidebarHeader}>
@@ -581,33 +621,40 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       <div className={styles.chatMain}>
         {/* Header */}
         <header className={styles.header}>
-          {!sidebarOpen && (
-            <button
-              className={styles.sidebarToggleBtn}
-              onClick={() => setSidebarOpen(true)}
-              title="Open chat history sidebar"
+          <div className={styles.headerLeft}>
+            {!sidebarOpen && (
+              <button
+                className={styles.sidebarToggleBtn}
+                onClick={() => setSidebarOpen(true)}
+                title="Open chat history sidebar"
+                aria-label="Open chat history"
+              >
+                <PanelLeft size={18} />
+              </button>
+            )}
+
+            <Link
+              href={currentUser ? "/dashboard" : "/browse"}
+              className={styles.backBtn}
+              title={currentUser ? "Back to Dashboard" : "Back to Browse"}
+              aria-label="Back"
             >
-              <PanelLeft size={18} />
-            </button>
-          )}
+              ←
+            </Link>
 
-          <Link href="/dashboard" className={styles.backBtn} title="Back to Dashboard">
-            ←
-          </Link>
-
-          <div className={styles.headerInfo}>
             <div className={styles.expertAvatar}>
               {expert.name.charAt(0).toUpperCase()}
             </div>
-            <div>
-              <div className={styles.expertName}>{expert.name}</div>
+            
+            <div className={styles.headerTitles}>
+              <div className={styles.expertName} title={expert.name}>{expert.name}</div>
               <div className={styles.expertTag}>
                 {expertMetadata?.reasoningMode === "evaluative"
-                  ? "🔥 Critical Evaluator & Scorecard"
+                  ? "🔥 Critical Evaluator"
                   : expertMetadata?.reasoningMode === "strict"
                   ? "🔒 Strict Grounding"
                   : "⚖️ Smart Assistant"}
-                {expertMetadata?.webSearchEnabled ? " · 🌐 Live Web Intelligence" : " · Internal RAG"}
+                {expertMetadata?.webSearchEnabled ? " · 🌐 Web" : ""}
               </div>
             </div>
           </div>
@@ -615,32 +662,46 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           <div className={styles.headerActions}>
             {isOwner && (
               <button
-                className="btn btn-secondary btn-sm"
+                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
                 onClick={() => setEditModalOpen(true)}
-                style={{ gap: 6 }}
                 title="Edit assistant rules and system prompt"
               >
                 <Settings2 size={16} />
-                Edit Settings
+                <span className={styles.btnLabel}>Edit Settings</span>
               </button>
             )}
             <button
-              className="btn btn-secondary btn-sm"
+              className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
               onClick={() => setSourcesModalOpen(true)}
-              style={{ gap: 6 }}
-              title="View indexed knowledge sources or upload new documents"
+              title={`View indexed knowledge sources (${totalChunks} chunks)`}
             >
               <BookOpen size={16} />
-              Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}
+              <span className={styles.btnLabel}>Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}</span>
             </button>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={() => setPublishModalOpen(true)}
-              style={{ gap: 6 }}
-            >
-              <Globe size={16} />
-              {expert.is_published ? "Published (Share)" : "Publish & Share"}
-            </button>
+            {isOwner ? (
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
+                onClick={() => setPublishModalOpen(true)}
+                title="Publish & Share settings"
+              >
+                <Globe size={16} />
+                <span className={styles.btnLabel}>{expert.is_published ? "Published" : "Publish & Share"}</span>
+              </button>
+            ) : (
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
+                onClick={() => {
+                  if (typeof window !== "undefined" && navigator.clipboard) {
+                    navigator.clipboard.writeText(window.location.href);
+                    alert("Share link copied to clipboard!");
+                  }
+                }}
+                title="Copy share link"
+              >
+                <Globe size={16} />
+                <span className={styles.btnLabel}>Share</span>
+              </button>
+            )}
           </div>
         </header>
 

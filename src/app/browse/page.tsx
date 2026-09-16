@@ -245,42 +245,53 @@ export default function BrowseModelsPage() {
 
               <div className={styles.cardFooter}>
                 <div className={styles.stats}>
-                  <div className={styles.statItem} title="Total Chats">
-                    <MessageCircle size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> 
-                    {localStats[item.id]?.chats ?? item.chatsCount >= 1000 ? ((localStats[item.id]?.chats ?? item.chatsCount) / 1000).toFixed(1) + "k" : (localStats[item.id]?.chats ?? item.chatsCount)}
-                  </div>
-                  <div 
-                    className={styles.statItem} 
-                    title={likedIds.has(item.id) ? "Unlike" : "Like"}
-                    role="button"
-                    tabIndex={0}
-                    style={{ 
-                      cursor: likeInProgress.has(item.id) ? 'wait' : 'pointer', 
-                      transition: 'all 0.2s',
-                      opacity: likeInProgress.has(item.id) ? 0.6 : 1,
-                    }}
-                    onClick={() => handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job")}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job");
-                      }
-                    }}
-                  >
-                    <Heart 
-                      size={14} 
-                      fill={likedIds.has(item.id) ? "#C77DFF" : "none"}
-                      color={likedIds.has(item.id) ? "#C77DFF" : "currentColor"}
-                      style={{ 
-                        display: 'inline', 
-                        verticalAlign: 'text-bottom', 
-                        marginRight: 4,
-                        transform: likedIds.has(item.id) ? 'scale(1.1)' : 'scale(1)',
-                        transition: 'transform 0.15s ease, fill 0.15s ease',
-                      }} 
-                    /> 
-                    {localStats[item.id]?.likes ?? item.likesCount}
-                  </div>
+                  {(() => {
+                    const chatCount = localStats[item.id]?.chats ?? item.chatsCount ?? 0;
+                    const likeCount = localStats[item.id]?.likes ?? item.likesCount ?? 0;
+                    const formattedChats = chatCount >= 1000 ? (chatCount / 1000).toFixed(1) + "k" : String(chatCount);
+                    const formattedLikes = likeCount >= 1000 ? (likeCount / 1000).toFixed(1) + "k" : String(likeCount);
+
+                    return (
+                      <>
+                        <div className={styles.statItem} title="Total Chats">
+                          <MessageCircle size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: 4 }} /> 
+                          {formattedChats}
+                        </div>
+                        <div 
+                          className={styles.statItem} 
+                          title={likedIds.has(item.id) ? "Unlike" : "Like"}
+                          role="button"
+                          tabIndex={0}
+                          style={{ 
+                            cursor: likeInProgress.has(item.id) ? 'wait' : 'pointer', 
+                            transition: 'all 0.2s',
+                            opacity: likeInProgress.has(item.id) ? 0.6 : 1,
+                          }}
+                          onClick={() => handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job")}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleLike(item.id, item.type === "smart_assistant" ? "expert" : "job");
+                            }
+                          }}
+                        >
+                          <Heart 
+                            size={14} 
+                            fill={likedIds.has(item.id) ? "#C77DFF" : "none"}
+                            color={likedIds.has(item.id) ? "#C77DFF" : "currentColor"}
+                            style={{ 
+                              display: 'inline', 
+                              verticalAlign: 'text-bottom', 
+                              marginRight: 4,
+                              transform: likedIds.has(item.id) ? 'scale(1.1)' : 'scale(1)',
+                              transition: 'transform 0.15s ease, fill 0.15s ease',
+                            }} 
+                          /> 
+                          {formattedLikes}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
                 <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ padding: "6px 16px", borderRadius: "8px" }}>
                   {item.type === "smart_assistant" ? "Chat ▷" : "Try ▷"}
