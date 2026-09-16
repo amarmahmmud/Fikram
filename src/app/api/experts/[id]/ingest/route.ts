@@ -23,6 +23,37 @@ const MAX_FILE_SIZES: Record<string, number> = {
   video: 4 * 1024 * 1024,    // 4MB for video
 };
 
+function inferMimeType(filename: string, mimeType?: string): string {
+  if (mimeType && mimeType !== "application/octet-stream" && mimeType.trim().length > 0) {
+    return mimeType;
+  }
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  switch (ext) {
+    case "pdf": return "application/pdf";
+    case "png": return "image/png";
+    case "jpg":
+    case "jpeg": return "image/jpeg";
+    case "webp": return "image/webp";
+    case "gif": return "image/gif";
+    case "heic": return "image/heic";
+    case "heif": return "image/heif";
+    case "mp3": return "audio/mpeg";
+    case "wav": return "audio/wav";
+    case "m4a": return "audio/x-m4a";
+    case "ogg": return "audio/ogg";
+    case "aac": return "audio/aac";
+    case "flac": return "audio/flac";
+    case "mp4": return "video/mp4";
+    case "webm": return "video/webm";
+    case "mov": return "video/quicktime";
+    case "txt": return "text/plain";
+    case "md": return "text/markdown";
+    case "csv": return "text/csv";
+    case "json": return "application/json";
+    default: return mimeType || "text/plain";
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -65,12 +96,13 @@ export async function POST(
       return NextResponse.json({ error: "File URL or content data is required" }, { status: 400 });
     }
 
-    const isPdf = filename.toLowerCase().endsWith(".pdf");
-    const isMedia = isMediaMimeType(mimeType || "application/octet-stream");
-    const mediaCategory = isMedia ? getMediaCategory(mimeType) : isPdf ? "document" : "text";
+    const effectiveMime = inferMimeType(filename, mimeType);
+    const isPdf = filename.toLowerCase().endsWith(".pdf") || effectiveMime === "application/pdf";
+    const isMedia = isMediaMimeType(effectiveMime);
+    const mediaCategory = isMedia ? getMediaCategory(effectiveMime) : isPdf ? "document" : "text";
 
     // ── Credit check & deduction ──────────────────────────────────────────
-    const { cost, action } = getIngestCreditCost(mimeType || "text/plain", isMedia || isPdf);
+    const { cost, action } = getIngestCreditCost(effectiveMime, isMedia || isPdf);
     const { allowed: hasCredits, balance } = await checkCreditBalance(user.id, cost);
     if (!hasCredits) {
       return NextResponse.json(
@@ -96,7 +128,7 @@ export async function POST(
 
     // ── AI Gateway: Determine routing ─────────────────────────────────────
     const { tier } = await getUserTier(user.id);
-    const task = classifyIngestTask(mimeType || "text/plain", filename);
+    const task = classifyIngestTask(effectiveMime, filename);
     const decision = await routeRequest(task, tier);
     const vertexOp = taskToVertexOp(task);
 
@@ -168,7 +200,7 @@ export async function POST(
           return await describeMediaWithGemini({
             url,
             data,
-            mimeType,
+            mimeType: effectiveMime,
             filename,
             useEnterprise: decision.useEnterprise,
           });
@@ -178,7 +210,7 @@ export async function POST(
           return await describeMediaWithGemini({
             url,
             data,
-            mimeType,
+            mimeType: effectiveMime,
             filename,
             useEnterprise: decision.fallback === "vertex-ai",
           });

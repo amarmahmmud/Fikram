@@ -19,6 +19,9 @@ import {
   ArrowRight,
   UploadCloud,
   CheckCircle2,
+  Image,
+  FileAudio,
+  Film,
 } from "lucide-react";
 
 type Step = 1 | 2 | 3;
@@ -137,17 +140,51 @@ export default function NewExpertPage() {
   }
 
   function addFiles(newFiles: File[]) {
-    const valid = newFiles.filter(
-      (f) =>
-        f.name.endsWith(".pdf") ||
-        f.name.endsWith(".txt") ||
-        f.name.endsWith(".md") ||
-        f.type.startsWith("text/")
-    );
-    setFiles((prev) => [
-      ...prev,
-      ...valid.map((file) => ({ file, sourceType: "file" as const, status: "pending" as const })),
+    const validExtensions = new Set([
+      // Documents
+      "pdf", "txt", "md", "csv", "json",
+      // Images
+      "png", "jpg", "jpeg", "webp", "gif", "heic", "heif",
+      // Audio
+      "mp3", "wav", "m4a", "ogg", "aac", "flac",
+      // Video
+      "mp4", "webm", "mov", "quicktime",
     ]);
+
+    const valid = newFiles.filter((f) => {
+      const ext = f.name.toLowerCase().split(".").pop() || "";
+      const isMimeValid =
+        f.type.startsWith("text/") ||
+        f.type.startsWith("image/") ||
+        f.type.startsWith("audio/") ||
+        f.type.startsWith("video/") ||
+        f.type === "application/pdf" ||
+        f.type === "application/json";
+
+      if (!validExtensions.has(ext) && !isMimeValid) {
+        toast.error(`"${f.name}" is not a supported file type.`);
+        return false;
+      }
+
+      const isVid = ext === "mp4" || ext === "webm" || ext === "mov" || f.type.startsWith("video/");
+      const isAud = ext === "mp3" || ext === "wav" || ext === "m4a" || ext === "ogg" || ext === "flac" || f.type.startsWith("audio/");
+      const isImg = ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp" || ext === "gif" || ext === "heic" || f.type.startsWith("image/");
+      const maxSize = isVid ? 50 * 1024 * 1024 : isAud ? 25 * 1024 * 1024 : isImg ? 20 * 1024 * 1024 : 25 * 1024 * 1024;
+
+      if (f.size > maxSize) {
+        toast.error(`"${f.name}" exceeds the maximum size of ${Math.round(maxSize / 1024 / 1024)}MB.`);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (valid.length > 0) {
+      setFiles((prev) => [
+        ...prev,
+        ...valid.map((file) => ({ file, sourceType: "file" as const, status: "pending" as const })),
+      ]);
+    }
   }
 
   // Add scraped URL as a file
@@ -205,11 +242,25 @@ export default function NewExpertPage() {
       try {
         const file = files[i].file;
         
+        // Infer MIME type if browser passed empty string or generic
+        const ext = file.name.toLowerCase().split(".").pop() || "";
+        let mimeType = file.type;
+        if (!mimeType || mimeType === "application/octet-stream") {
+          if (ext === "pdf") mimeType = "application/pdf";
+          else if (["png", "jpg", "jpeg", "webp", "gif", "heic"].includes(ext)) mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+          else if (["mp3", "wav", "ogg", "aac", "flac"].includes(ext)) mimeType = `audio/${ext}`;
+          else if (ext === "m4a") mimeType = "audio/x-m4a";
+          else if (["mp4", "webm"].includes(ext)) mimeType = `video/${ext}`;
+          else if (ext === "mov") mimeType = "video/quicktime";
+          else if (["txt", "md", "csv"].includes(ext)) mimeType = "text/plain";
+          else if (ext === "json") mimeType = "application/json";
+        }
+
         // Direct-to-R2 Architecture
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: file.type }),
+          body: JSON.stringify({ filename: file.name, contentType: mimeType || file.type }),
         });
         
         if (!uploadRes.ok) throw new Error("Failed to get upload URL");
@@ -219,7 +270,7 @@ export default function NewExpertPage() {
         const putRes = await fetch(uploadUrl, {
           method: "PUT",
           body: file,
-          headers: { "Content-Type": file.type },
+          headers: { "Content-Type": mimeType || file.type },
         });
         if (!putRes.ok) throw new Error("Failed to upload file to storage");
 
@@ -229,7 +280,7 @@ export default function NewExpertPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             url: downloadUrl,
-            mimeType: file.type,
+            mimeType: mimeType || file.type,
             filename: file.name,
           }),
         });
@@ -465,7 +516,7 @@ export default function NewExpertPage() {
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>Upload Knowledge Content</h2>
             <p className={styles.cardDesc}>
-              Upload the expert&apos;s content — PDFs, text files, course materials, or web links. The AI will read and index these.
+              Upload the expert&apos;s content — PDFs, documents, images, audio, video, or web links. The AI will extract and index knowledge from them.
             </p>
 
             <div
@@ -478,7 +529,7 @@ export default function NewExpertPage() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,.txt,.md"
+                accept=".pdf,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.heic,.mp3,.wav,.m4a,.ogg,.aac,.flac,.mp4,.webm,.mov,image/*,audio/*,video/*"
                 multiple
                 hidden
                 onChange={handleFileSelect}
@@ -489,7 +540,7 @@ export default function NewExpertPage() {
               <p className={styles.dropzoneText}>
                 Drop files here or <span className={styles.dropzoneLink}>browse</span>
               </p>
-              <p className={styles.dropzoneHint}>PDF, TXT, MD files supported</p>
+              <p className={styles.dropzoneHint}>PDF, Documents, Images, Audio, Video supported (up to 50MB)</p>
             </div>
 
             {/* URL Ingestion Section */}
@@ -535,14 +586,30 @@ export default function NewExpertPage() {
             {/* File & Source list */}
             {files.length > 0 && (
               <div className={styles.fileList}>
-                {files.map((f, i) => (
-                  <div key={i} className={styles.fileRow}>
-                    <span className={styles.fileIcon}>
-                      {f.sourceType === "url" ? <Globe size={15} /> : <FileText size={15} />}
-                    </span>
-                    <span className={styles.fileName}>
-                      {f.sourceType === "url" ? `${f.file.name} (${f.sourceUrl})` : f.file.name}
-                    </span>
+                {files.map((f, i) => {
+                  const lowerName = f.file.name.toLowerCase();
+                  const isImg = lowerName.match(/\.(png|jpe?g|webp|gif|heic|heif)$/) || f.file.type.startsWith("image/");
+                  const isAud = lowerName.match(/\.(mp3|wav|m4a|ogg|aac|flac)$/) || f.file.type.startsWith("audio/");
+                  const isVid = lowerName.match(/\.(mp4|webm|mov)$/) || f.file.type.startsWith("video/");
+
+                  return (
+                    <div key={i} className={styles.fileRow}>
+                      <span className={styles.fileIcon}>
+                        {f.sourceType === "url" ? (
+                          <Globe size={15} />
+                        ) : isImg ? (
+                          <Image size={15} />
+                        ) : isAud ? (
+                          <FileAudio size={15} />
+                        ) : isVid ? (
+                          <Film size={15} />
+                        ) : (
+                          <FileText size={15} />
+                        )}
+                      </span>
+                      <span className={styles.fileName}>
+                        {f.sourceType === "url" ? `${f.file.name} (${f.sourceUrl})` : f.file.name}
+                      </span>
                     <span className={styles.fileSize}>
                       {(f.file.size / 1024).toFixed(0)} KB
                     </span>
@@ -571,8 +638,9 @@ export default function NewExpertPage() {
                         <X size={14} />
                       </button>
                     )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
             )}
 

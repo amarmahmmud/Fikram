@@ -115,16 +115,32 @@ export async function describeMediaWithGemini({
   let fileUri: string | null = null;
   let pinnedApiKey: string | undefined;
 
-  if (url) {
-    // Upload via Gemini File API (handles large files without timeout).
-    // The upload returns the API key it used — we pin the generation request
-    // to the same key, since Gemini files are scoped per API key.
-    const upload = await uploadFileFromUrl(url, mimeType);
-    fileUri = upload.fileUri;
-    pinnedApiKey = upload.apiKey || undefined;
-    parts.push({ fileData: { fileUri, mimeType } });
-  } else if (data) {
+  if (data) {
     parts.push({ inlineData: { data, mimeType } });
+  } else if (url) {
+    let handledInline = false;
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        const buffer = Buffer.from(await res.arrayBuffer());
+        if (buffer.length <= 20 * 1024 * 1024 || useEnterprise) {
+          parts.push({ inlineData: { data: buffer.toString("base64"), mimeType } });
+          handledInline = true;
+        }
+      }
+    } catch (downloadErr) {
+      console.warn("[describeMediaWithGemini] Direct download failed, falling back to File API:", downloadErr);
+    }
+
+    if (!handledInline) {
+      // Upload via Gemini File API (handles large files without timeout).
+      // The upload returns the API key it used — we pin the generation request
+      // to the same key, since Gemini files are scoped per API key.
+      const upload = await uploadFileFromUrl(url, mimeType);
+      fileUri = upload.fileUri;
+      pinnedApiKey = upload.apiKey || undefined;
+      parts.push({ fileData: { fileUri, mimeType } });
+    }
   } else {
     throw new Error("Must provide either url or data");
   }
@@ -934,10 +950,20 @@ ${finalGroundingBlock}`;
     for (const attachment of options!.mediaAttachments!) {
       if (attachment.url) {
         try {
-          console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
-          const { fileUri } = await uploadFileFromUrl(attachment.url, attachment.mimeType);
-          uploadedUris.push(fileUri);
-          userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
+          if (options?.useEnterprise) {
+            console.log(`[RAG] Fetching ${attachment.filename || "file"} for Vertex AI inline processing...`);
+            const res = await fetch(attachment.url);
+            if (!res.ok) throw new Error(`Failed to download attachment from storage: ${res.statusText}`);
+            const buffer = Buffer.from(await res.arrayBuffer());
+            userParts.push({
+              inlineData: { mimeType: attachment.mimeType, data: buffer.toString("base64") },
+            });
+          } else {
+            console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
+            const { fileUri } = await uploadFileFromUrl(attachment.url, attachment.mimeType);
+            uploadedUris.push(fileUri);
+            userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
+          }
         } catch (err: any) {
           console.error("[RAG] Failed to process media attachment from URL:", err);
           throw new Error(`Failed to process media attachment: ${err.message}`);

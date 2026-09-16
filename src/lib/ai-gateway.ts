@@ -323,9 +323,9 @@ export async function executeWithFallback<T>({
 export function classifyIngestTask(mimeType: string, filename: string): TaskType {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".pdf") || mimeType === "application/pdf") return "ingest_pdf";
-  if (mimeType.startsWith("image/")) return "ingest_image";
-  if (mimeType.startsWith("audio/")) return "ingest_audio";
-  if (mimeType.startsWith("video/")) return "ingest_video";
+  if (mimeType.startsWith("image/") || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(lower)) return "ingest_image";
+  if (mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a|aac|flac)$/i.test(lower)) return "ingest_audio";
+  if (mimeType.startsWith("video/") || /\.(mp4|webm|ogg|mov|quicktime)$/i.test(lower)) return "ingest_video";
   return "ingest_text";
 }
 
