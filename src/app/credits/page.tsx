@@ -54,6 +54,15 @@ function CreditsPageContent() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        // If user just returned from checkout, trigger instant reconciliation with Polar
+        if (isCheckoutSuccess) {
+          try {
+            await fetch("/api/checkout/sync", { method: "POST" });
+          } catch (syncErr) {
+            console.warn("[credits] Auto-sync with Polar:", syncErr);
+          }
+        }
+
         // Fetch profile credits balance + held + plan
         const { data: profile } = await supabase
           .from("profiles")
@@ -84,7 +93,7 @@ function CreditsPageContent() {
       }
     }
     loadData();
-  }, [supabase]);
+  }, [supabase, isCheckoutSuccess]);
 
   const total = Math.max(100, balance + held); // Dynamic total based on actual balance
   const available = Math.max(0, balance - held);

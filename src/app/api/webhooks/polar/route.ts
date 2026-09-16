@@ -127,7 +127,7 @@ async function resolveUserId(data: any): Promise<string | null> {
 
 // ── Webhook handler using named event handlers for proper TypeScript typing ──
 
-export const POST = Webhooks({
+const polarWebhookHandler = Webhooks({
   webhookSecret: process.env.POLAR_WEBHOOK_SECRET || "",
 
   // ── Order paid — this is where credits are actually granted ──
@@ -242,3 +242,26 @@ export const POST = Webhooks({
     }
   },
 });
+
+export async function POST(request: any) {
+  const webhookId = request.headers.get("webhook-id");
+  const webhookSig = request.headers.get("webhook-signature");
+  console.log(`[webhook] Incoming Polar webhook. ID: ${webhookId || "none"}, has-signature: ${Boolean(webhookSig)}`);
+
+  if (!process.env.POLAR_WEBHOOK_SECRET) {
+    console.error("[webhook] CRITICAL: POLAR_WEBHOOK_SECRET is not configured in environment variables!");
+  }
+
+  try {
+    const response = await (polarWebhookHandler as any)(request);
+    if (response.status === 403) {
+      console.error("[webhook] 403 Forbidden: Polar signature validation failed. Verify POLAR_WEBHOOK_SECRET matches the signing secret in Polar Sandbox dashboard.");
+    } else {
+      console.log(`[webhook] Event processed with HTTP status: ${response.status}`);
+    }
+    return response;
+  } catch (err) {
+    console.error("[webhook] Unexpected exception in webhook handler:", err);
+    throw err;
+  }
+}
