@@ -7,7 +7,7 @@ import { MODELS, ASR_MODEL_CATEGORIES as MODEL_CATEGORIES } from "@/lib/models";
 import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
-import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap } from "lucide-react";
+import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -325,8 +325,9 @@ export default function ModelsPage() {
                           <MessageCircle size={14} /> {item.chatsCount.toLocaleString()} chats · <Heart size={14} /> {item.likesCount}
                         </span>
                       </div>
-                      <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ gap: 4 }}>
-                        Try AI ▷
+                      <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <span>Try AI</span>
+                        <ArrowRight size={13} />
                       </Link>
                     </div>
                   </div>
@@ -458,7 +459,7 @@ export default function ModelsPage() {
       {/* ── Edit Modal ── */}
       {editItem && (
         <div className="modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, backdropFilter: "blur(6px)" }}>
-          <div className="modal-content" style={{ backgroundColor: "var(--bg)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 400, border: "1px solid var(--border)", boxShadow: "0 20px 40px rgba(0,0,0,0.6)" }}>
+          <div className="modal-content" style={{ backgroundColor: "var(--surface-1)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 400, border: "1px solid var(--border)", boxShadow: "0 20px 40px rgba(0,0,0,0.6)" }}>
             <h3 style={{ marginBottom: 16 }}>Edit Model Details</h3>
             <div className="form-group">
               <label className="label" style={{ display: "block", marginBottom: 6, fontSize: "0.875rem" }}>Public Name</label>

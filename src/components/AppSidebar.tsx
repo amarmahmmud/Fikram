@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
-import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings } from "lucide-react";
+import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings, Menu, X } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
@@ -102,11 +102,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
         aria-label="Open menu"
         aria-expanded={isOpen}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="3" y1="12" x2="21" y2="12" />
-          <line x1="3" y1="6" x2="21" y2="6" />
-          <line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
+        <Menu size={20} />
       </button>
 
       {/* Mobile backdrop overlay */}
@@ -128,10 +124,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
             onClick={() => setIsOpen(false)}
             aria-label="Close menu"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
+            <X size={18} />
           </button>
         </div>
 

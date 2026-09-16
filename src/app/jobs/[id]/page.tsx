@@ -7,7 +7,7 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, RotateCcw, Sparkles } from "lucide-react";
+import { Globe, RotateCcw, Sparkles, Server, Package, Cpu, BarChart3, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { ASREvalReport, formatPER, perToGrade } from "@/lib/evaluator";
 import { TAJWEED_RULE_LABELS, TajweedRule } from "@/lib/qps-types";
 
@@ -183,7 +183,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       friendlyLabel: "GPU reserved for your model",
       techDetail: "NVIDIA A10G or L4 provisioned",
       status: isPending ? "pending" : "done",
-      icon: "🖥️",
+      icon: Server,
     },
     {
       id: "loading",
@@ -191,7 +191,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       friendlyLabel: "Setting up the ASR model",
       techDetail: `Loading ${job.base_model} CTC checkpoint with adapter`,
       status: isPending ? "pending" : (isRunning && elapsedSec < 45) ? "active" : isRunning || isCompleted ? "done" : "pending",
-      icon: "📦",
+      icon: Package,
     },
     {
       id: "training",
@@ -199,7 +199,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       friendlyLabel: "Fine-tuning on audio pairs",
       techDetail: `${epochs} epochs × batch ${batchSize} | LR: ${lr} | CTC Loss`,
       status: isRunning && elapsedSec >= 45 ? "active" : isCompleted ? "done" : "pending",
-      icon: "🧠",
+      icon: Cpu,
     },
     {
       id: "evaluating",
@@ -212,7 +212,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
           : config.eval_status === "unavailable" ? "done"
           : config.eval_dataset_url ? "active" : "done")
         : "pending",
-      icon: "📊",
+      icon: BarChart3,
     },
     {
       id: "complete",
@@ -220,7 +220,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
       friendlyLabel: "Your ASR model is ready!",
       techDetail: `Finished in ${durationStr}. Checkpoint available at ${job.result_url}`,
       status: isCompleted ? "done" : isFailed ? "failed" : "pending",
-      icon: "✨",
+      icon: CheckCircle2,
     },
   ];
 
@@ -390,7 +390,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                             <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                           </svg>
                         ) : (
-                          <span style={{ fontSize: "0.75rem" }}>{phase.icon}</span>
+                          <phase.icon size={13} />
                         )}
                       </div>
                       {idx < phases.length - 1 && (
@@ -422,7 +422,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 return (
                   <div className={styles.evalCard}>
                     <div className={styles.evalHeader}>
-                      <span className={styles.evalTitle}>📊 ASR Evaluation</span>
+                      <span className={styles.evalTitle} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <BarChart3 size={15} />
+                        <span>ASR Evaluation</span>
+                      </span>
                     </div>
                     <div className={styles.evalStatusRunning}>
                       <div className={styles.evalSpinner} />
@@ -438,7 +441,10 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                 return (
                   <div className={styles.evalCard}>
                     <div className={styles.evalHeader}>
-                      <span className={styles.evalTitle}>📊 ASR Evaluation Report</span>
+                      <span className={styles.evalTitle} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <BarChart3 size={15} />
+                        <span>ASR Evaluation Report</span>
+                      </span>
                       <span className={styles.evalBadge} style={{ backgroundColor: color, color: '#fff' }}>
                         Grade: {grade} ({label})
                       </span>
@@ -477,8 +483,12 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                         <h4 className="font-medium mb-2">Diagnostics</h4>
                         <ul className="space-y-2">
                           {evalResult.diagnosticGuidance.map((diag, i) => (
-                            <li key={i} className="text-sm flex gap-2">
-                              {diag.level === "warning" || diag.level === "action" ? "⚠️" : "ℹ️"}
+                            <li key={i} className="text-sm flex gap-2 items-start">
+                              {diag.level === "warning" || diag.level === "action" ? (
+                                <AlertTriangle size={14} style={{ color: "var(--warning)", flexShrink: 0, marginTop: 3 }} />
+                              ) : (
+                                <Info size={14} style={{ color: "var(--info)", flexShrink: 0, marginTop: 3 }} />
+                              )}
                               <span>{diag.message}</span>
                             </li>
                           ))}

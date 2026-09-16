@@ -11,6 +11,7 @@ import { MAX_TRAINING_CLIPS, MAX_UPLOAD_DURATION_MS, MAX_UPLOAD_SIZE_BYTES, SUPP
 import PipelineProgressOverlay, { PipelineEvent } from "@/components/PipelineProgressOverlay";
 import WaveformCorrector from "@/components/WaveformCorrector";
 import type { ASRDatasetPair, PhonemeLabel } from "@/lib/qps-types";
+import { Zap, Check, Headphones, Rocket, ArrowLeft, ArrowRight } from "lucide-react";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -352,7 +353,7 @@ export default function NewJobPage() {
             <div className={styles.benchmarkCard}>
               <div className={styles.benchmarkInfo}>
                 <div className={styles.benchmarkTitle}>
-                  <span>⚡</span>
+                  <Zap size={14} style={{ color: "var(--warning)", flexShrink: 0 }} />
                   <span>Test 3 Quranic Phonetic Benchmark (96 clips)</span>
                 </div>
                 <div className={styles.benchmarkDesc}>
@@ -361,8 +362,8 @@ export default function NewJobPage() {
               </div>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 {datasetItems && datasetItems.length > 0 ? (
-                  <span className={styles.benchmarkBadge}>
-                    <span>✓</span>
+                  <span className={styles.benchmarkBadge} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                    <Check size={13} />
                     <span>{datasetName} ({datasetItems.length} clips)</span>
                   </span>
                 ) : (
@@ -399,11 +400,15 @@ export default function NewJobPage() {
                 accept={`${SUPPORTED_AUDIO_EXTENSIONS.join(",")},.jsonl,.json`} 
                 onChange={handleFileChange}
               />
-              <div className={styles.uploadIcon}>🎧</div>
+              <div className={styles.uploadIcon}><Headphones size={26} /></div>
               {audioFile ? (
-                <div className={styles.uploadLoadedBadge}>✓ {audioFile.name}</div>
+                <div className={styles.uploadLoadedBadge} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Check size={13} /> <span>{audioFile.name}</span>
+                </div>
               ) : datasetItems ? (
-                <div className={styles.uploadLoadedBadge}>✓ {datasetName} ({datasetItems.length} clips)</div>
+                <div className={styles.uploadLoadedBadge} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  <Check size={13} /> <span>{datasetName} ({datasetItems.length} clips)</span>
+                </div>
               ) : (
                 <>
                   <div className={styles.uploadPrompt}>Click to upload audio or dataset JSONL</div>
@@ -614,11 +619,12 @@ export default function NewJobPage() {
           <div className={styles.stepContent}>
             {launchedJobId ? (
               <div className={styles.successBox}>
-                <div className={styles.successIcon}>🚀</div>
+                <div className={styles.successIcon}><Rocket size={36} /></div>
                 <h1 className={styles.successTitle}>Job Launched!</h1>
                 <p className={styles.successDesc}>Your ASR fine-tuning job is running on Modal NVIDIA A10G GPU cluster.</p>
-                <Link href={`/jobs/${launchedJobId}`} className={styles.btnPrimary}>
-                  View Job Progress →
+                <Link href={`/jobs/${launchedJobId}`} className={styles.btnPrimary} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <span>View Job Progress</span>
+                  <ArrowRight size={14} />
                 </Link>
               </div>
             ) : (
@@ -664,7 +670,10 @@ export default function NewJobPage() {
                 </div>
                 
                 <div className={styles.navRow}>
-                  <button className={styles.btnDefault} onClick={() => setStep(4)} disabled={launching}>← Back</button>
+                  <button className={styles.btnDefault} onClick={() => setStep(4)} disabled={launching} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <ArrowLeft size={14} />
+                    <span>Back</span>
+                  </button>
                   <button className={styles.btnPrimary} onClick={handleLaunch} disabled={launching}>
                     {launching ? (
                       <>
@@ -672,9 +681,10 @@ export default function NewJobPage() {
                         <span>Launching...</span>
                       </>
                     ) : (
-                      <>
-                        <span>🚀 Start Training</span>
-                      </>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                        <Rocket size={15} />
+                        <span>Start Training</span>
+                      </span>
                     )}
                   </button>
                 </div>

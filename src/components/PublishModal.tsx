@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import styles from "./PublishModal.module.css";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, Lock } from "lucide-react";
+import { Globe, Lock, X, AlertTriangle, Check, Copy, Code } from "lucide-react";
 
 interface PublishModalProps {
   isOpen: boolean;
@@ -120,15 +120,16 @@ export function PublishModal({
             </div>
           </div>
           <button className={styles.closeBtn} onClick={onClose} aria-label="Close modal">
-            ✕
+            <X size={16} />
           </button>
         </div>
 
         {/* Body */}
         <div className={styles.body}>
           {error && (
-            <div className="badge badge-error" style={{ padding: "8px 12px", width: "100%", justifyContent: "flex-start" }}>
-              ⚠ {error}
+            <div className="badge badge-error" style={{ padding: "8px 12px", width: "100%", justifyContent: "flex-start", display: "flex", alignItems: "center", gap: 6 }}>
+              <AlertTriangle size={14} />
+              <span>{error}</span>
             </div>
           )}
 
@@ -199,8 +200,9 @@ export function PublishModal({
                     type="button"
                     className={`${styles.copyBtn} ${copiedLink ? styles.copied : ""}`}
                     onClick={() => copyToClipboard(shareUrl, false)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
                   >
-                    {copiedLink ? "✓ Copied!" : "Copy Link"}
+                    {copiedLink ? <><Check size={13} /> Copied!</> : <><Copy size={13} /> Copy Link</>}
                   </button>
                 </div>
               </div>
@@ -216,8 +218,9 @@ export function PublishModal({
                     type="button"
                     className={`${styles.copyBtn} ${copiedEmbed ? styles.copied : ""}`}
                     onClick={() => copyToClipboard(embedCode, true)}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
                   >
-                    {copiedEmbed ? "✓ Copied Snippet!" : "Copy Embed"}
+                    {copiedEmbed ? <><Check size={13} /> Copied Snippet!</> : <><Code size={13} /> Copy Embed</>}
                   </button>
                 </div>
               </div>

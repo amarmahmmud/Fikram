@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
+import { CheckCircle2 } from "lucide-react";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -74,8 +75,9 @@ export default function SettingsPage() {
 
       <div className="page-content" style={{ maxWidth: 680 }}>
         {saved && (
-          <div className={styles.savedBanner}>
-            ✓ Profile saved successfully
+          <div className={styles.savedBanner} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <CheckCircle2 size={16} />
+            <span>Profile saved successfully</span>
           </div>
         )}
 

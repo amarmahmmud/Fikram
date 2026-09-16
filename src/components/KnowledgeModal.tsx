@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import styles from "./KnowledgeModal.module.css";
-import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film } from "lucide-react";
+import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film, ShieldCheck, Flame, Scale, Globe } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
 
 interface SourceItem {
@@ -227,7 +227,8 @@ export function KnowledgeModal({
                   onClick={() => handleUpdateMode("strict")}
                   title="Answer strictly from documents. Refuses if not found."
                 >
-                  🔒 Strict (Docs Only)
+                  <ShieldCheck size={14} style={{ display: "inline-block", verticalAlign: "text-bottom", marginRight: 5 }} />
+                  <span>Strict (Docs Only)</span>
                 </button>
                 <button
                   type="button"
@@ -235,7 +236,8 @@ export function KnowledgeModal({
                   onClick={() => handleUpdateMode("evaluative")}
                   title="Uses docs as rubrics. Evaluates new pitches with logic and sharp wit."
                 >
-                  🔥 Critical Thinker
+                  <Flame size={14} style={{ display: "inline-block", verticalAlign: "text-bottom", marginRight: 5 }} />
+                  <span>Critical Thinker</span>
                 </button>
                 <button
                   type="button"
@@ -243,7 +245,8 @@ export function KnowledgeModal({
                   onClick={() => handleUpdateMode("hybrid")}
                   title="Uses docs as primary ground, but explains and extrapolates freely."
                 >
-                  ⚖️ Hybrid Balanced
+                  <Scale size={14} style={{ display: "inline-block", verticalAlign: "text-bottom", marginRight: 5 }} />
+                  <span>Hybrid Balanced</span>
                 </button>
               </div>
 
@@ -252,8 +255,9 @@ export function KnowledgeModal({
                 onClick={handleToggleWebSearch}
               >
                 <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                    🌐 Live Web Search &amp; Market Intelligence
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Globe size={14} />
+                    <span>Live Web Search &amp; Market Intelligence</span>
                   </span>
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     Searches Google/web in real-time for market trends, competitors &amp; breaking news

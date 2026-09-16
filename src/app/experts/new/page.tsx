@@ -6,6 +6,20 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import { apiClient } from "@/lib/apiClient";
 import { toast } from "sonner";
+import {
+  ShieldCheck,
+  Flame,
+  Scale,
+  Globe,
+  Sparkles,
+  Link2,
+  FileText,
+  Check,
+  X,
+  ArrowRight,
+  UploadCloud,
+  CheckCircle2,
+} from "lucide-react";
 
 type Step = 1 | 2 | 3;
 
@@ -279,7 +293,7 @@ export default function NewExpertPage() {
               className={`${styles.step} ${i + 1 <= step ? styles.stepActive : ""} ${i + 1 < step ? styles.stepDone : ""}`}
             >
               <div className={styles.stepNumber}>
-                {i + 1 < step ? "✓" : i + 1}
+                {i + 1 < step ? <Check size={13} strokeWidth={3} /> : i + 1}
               </div>
               <span className={styles.stepLabel}>{label}</span>
             </div>
@@ -322,7 +336,10 @@ export default function NewExpertPage() {
                   className={`${styles.modeOption} ${reasoningMode === "strict" ? styles.modeOptionActive : ""}`}
                   onClick={() => setReasoningMode("strict")}
                 >
-                  <div className={styles.modeTitle}>🔒 Strict Grounding</div>
+                  <div className={styles.modeTitle}>
+                    <ShieldCheck size={16} />
+                    <span>Strict Grounding</span>
+                  </div>
                   <div className={styles.modeDesc}>
                     Answers strictly with words from your documents. Refuses if not in text. Best for HR, Legal, Compliance.
                   </div>
@@ -332,7 +349,10 @@ export default function NewExpertPage() {
                   className={`${styles.modeOption} ${reasoningMode === "evaluative" ? styles.modeOptionActive : ""}`}
                   onClick={() => setReasoningMode("evaluative")}
                 >
-                  <div className={styles.modeTitle}>🔥 Critical Thinker</div>
+                  <div className={styles.modeTitle}>
+                    <Flame size={16} />
+                    <span>Critical Thinker</span>
+                  </div>
                   <div className={styles.modeDesc}>
                     Uses documents as rubrics &amp; benchmarks. Evaluates new ideas using logic, economics, and sharp wit. Best for Roasts &amp; Audits.
                   </div>
@@ -342,7 +362,10 @@ export default function NewExpertPage() {
                   className={`${styles.modeOption} ${reasoningMode === "hybrid" ? styles.modeOptionActive : ""}`}
                   onClick={() => setReasoningMode("hybrid")}
                 >
-                  <div className={styles.modeTitle}>⚖️ Balanced Hybrid</div>
+                  <div className={styles.modeTitle}>
+                    <Scale size={16} />
+                    <span>Balanced Hybrid</span>
+                  </div>
                   <div className={styles.modeDesc}>
                     Grounded in your files as primary foundation, but freely explains and extrapolates with world knowledge.
                   </div>
@@ -356,7 +379,8 @@ export default function NewExpertPage() {
               >
                 <div className={styles.webToggleInfo}>
                   <div className={styles.webToggleTitle}>
-                    🌐 Live Web Search &amp; Market Intelligence
+                    <Globe size={15} style={{ display: "inline-block", verticalAlign: "text-bottom", marginRight: 6 }} />
+                    <span>Live Web Search &amp; Market Intelligence</span>
                   </div>
                   <div className={styles.webToggleDesc}>
                     Allows the AI to search the web in real-time for latest news, competitors, and industry trends.
@@ -379,8 +403,10 @@ export default function NewExpertPage() {
                   type="button"
                   className={styles.aiHelperBtn}
                   onClick={() => setShowAiHelper(!showAiHelper)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
                 >
-                  ✨ {showAiHelper ? "Hide AI Helper" : "Generate with AI"}
+                  <Sparkles size={13} />
+                  <span>{showAiHelper ? "Hide AI Helper" : "Generate with AI"}</span>
                 </button>
               </div>
 
@@ -426,8 +452,10 @@ export default function NewExpertPage() {
               className="btn btn-primary"
               onClick={handleCreateExpert}
               disabled={!name.trim() || creating}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
             >
-              {creating ? "Creating..." : "Continue →"}
+              <span>{creating ? "Creating..." : "Continue"}</span>
+              {!creating && <ArrowRight size={14} />}
             </button>
           </div>
         )}
@@ -455,7 +483,9 @@ export default function NewExpertPage() {
                 hidden
                 onChange={handleFileSelect}
               />
-              <div className={styles.dropzoneIcon}>◆</div>
+              <div className={styles.dropzoneIcon}>
+                <UploadCloud size={32} />
+              </div>
               <p className={styles.dropzoneText}>
                 Drop files here or <span className={styles.dropzoneLink}>browse</span>
               </p>
@@ -469,8 +499,10 @@ export default function NewExpertPage() {
                   type="button"
                   className={styles.urlToggle}
                   onClick={() => setShowUrlInput(true)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                 >
-                  🔗 + Add web links (optional)
+                  <Link2 size={14} />
+                  <span>Add web links (optional)</span>
                 </button>
               ) : (
                 <div className={styles.urlInputRow}>
@@ -505,7 +537,9 @@ export default function NewExpertPage() {
               <div className={styles.fileList}>
                 {files.map((f, i) => (
                   <div key={i} className={styles.fileRow}>
-                    <span className={styles.fileIcon}>{f.sourceType === "url" ? "🔗" : "📄"}</span>
+                    <span className={styles.fileIcon}>
+                      {f.sourceType === "url" ? <Globe size={15} /> : <FileText size={15} />}
+                    </span>
                     <span className={styles.fileName}>
                       {f.sourceType === "url" ? `${f.file.name} (${f.sourceUrl})` : f.file.name}
                     </span>
@@ -515,8 +549,16 @@ export default function NewExpertPage() {
                     <span className={`${styles.fileStatus} ${styles[`fileStatus_${f.status}`]}`}>
                       {f.status === "pending" && "Ready"}
                       {f.status === "uploading" && "Processing..."}
-                      {f.status === "done" && `✓ ${f.chunksStored} chunks`}
-                      {f.status === "error" && `✗ ${f.error}`}
+                      {f.status === "done" && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <Check size={12} /> {f.chunksStored} chunks
+                        </span>
+                      )}
+                      {f.status === "error" && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          <X size={12} /> {f.error}
+                        </span>
+                      )}
                     </span>
                     {f.status === "pending" && (
                       <button
@@ -524,8 +566,9 @@ export default function NewExpertPage() {
                         className={styles.fileRemoveBtn}
                         onClick={() => removeFile(i)}
                         title="Remove"
+                        aria-label="Remove"
                       >
-                        ✕
+                        <X size={14} />
                       </button>
                     )}
                   </div>
@@ -538,12 +581,19 @@ export default function NewExpertPage() {
                 className="btn btn-primary"
                 onClick={handleIngest}
                 disabled={files.length === 0 || ingesting}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                {ingesting ? "Processing..." : `Process ${files.length} source${files.length !== 1 ? "s" : ""} →`}
+                <span>{ingesting ? "Processing..." : `Process ${files.length} source${files.length !== 1 ? "s" : ""}`}</span>
+                {!ingesting && <ArrowRight size={14} />}
               </button>
               {totalChunks > 0 && (
-                <button className="btn btn-secondary" onClick={() => setStep(3)}>
-                  {allDone ? "Continue →" : `Continue with ${totalChunks} chunks →`}
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => setStep(3)}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <span>{allDone ? "Continue" : `Continue with ${totalChunks} chunks`}</span>
+                  <ArrowRight size={14} />
                 </button>
               )}
             </div>
@@ -553,7 +603,9 @@ export default function NewExpertPage() {
         {/* Step 3: Done */}
         {step === 3 && (
           <div className={styles.card} style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "2rem", marginBottom: 16, color: "var(--accent-primary)" }}>◆</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--accent-primary)" }}>
+              <CheckCircle2 size={44} />
+            </div>
             <h2 className={styles.cardTitle}>Your Smart Assistant is Ready</h2>
             <p className={styles.cardDesc}>
               <strong>{name}</strong> has been created with <strong>{totalChunks} knowledge chunks</strong> from your content. Start chatting now.
@@ -562,8 +614,10 @@ export default function NewExpertPage() {
               <Link
                 href={`/experts/${expertId}/chat`}
                 className="btn btn-primary"
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                Start Chatting
+                <span>Start Chatting</span>
+                <ArrowRight size={14} />
               </Link>
               <Link href="/dashboard" className="btn btn-secondary">
                 Back to Dashboard

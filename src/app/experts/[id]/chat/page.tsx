@@ -27,6 +27,15 @@ import {
   Mic,
   Square,
   Settings2,
+  ArrowLeft,
+  ArrowUp,
+  FileText,
+  ShieldCheck,
+  Flame,
+  Scale,
+  BotOff,
+  Check,
+  Share2,
 } from "lucide-react";
 
 interface Message {
@@ -62,6 +71,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [totalChunks, setTotalChunks] = useState(0);
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [copiedShare, setCopiedShare] = useState(false);
 
   // Session-based custom rules & prompt state (persisted per-user in localStorage)
   const [sessionPrompt, setSessionPrompt] = useState<string | null>(null);
@@ -549,7 +559,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   if (!expert) {
     return (
       <div className={styles.loading}>
-        <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🤖</div>
+        <div className={styles.notFoundIconWrap}>
+          <BotOff size={32} />
+        </div>
         <h3 style={{ marginBottom: 8, color: "var(--text-primary)", fontSize: "1.25rem", fontWeight: 600 }}>
           Assistant Not Found
         </h3>
@@ -655,7 +667,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               title={currentUser ? "Back to Dashboard" : "Back to Browse"}
               aria-label="Back"
             >
-              ←
+              <ArrowLeft size={16} />
             </Link>
 
             <div className={styles.expertAvatar}>
@@ -665,12 +677,24 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             <div className={styles.headerTitles}>
               <div className={styles.expertName} title={expert.name}>{expert.name}</div>
               <div className={styles.expertTag}>
-                {expertMetadata?.reasoningMode === "evaluative"
-                  ? "🔥 Critical Evaluator"
-                  : expertMetadata?.reasoningMode === "strict"
-                  ? "🔒 Strict Grounding"
-                  : "⚖️ Smart Assistant"}
-                {expertMetadata?.webSearchEnabled ? " · 🌐 Web" : ""}
+                {expertMetadata?.reasoningMode === "evaluative" ? (
+                  <span className={styles.modeBadgeEvaluative}>
+                    <Flame size={12} /> Critical Evaluator
+                  </span>
+                ) : expertMetadata?.reasoningMode === "strict" ? (
+                  <span className={styles.modeBadgeStrict}>
+                    <ShieldCheck size={12} /> Strict Grounding
+                  </span>
+                ) : (
+                  <span className={styles.modeBadgeSmart}>
+                    <Scale size={12} /> Smart Assistant
+                  </span>
+                )}
+                {expertMetadata?.webSearchEnabled && (
+                  <span className={styles.webSearchBadge}>
+                    <Globe size={11} /> Live Web
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -711,16 +735,17 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             ) : (
               <button
                 className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
-                onClick={() => {
+                onClick={async () => {
                   if (typeof window !== "undefined" && navigator.clipboard) {
-                    navigator.clipboard.writeText(window.location.href);
-                    alert("Share link copied to clipboard!");
+                    await navigator.clipboard.writeText(window.location.href);
+                    setCopiedShare(true);
+                    setTimeout(() => setCopiedShare(false), 2500);
                   }
                 }}
                 title="Copy share link"
               >
-                <Globe size={16} />
-                <span className={styles.btnLabel}>Share</span>
+                {copiedShare ? <Check size={15} color="var(--accent-primary)" /> : <Share2 size={15} />}
+                <span className={styles.btnLabel}>{copiedShare ? "Copied Link!" : "Share"}</span>
               </button>
             )}
           </div>
@@ -771,12 +796,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                     <div className={styles.summaryBadges}>
                       {msg.sources && msg.sources.length > 0 && (
                         <span className={styles.sourceCountBadge}>
-                          📚 {msg.sources.length} Knowledge Base Chunks
+                          <BookOpen size={12} />
+                          <span>{msg.sources.length} Knowledge Chunks</span>
                         </span>
                       )}
                       {msg.webSources && msg.webSources.length > 0 && (
                         <span className={styles.webCountBadge}>
-                          🌐 {msg.webSources.length} Live Web References
+                          <Globe size={12} />
+                          <span>{msg.webSources.length} Web References</span>
                         </span>
                       )}
                     </div>
@@ -790,7 +817,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                         {msg.sources.map((s, si) => (
                           <div key={si} className={styles.sourceCard}>
                             <div className={styles.sourceFilename} title={s.filename}>
-                              📄 {s.filename}
+                              <FileText size={12} />
+                              <span>{s.filename}</span>
                             </div>
                             <div className={styles.sourceMetadata}>
                               <span>Chunk {s.chunkIndex + 1}</span>
@@ -816,7 +844,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                             title={ws.snippet}
                           >
                             <div className={styles.webSourceTitle}>
-                              🔗 {ws.title}
+                              <ExternalLink size={12} />
+                              <span>{ws.title}</span>
                             </div>
                             <div className={styles.webSourceSnippet}>{ws.snippet}</div>
                           </a>
@@ -935,8 +964,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                   onClick={handleSend}
                   disabled={(!input.trim() && !pendingAttachment) || sending}
                   title="Send message (Enter)"
+                  aria-label="Send message"
                 >
-                  ↑
+                  <ArrowUp size={18} strokeWidth={2.5} />
                 </button>
               </>
             )}

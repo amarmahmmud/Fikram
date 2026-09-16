@@ -300,6 +300,37 @@
   color: var(--text-primary);
 }
 
+.cardActionBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  border: 1px solid rgba(0, 229, 200, 0.35);
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.cardActionBtn:hover {
+  background: var(--accent-primary);
+  color: #000;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 14px rgba(0, 229, 200, 0.35);
+  transform: translateY(-1px);
+}
+
+.btnArrow {
+  transition: transform 0.2s ease;
+}
+
+.cardActionBtn:hover .btnArrow {
+  transform: translateX(2px);
+}
+
 .emptyState {
   text-align: center;
   padding: 80px 0;

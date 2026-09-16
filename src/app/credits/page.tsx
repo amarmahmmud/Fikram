@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
+import { CheckCircle2 } from "lucide-react";
 
 type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
@@ -150,9 +151,13 @@ function CreditsPageContent() {
               fontSize: "0.875rem",
               fontWeight: 600,
               marginBottom: 20,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
-            ✓ Payment received — your credits will appear in a moment once the payment is confirmed.
+            <CheckCircle2 size={16} />
+            <span>Payment received — your credits will appear in a moment once the payment is confirmed.</span>
           </div>
         )}
 

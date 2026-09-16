@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import styles from "./PipelineProgressOverlay.module.css";
+import { AudioLines, Cpu, CheckCircle2, Sparkles, AlertCircle } from "lucide-react";
 
 /* ── Types ── */
 export interface PipelineEvent {
@@ -42,25 +43,25 @@ const STAGES = [
     id: "chunking",
     label: "Segmenting Audio",
     friendlyDesc: "Running VAD segmentation to split audio into Noorani Qaida letter/syllable clips",
-    icon: "🎵",
+    icon: AudioLines,
   },
   {
     id: "generating",
     label: "Bootstrap Transcription",
     friendlyDesc: "Generating initial phonetic and sifat alignments for each audio clip",
-    icon: "🧠",
+    icon: Cpu,
   },
   {
     id: "validating",
     label: "Quality & Dedup",
     friendlyDesc: "Checking duration, clipping, and removing near-duplicate phonetic patterns",
-    icon: "✓",
+    icon: CheckCircle2,
   },
   {
     id: "complete",
     label: "Complete",
     friendlyDesc: "Your ASR training dataset is ready!",
-    icon: "✨",
+    icon: Sparkles,
   },
 ] as const;
 
@@ -207,7 +208,7 @@ export default function PipelineProgressOverlay({
         {/* Header */}
         <div className={styles.header}>
           <div className={styles.headerIcon}>
-            {isError ? "⚠️" : isComplete ? "✨" : "🧠"}
+            {isError ? <AlertCircle size={28} /> : isComplete ? <Sparkles size={28} /> : <Cpu size={28} />}
           </div>
           <h2 className={styles.headerTitle}>
             {isError
@@ -240,18 +241,9 @@ export default function PipelineProgressOverlay({
                 >
                   <div className={styles.stepIcon}>
                     {isDone ? (
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path
-                          d="M3 8.5L6.5 12L13 4"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className={isDone ? styles.checkPath : ""}
-                        />
-                      </svg>
+                      <CheckCircle2 size={16} />
                     ) : (
-                      <span className={styles.stepEmoji}>{stage.icon}</span>
+                      <stage.icon size={16} />
                     )}
                   </div>
                   <span className={styles.stepLabel}>{stage.label}</span>

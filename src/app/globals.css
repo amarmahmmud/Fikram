@@ -7,16 +7,24 @@
 
 /* ── CSS Custom Properties ── */
 :root {
-  /* ── Backgrounds — pure black mode ── */
-  --bg-base:      #000000;   /* page — pure black */
-  --bg-surface:   #050505;   /* sidebar / topbar */
-  --bg-card:      #0a0a0c;   /* cards */
-  --bg-elevated:  #101012;   /* hover / dropdowns */
-  --bg-hover:     #16161a;
+  /* ── Backgrounds & Surfaces ── */
+  --bg:           #050608;
+  --bg-base:      #050608;   /* page — sleek dark zinc */
+  --bg-surface:   #090a0f;   /* sidebar / topbar */
+  --bg-card:      #0e1017;   /* cards */
+  --bg-elevated:  #141722;   /* hover / dropdowns */
+  --bg-hover:     #191d2a;
   --bg-overlay:   rgba(0, 0, 0, 0.85);
 
+  /* ── Unified Surface Hierarchy ── */
+  --surface-1:     #090a0f;   /* containers, sidebars, panes */
+  --surface-2:     #10121a;   /* cards, input backgrounds, bubbles */
+  --surface-3:     #171a25;   /* active / elevated elements */
+  --surface-hover: #1d212f;
+  --surface-border: rgba(255, 255, 255, 0.08);
+
   /* ── Glass ── */
-  --glass-bg:      rgba(10, 10, 12, 0.75);
+  --glass-bg:      rgba(14, 16, 23, 0.85);
   --glass-border:  rgba(255, 255, 255, 0.08);
   --glass-shine:   rgba(255, 255, 255, 0.03);
 

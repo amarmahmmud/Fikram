@@ -5,7 +5,8 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, MessageCircle, Heart, Search } from "lucide-react";
+import { Globe, MessageCircle, Heart, Search, ArrowRight } from "lucide-react";
+import { toast } from "sonner";
 
 const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
 type SortOption = "newest" | "popular";
@@ -115,7 +116,7 @@ export default function BrowseModelsPage() {
       });
 
       if (err?.status === 401) {
-        alert("Please log in to like models and smart assistants.");
+        toast.error("Please sign in to like models and assistants.");
       }
     } finally {
       setLikeInProgress((prev) => {
@@ -293,8 +294,9 @@ export default function BrowseModelsPage() {
                     );
                   })()}
                 </div>
-                <Link href={item.chatUrl} className="btn btn-primary btn-sm" style={{ padding: "6px 16px", borderRadius: "8px" }}>
-                  {item.type === "smart_assistant" ? "Chat ▷" : "Try ▷"}
+                <Link href={item.chatUrl} className={styles.cardActionBtn}>
+                  <span>{item.type === "smart_assistant" ? "Chat" : "Try"}</span>
+                  <ArrowRight size={13} className={styles.btnArrow} />
                 </Link>
               </div>
             </div>

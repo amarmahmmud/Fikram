@@ -1,6 +1,6 @@
 import { useState } from "react";
 import styles from "./EditAssistantModal.module.css";
-import { Settings2, X, Plus, RotateCcw, Check, Sparkles } from "lucide-react";
+import { Settings2, X, Plus, RotateCcw, Check, Sparkles, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 interface EditAssistantModalProps {
@@ -99,7 +99,7 @@ export function EditAssistantModal({
         <div className={styles.body}>
           {/* Information Banner */}
           <div className={styles.scopeBanner}>
-            <span className={styles.scopeBannerIcon}>🔒</span>
+            <span className={styles.scopeBannerIcon}><ShieldCheck size={16} /></span>
             <div>
               <strong>Personal Session Scope:</strong> Rules you add here will customize how the assistant responds to you in your chat. They will <em>not</em> overwrite the assistant for any other users.
             </div>

@@ -594,8 +594,8 @@ export default function ASRPlaygroundPage({ params }: { params: Promise<{ id: st
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: 4 }}>
                         <span style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{bench.reciter}</span>
                         {isSelected && (
-                          <span style={{ fontSize: "0.72rem", color: "var(--accent-primary)", fontWeight: 700 }}>
-                            Selected ✓
+                          <span style={{ fontSize: "0.72rem", color: "var(--accent-primary)", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                            <Check size={12} /> Selected
                           </span>
                         )}
                       </div>

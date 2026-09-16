@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
+import { Sparkles, Cpu, Check, ArrowRight, Layers } from "lucide-react";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Job     = Database["public"]["Tables"]["jobs"]["Row"];
@@ -146,33 +147,34 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
             {/* Smart Assistant — RAG */}
             <div className={`${styles.tierCard} ${styles.tierRecommended}`}>
               <div className={styles.tierBadge}>Recommended</div>
-              <div className={styles.tierIcon}>◆</div>
+              <div className={styles.tierIcon}><Sparkles size={22} /></div>
               <h3 className={styles.tierTitle}>Smart Assistant</h3>
               <p className={styles.tierDesc}>
                 Upload your content and get an accurate, citation-backed AI assistant in seconds. No training needed.
               </p>
               <ul className={styles.tierFeatures}>
-                <li>✓ Ready in 10-30 seconds</li>
-                <li>✓ Answers grounded in your text with citations</li>
-                <li>✓ Free to set up (no GPU cost)</li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Ready in 10-30 seconds</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Answers grounded in your text with citations</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Free to set up (no GPU cost)</span></li>
               </ul>
               <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
-                Create Assistant →
+                <span>Create Assistant</span>
+                <ArrowRight size={14} />
               </Link>
             </div>
 
             {/* Custom Model — Fine-tuning (Coming Soon) */}
             <div className={styles.tierCard} style={{ opacity: 0.7, position: "relative" }}>
               <div className={styles.tierBadgePremium} style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>Coming Soon</div>
-              <div className={styles.tierIcon}>◈</div>
+              <div className={styles.tierIcon}><Cpu size={22} /></div>
               <h3 className={styles.tierTitle}>Custom AI Model</h3>
               <p className={styles.tierDesc}>
                 Train a model that captures your unique voice and expertise. Best for established experts with lots of content.
               </p>
               <ul className={styles.tierFeatures}>
-                <li>✓ Learns your unique tone and style</li>
-                <li>✓ Sounds authentically like you in every response</li>
-                <li>✓ Best for creators with an established content library</li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Learns your unique tone and style</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Sounds authentically like you in every response</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Best for creators with an established content library</span></li>
               </ul>
               <button
                 className={`btn btn-secondary ${styles.tierBtn}`}
@@ -205,7 +207,10 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>Recent Jobs</h3>
-            <Link href="/jobs" className="btn btn-ghost btn-sm">View all →</Link>
+            <Link href="/jobs" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span>View all</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
 
           {jobs.length === 0 ? (
@@ -240,7 +245,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                         <span className={`status-dot ${job.status}`} />
                         {s.label}
                       </span>
-                      <span style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>→</span>
+                      <ArrowRight size={14} style={{ color: "var(--text-muted)" }} />
                     </div>
                   </Link>
                 );
@@ -266,7 +271,10 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
             <h3 className={styles.sectionTitle}>Popular Base Models</h3>
-            <Link href="/models" className="btn btn-ghost btn-sm">Browse all →</Link>
+            <Link href="/models" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span>Browse all</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
           <div className={styles.modelsGrid}>
             {[
@@ -277,7 +285,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
             ].map((m) => (
               <div key={m.name} className={`card card-hover ${styles.modelCard}`}>
                 <div className={styles.modelCardHeader}>
-                  <div className={styles.modelIcon}>▣</div>
+                  <div className={styles.modelIcon}><Layers size={18} /></div>
                   <span className="badge badge-default">{m.size}</span>
                 </div>
                 <div className={styles.modelName}>{m.name}</div>
