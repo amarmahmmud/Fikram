@@ -13,33 +13,28 @@ import {
   Sparkles,
   Shield,
   Zap,
-  Mic,
-  Cpu,
   Layers,
-  Download,
   ArrowRight,
-  HelpCircle,
-  Clock,
-  Radio,
-  ExternalLink,
-  Bot,
-  Flame,
+  Video,
+  FileSearch,
+  Languages,
   CheckCircle2,
+  Lock,
 } from "lucide-react";
 
 // ── Hero Use-Case Rotation ──
 const HERO_USE_CASES = [
-  "Quranic Scholars & Tajweed Educators",
+  "Quranic & Islamic Scholars",
+  "Legal & Regulatory Counsel",
   "Medical & Clinical Researchers",
-  "Legal & Compliance Advisors",
-  "Multilingual Course Creators",
-  "Enterprise Technical Teams",
+  "University Educators & Course Creators",
+  "Technical Support & Engineering Teams",
   "Financial & Investment Analysts",
-  "Acoustic & Speech Researchers",
-  "Global Knowledge Organizations",
+  "Executive Strategy Consultants",
+  "Global Multilingual Organizations",
 ];
 
-// ── 140+ Languages Showcase Data ──
+// ── 140+ Multilingual RAG Showcase Data ──
 type LangCategory = "arabic" | "asian" | "european" | "african";
 
 interface LanguageItem {
@@ -52,101 +47,101 @@ interface LanguageItem {
 
 const LANGUAGES_DATA: Record<LangCategory, { title: string; items: LanguageItem[] }> = {
   arabic: {
-    title: "Arabic & Tajweed Phonetics",
+    title: "Arabic & Regional Dialects",
     items: [
-      { name: "Classical Quranic Arabic", native: "العربية الفصحى التراثية", flag: "📖", tag: "QPS Tajweed Engine", detail: "Phoneme + Sifat Makharij articulation" },
-      { name: "Modern Standard Arabic", native: "العربية الفصحى المعاصرة", flag: "🌐", tag: "Full OCR & RAG", detail: "Formal documents, books & research" },
-      { name: "Egyptian Dialect", native: "اللهجة المصرية", flag: "🇪🇬", tag: "Speech & Audio", detail: "Acoustic transfer & conversational AI" },
-      { name: "Gulf & Saudi Arabic", native: "اللهجة الخليجية", flag: "🇸🇦", tag: "Speech & Audio", detail: "Speech recognition & local terms" },
-      { name: "Levantine (Shami)", native: "اللهجة الشامية", flag: "🇱🇧", tag: "Speech & Audio", detail: "Jordanian, Syrian, Lebanese, Palestinian" },
-      { name: "Maghrebi (North African)", native: "الدارجة المغربية", flag: "🇲🇦", tag: "Speech & Audio", detail: "Moroccan, Algerian & Tunisian dialects" },
-      { name: "Sudanese Arabic", native: "اللهجة السودانية", flag: "🇸🇩", tag: "Speech & Audio", detail: "Speech-to-text & phonetic mapping" },
-      { name: "Yemeni Arabic", native: "اللهجة اليمنية", flag: "🇾🇪", tag: "Speech & Audio", detail: "Classical phonetic conservation" },
+      { name: "Classical Arabic (Fusha)", native: "العربية الفصحى التراثية", flag: "📖", tag: "Full Tashkeel RAG", detail: "Diacritic-tolerant semantic search & citations" },
+      { name: "Modern Standard Arabic", native: "العربية الفصحى المعاصرة", flag: "🌐", tag: "Document OCR", detail: "Formal legal, academic & financial texts" },
+      { name: "Egyptian Arabic", native: "اللهجة المصرية", flag: "🇪🇬", tag: "Audio & Video", detail: "Transcribes lectures & conversational audio" },
+      { name: "Gulf & Saudi Arabic", native: "اللهجة الخليجية", flag: "🇸🇦", tag: "Audio & Video", detail: "Local regulatory terminology & speech" },
+      { name: "Levantine (Shami)", native: "اللهجة الشامية", flag: "🇱🇧", tag: "Audio & Video", detail: "Jordanian, Syrian, Lebanese & Palestinian" },
+      { name: "Maghrebi (North African)", native: "الدارجة المغربية", flag: "🇲🇦", tag: "Cross-Lingual", detail: "Moroccan, Algerian & Tunisian documents" },
+      { name: "Sudanese Arabic", native: "اللهجة السودانية", flag: "🇸🇩", tag: "Audio & Docs", detail: "Academic literature & recorded lectures" },
+      { name: "Yemeni Arabic", native: "اللهجة اليمنية", flag: "🇾🇪", tag: "Classical Texts", detail: "Traditional manuscripts & scanned books" },
     ],
   },
   asian: {
-    title: "Asian & South Asian (XLS-R / w2v-BERT)",
+    title: "Asian & South Asian Languages",
     items: [
-      { name: "Urdu", native: "اردو", flag: "🇵🇰", tag: "Speech + Docs", detail: "Nastaliq & phonetic recitation mapping" },
-      { name: "Bahasa Indonesia", native: "Bahasa Indonesia", flag: "🇮🇩", tag: "140+ Pre-trained", detail: "Full document extraction & speech ASR" },
-      { name: "Bahasa Melayu", native: "Bahasa Melayu", flag: "🇲🇾", tag: "140+ Pre-trained", detail: "Islamic education materials & audio" },
-      { name: "Bengali", native: "বাংলা", flag: "🇧🇩", tag: "Speech + Docs", detail: "Sub-continental phonetic alignment" },
-      { name: "Hindi", native: "हिन्दी", flag: "🇮🇳", tag: "Speech + Docs", detail: "Devanagari document OCR & speech" },
-      { name: "Mandarin Chinese", native: "简体中文", flag: "🇨🇳", tag: "Multimodal Vision", detail: "High-density diagram & text parsing" },
-      { name: "Japanese", native: "日本語", flag: "🇯🇵", tag: "Multimodal Vision", detail: "Technical manuals & lecture transcription" },
-      { name: "Korean", native: "한국어", flag: "🇰🇷", tag: "140+ Pre-trained", detail: "High-accuracy embedding & retrieval" },
+      { name: "Urdu", native: "اردو", flag: "🇵🇰", tag: "Nastaliq & Urdu Docs", detail: "Complex script OCR & cross-lingual search" },
+      { name: "Bahasa Indonesia", native: "Bahasa Indonesia", flag: "🇮🇩", tag: "Full Multimodal", detail: "Government decrees, education & audio" },
+      { name: "Bahasa Melayu", native: "Bahasa Melayu", flag: "🇲🇾", tag: "Full Multimodal", detail: "Academic literature & recorded seminars" },
+      { name: "Bengali", native: "বাংলা", flag: "🇧🇩", tag: "Complex Script", detail: "Sub-continental text & audio comprehension" },
+      { name: "Hindi", native: "हिन्दी", flag: "🇮🇳", tag: "Devanagari OCR", detail: "Dense document extraction & video RAG" },
+      { name: "Mandarin Chinese", native: "简体中文", flag: "🇨🇳", tag: "Vision & OCR", detail: "High-density technical manuals & charts" },
+      { name: "Japanese", native: "日本語", flag: "🇯🇵", tag: "Vision & OCR", detail: "Vertical text, diagrams & slide decks" },
+      { name: "Korean", native: "한국어", flag: "🇰🇷", tag: "Multimodal RAG", detail: "High-speed semantic search & citations" },
     ],
   },
   european: {
     title: "European & Global Languages",
     items: [
-      { name: "English (US, UK, Global)", native: "English", flag: "🇬🇧", tag: "Global Benchmark", detail: "Full multimodal speed & reasoning" },
-      { name: "French", native: "Français", flag: "🇫🇷", tag: "140+ Pre-trained", detail: "Legal and academic literature parsing" },
-      { name: "Spanish", native: "Español", flag: "🇪🇸", tag: "140+ Pre-trained", detail: "Latin America & European dialects" },
-      { name: "German", native: "Deutsch", flag: "🇩🇪", tag: "140+ Pre-trained", detail: "Dense compound text extraction" },
-      { name: "Turkish", native: "Türkçe", flag: "🇹🇷", tag: "Speech + Docs", detail: "Ottoman-rooted & modern Turkish ASR" },
-      { name: "Russian", native: "Русский", flag: "🇷🇺", tag: "140+ Pre-trained", detail: "Cyrillic OCR & vector search" },
-      { name: "Italian", native: "Italiano", flag: "🇮🇹", tag: "140+ Pre-trained", detail: "Academic publications & audio" },
-      { name: "Portuguese", native: "Português", flag: "🇧🇷", tag: "140+ Pre-trained", detail: "Brazilian & European Portuguese" },
+      { name: "English (US, UK, Global)", native: "English", flag: "🇬🇧", tag: "Full Multimodal", detail: "Sub-second Groq streaming & vision" },
+      { name: "French", native: "Français", flag: "🇫🇷", tag: "Full Multimodal", detail: "Legal treatises, contracts & lecture audio" },
+      { name: "Spanish", native: "Español", flag: "🇪🇸", tag: "Full Multimodal", detail: "Latin American & European publications" },
+      { name: "German", native: "Deutsch", flag: "🇩🇪", tag: "Compound Words", detail: "Compound noun parsing & dense research" },
+      { name: "Turkish", native: "Türkçe", flag: "🇹🇷", tag: "Agglutinative", detail: "Ottoman history & modern legal codes" },
+      { name: "Russian", native: "Русский", flag: "🇷🇺", tag: "Cyrillic OCR", detail: "Scanned research papers & technical docs" },
+      { name: "Italian", native: "Italiano", flag: "🇮🇹", tag: "Full Multimodal", detail: "Academic archives & audio interviews" },
+      { name: "Portuguese", native: "Português", flag: "🇧🇷", tag: "Full Multimodal", detail: "Brazilian & European documentation" },
     ],
   },
   african: {
     title: "Middle Eastern & African Languages",
     items: [
-      { name: "Persian (Farsi)", native: "فارسی", flag: "🇮🇷", tag: "Speech + Docs", detail: "Perso-Arabic script & classical poetry" },
-      { name: "Swahili", native: "Kiswahili", flag: "🇰🇪", tag: "140+ Pre-trained", detail: "East African education & audio" },
-      { name: "Hausa", native: "Harshen Hausa", flag: "🇳🇬", tag: "Speech + Docs", detail: "West African Islamic scholarship" },
-      { name: "Somali", native: "Af-Soomaali", flag: "🇸🇴", tag: "Speech + Docs", detail: "Oral recitation & written records" },
-      { name: "Kurdish (Sorani & Kurmanji)", native: "کوردی", flag: "☀️", tag: "140+ Pre-trained", detail: "Dialectal speech & document parsing" },
-      { name: "Amharic", native: "አማርኛ", flag: "🇪🇹", tag: "Ge'ez Script", detail: "Ethiopian script OCR & embeddings" },
-      { name: "Pashto", native: "پښتو", flag: "🇦🇫", tag: "Speech + Docs", detail: "Complex phonetic consonants" },
-      { name: "Uzbek", native: "Oʻzbekcha", flag: "🇺🇿", tag: "Central Asian", detail: "Latin & Cyrillic dual-alphabet RAG" },
+      { name: "Persian (Farsi)", native: "فارسی", flag: "🇮🇷", tag: "Perso-Arabic", detail: "Manuscripts, literature & historical files" },
+      { name: "Swahili", native: "Kiswahili", flag: "🇰🇪", tag: "East African", detail: "Regional policy, education & audio memos" },
+      { name: "Hausa", native: "Harshen Hausa", flag: "🇳🇬", tag: "West African", detail: "Islamic scholarship & local transcripts" },
+      { name: "Somali", native: "Af-Soomaali", flag: "🇸🇴", tag: "Oral & Text", detail: "Recorded oral lectures & modern documents" },
+      { name: "Kurdish (Sorani & Kurmanji)", native: "کوردی", flag: "☀️", tag: "Dialect Support", detail: "Bilingual documentation & audio notes" },
+      { name: "Amharic", native: "አማርኛ", flag: "🇪🇹", tag: "Ge'ez Script", detail: "Ethiopian script OCR & knowledge retrieval" },
+      { name: "Pashto", native: "پښتو", flag: "🇦🇫", tag: "Regional Dialects", detail: "Central Asian archives & transcripts" },
+      { name: "Uzbek", native: "Oʻzbekcha", flag: "🇺🇿", tag: "Dual Alphabet", detail: "Latin & Cyrillic dual-alphabet RAG" },
     ],
   },
 };
 
-// ── Proprietary Advantages ──
+// ── 6 Proprietary RAG Unfair Advantages ──
 const ADVANTAGES = [
   {
-    badge: "Multimodal Knowledge Ingestion",
-    title: "Not Just Text — Audio, Video & Scanned OCR",
-    desc: "Ingest voice notes, MP4 lecture recordings, scanned handwritten books, high-res diagrams, and raw datasets. Fikram automatically transcribes, segments, and embeds across all formats.",
-    icon: <Layers size={24} />,
-    tag: "PDF · Video · Audio · OCR",
+    badge: "Full-Spectrum Multimodal Ingestion",
+    title: "Video, Audio, Scanned OCR & PDFs",
+    desc: "Don't settle for simple text copy-paste. Upload MP4 lecture videos, MP3 audio recordings, scanned books via Google Document AI OCR, and diagrams. Fikram automatically transcribes, segments, and indexes every frame and page.",
+    icon: <Video size={24} />,
+    tag: "Video · Audio · OCR · PDF",
   },
   {
-    badge: "Proprietary Speech Engine",
-    title: "Sub-Phonemic Articulation & Tajweed (QPS)",
-    desc: "Generic ASR only guesses rough words. Fikram's two-level phoneme + sifat engine checks exact articulation points (Makharij, Qalqalah, Ghunnah, Madd) to catch errors no other AI can detect.",
-    icon: <Mic size={24} />,
-    tag: "Exclusive QPS Checkpoint",
+    badge: "Document Architecture",
+    title: "Section-Aware Hierarchical Chunking",
+    desc: "Naive RAG chops text blindly every 500 characters, severing sentences and mixing topics. Fikram detects document headings, chapter titles, and numbered legal/academic clauses, guaranteeing zero fragmented context.",
+    icon: <Layers size={24} />,
+    tag: "Heading & Clause Preserving",
   },
   {
     badge: "Verifiable Accuracy",
-    title: "100% Citation Grounding — Zero Hallucination",
-    desc: "Every answer cites exact document page numbers ([p. 14]) or audio/video timestamps ([04:22]) with source snippet previews. Easily audit and trust every word your assistant outputs.",
+    title: "100% Citation Grounding — Zero Hallucinations",
+    desc: "Every answer is strictly anchored with clickable citations: exact page numbers ([p. 18]), media timestamps ([12:45]), and source preview snippets. Never wonder if your AI is making things up.",
     icon: <Shield size={24} />,
-    tag: "Timestamp & Page Citations",
+    tag: "Page & Timestamp Proofs",
   },
   {
-    badge: "Open Weights & Zero Lock-in",
-    title: "Export to Ollama (GGUF) & Hugging Face",
-    desc: "Fine-tune models on our cloud GPU clusters (LoRA / CTC) and download the weights to run privately on your local Mac, PC, or private server. You own 100% of your trained model.",
-    icon: <Download size={24} />,
-    tag: "GGUF · HF Hub · Local Run",
+    badge: "Global Reach",
+    title: "140+ Multilingual & Cross-Lingual RAG",
+    desc: "Ask questions in English or Urdu, and Fikram retrieves facts from Arabic, French, or Turkish documents, synthesizing the answer in your chosen language. Seamless diacritic handling for classical Arabic.",
+    icon: <Languages size={24} />,
+    tag: "Cross-Lingual Semantic Search",
   },
   {
-    badge: "Hybrid Zero-Cold-Start Engine",
-    title: "Sub-Second Groq Streaming + Gemini Flash",
-    desc: "Lightning-fast responses via Groq Llama 3 with automatic key rotation (<200ms latency), resilient Google Gemini Flash vision fallback, and enterprise Google Vertex AI SLA.",
-    icon: <Zap size={24} />,
-    tag: "<200ms TTFT Latency",
+    badge: "Intelligent Retrieval",
+    title: "Adaptive Top-K & Live Web Search Grounding",
+    desc: "Broad queries ('summarize all', 'list every') automatically pull more context for exhaustive overviews, while factual queries pull high-precision chunks. Augmented with real-time Google Web Search when needed.",
+    icon: <FileSearch size={24} />,
+    tag: "Dynamic Top-K + Web Search",
   },
   {
     badge: "Enterprise Security",
-    title: "Tenant Isolation in pgvector — Never Trained On",
-    desc: "Your knowledge base is partitioned using PostgreSQL row-level tenant security. Your proprietary materials, datasets, and recordings are never shared or used to train public models.",
-    icon: <Cpu size={24} />,
+    title: "Private Tenant Isolation in pgvector",
+    desc: "Your knowledge base is partitioned using PostgreSQL row-level tenant security. Your proprietary documents, transcripts, and recordings are encrypted and never used to train public foundation models.",
+    icon: <Lock size={24} />,
     tag: "pgvector · Private Tenant",
   },
 ];
@@ -155,63 +150,63 @@ const ADVANTAGES = [
 const COMPARISON_ROWS = [
   {
     feature: "Full-Spectrum Multimodal Ingestion",
-    sub: "Direct upload of Video (MP4), Audio (WAV/MP3), Scanned OCR, and PDFs",
-    fikram: "Yes (Automatic OCR & Whisper/Gemini audio parsing)",
+    sub: "Direct upload of Video (MP4), Audio (WAV/MP3), Scanned Books (OCR), and PDFs",
+    fikram: "Yes (Automatic transcription, OCR & indexing)",
     generic: "Partial (Text & basic images only)",
     cloudDiy: "Complex custom pipeline required",
   },
   {
-    feature: "140+ Languages & Dialect Phonetics",
-    sub: "Meta XLS-R & w2v-BERT speech pre-training across global languages",
-    fikram: "143 Languages Pre-trained",
-    generic: "Limited / Basic text translation",
-    cloudDiy: "Manual fine-tuning & config",
+    feature: "Section-Aware Hierarchical Chunking",
+    sub: "Splits on headings, chapters, and numbered clauses instead of blind character cuts",
+    fikram: "Yes (Preserves structure & section titles)",
+    generic: "No (Fixed character chunking)",
+    cloudDiy: "Requires custom parser coding",
   },
   {
-    feature: "Sub-Phonemic Tajweed & Sifat Recognition",
-    sub: "Two-level phoneme + articulation rules (Makharij, Ghunnah, Qalqalah)",
-    fikram: "Exclusive QPS Architecture",
-    generic: "None (Word-level text only)",
-    cloudDiy: "None (Standard ASR only)",
+    feature: "140+ Multilingual & Cross-Lingual RAG",
+    sub: "Ask in one language, retrieve and synthesize from documents written in another",
+    fikram: "Yes (140+ languages pre-trained)",
+    generic: "Limited / Basic translation",
+    cloudDiy: "Requires multiple translation models",
+  },
+  {
+    feature: "Scanned Paper & Book OCR Quality",
+    sub: "High-accuracy OCR for scanned manuscripts, double-column books, and tables",
+    fikram: "Google Document AI OCR Engine",
+    generic: "Fails or scrambles dense text",
+    cloudDiy: "Separate AWS Textract / DocAI cost",
   },
   {
     feature: "Verifiable Page & Timestamp Citations",
-    sub: "Every claim anchored to verifiable source page or media timestamp",
-    fikram: "Yes ([p. 14], [04:22] previews)",
+    sub: "Clickable exact page numbers ([p. 18]) and video timestamps ([04:22]) with source previews",
+    fikram: "Yes (Exact [p.X] & [t:ss] previews)",
     generic: "Vague / Prone to hallucinations",
-    cloudDiy: "Requires custom RAG dev",
+    cloudDiy: "Requires complex custom RAG dev",
   },
   {
-    feature: "In-Browser Waveform & Label Editor",
-    sub: "Interactive waveform alignment and phoneme error correction",
-    fikram: "Built-in Waveform Corrector",
-    generic: "No",
-    cloudDiy: "No (Requires third-party tools)",
-  },
-  {
-    feature: "Open Model Export (Ollama / HuggingFace)",
-    sub: "Download fine-tuned GGUF weights to run locally offline",
-    fikram: "Yes (1-Click HF & Ollama)",
-    generic: "Locked into proprietary SaaS",
-    cloudDiy: "Manual bucket download",
+    feature: "Adaptive Top-K & Live Web Grounding",
+    sub: "Expands retrieval depth for summaries + real-time Google Web Search fallback",
+    fikram: "Built-in Adaptive Top-K + Web Search",
+    generic: "Static top-K (Misses broader context)",
+    cloudDiy: "Requires custom reranking pipeline",
   },
   {
     feature: "Time to First Working Assistant",
-    sub: "From raw files to deployed chat assistant",
+    sub: "From raw media upload to shareable, interactive AI assistant",
     fikram: "Under 30 Seconds",
     generic: "5 - 15 Minutes",
-    cloudDiy: "Weeks of engineering",
+    cloudDiy: "Weeks of engineering & devops",
   },
   {
     feature: "Free Starter Tier",
-    sub: "Start building immediately without entering payment info",
+    sub: "Immediate access to upload content and test without entering a credit card",
     fikram: "50 Free Credits on Signup",
-    generic: "Restricted free tier",
+    generic: "Restricted free tier / Paid Plus",
     cloudDiy: "Credit card required upfront",
   },
 ];
 
-// ── Live Pricing Tiers ──
+// ── Live Polar Pricing Tiers ──
 const PRICING_TIERS = [
   {
     name: "Starter",
@@ -235,7 +230,7 @@ const PRICING_TIERS = [
     name: "Pro",
     price: "$19",
     period: "/ month",
-    desc: "For professionals, educators, and creators who need continuous knowledge updates and speech training.",
+    desc: "For professionals, educators, and creators who need unlimited knowledge bases and full video ingestion.",
     credits: "2,000 Monthly Credits",
     highlight: true,
     badge: "Most Popular",
@@ -245,30 +240,30 @@ const PRICING_TIERS = [
       "2,000 monthly credits included",
       "Unlimited knowledge assistants",
       "Full video lecture & audio ingestion",
-      "Google Document AI OCR for scanned docs",
-      "Custom LoRA model fine-tuning on GPUs",
-      "In-browser waveform & phoneme editor",
-      "Priority GPU training queue",
-      "Community model sharing & publishing",
+      "Google Document AI OCR for scanned books",
+      "Section-aware hierarchical chunking",
+      "Cross-lingual search across 140+ languages",
+      "Sub-second Groq Llama 3 streaming",
+      "Shareable assistant public links",
     ],
   },
   {
     name: "Business",
     price: "$79",
     period: "/ month",
-    desc: "For institutions, research labs, and enterprises requiring dedicated throughput and model weight export.",
+    desc: "For institutions, research labs, and enterprises requiring dedicated throughput and multi-seat workspaces.",
     credits: "10,000 Monthly Credits",
     highlight: false,
     cta: "Get Business Plan",
     ctaLink: "/credits",
     features: [
       "10,000 monthly credits included",
-      "Dedicated Google Vertex AI throughput",
-      "Export model weights (Ollama GGUF / HuggingFace)",
-      "Multi-seat team workspace",
-      "Highest priority GPU cluster access",
+      "Dedicated Google Vertex AI enterprise throughput",
+      "Multi-seat team workspace & permissions",
+      "Highest priority embedding & inference queue",
+      "Custom domain & white-label embedding",
       "API & Webhook programmatic access",
-      "Custom vocabulary & Tajweed rule presets",
+      "Private pgvector tenant isolation",
       "Dedicated onboarding & SLA support",
     ],
   },
@@ -277,46 +272,46 @@ const PRICING_TIERS = [
 // ── Interactive FAQ ──
 const FAQS = [
   {
-    q: "How does Fikram support 140+ languages and Arabic phonetics?",
-    a: "Fikram incorporates state-of-the-art foundation models: Meta XLS-R (pre-trained on 128 languages) and Meta w2v-BERT 2.0 (pre-trained on 143 languages), combined with multimodal Gemini and Groq embeddings. For Arabic and Quranic recitation, we implement the obadx QPS acoustic architecture, which operates at the sub-phonemic acoustic level to track Makharij (points of articulation) and Sifat (phonetic characteristics like Qalqalah, Ghunnah, and Tafkheem/Tarqeeq) that standard speech engines completely overlook.",
+    q: "How does Fikram's multimodal RAG work across 140+ languages?",
+    a: "Fikram uses 768-dimensional multimodal embeddings paired with Groq and Gemini multilingual foundation models. When you upload content in any of the 140+ supported languages (Arabic, Urdu, French, Spanish, Bahasa, Turkish, etc.), the engine normalizes scripts, handles diacritics (like Arabic Tashkeel), and builds a semantic map. You can ask a question in English, and Fikram will seamlessly retrieve the answer from an Arabic or French document and reply in the language you requested.",
   },
   {
-    q: "What file formats can I upload into my knowledge base?",
-    a: "You can upload PDFs, Word documents, scanned paper books (via Google Document AI OCR), high-resolution images, audio recordings (MP3, WAV, M4A, OGG, FLAC), video lectures (MP4, WebM), and structured JSONL datasets. Everything is automatically processed, transcribed, section-chunked, and embedded.",
+    q: "What file formats can I upload into my assistant's knowledge base?",
+    a: "You can upload PDFs, Word documents, scanned paper books (via Google Document AI OCR), high-resolution diagrams and charts (via Gemini Flash vision), audio recordings (MP3, WAV, M4A, OGG), video lectures (MP4, WebM), and web URLs. Fikram automatically transcribes, segments, and indexes every piece of content.",
   },
   {
-    q: "How do credits work and what can I do with the 50 free credits?",
-    a: "Credits power AI processing: 1 credit per knowledge query, ~1 credit per document chunk embedded, and ~8 to 35 credits for GPU model training jobs depending on model size. The 50 free credits you receive at signup allow you to index a complete document or audio file and chat with your assistant 40+ times with zero commitment.",
+    q: "What is section-aware chunking and why does it beat standard RAG?",
+    a: "Standard RAG slices text into arbitrary character blocks (e.g. 500 characters), which frequently cuts sentences in half and mixes unrelated paragraphs together. Fikram analyzes the structural hierarchy of your documents (chapters, headers, subheadings, and numbered legal/academic clauses) before chunking. Each chunk preserves its section title and tier, ensuring the AI assistant understands the exact structural context of every passage.",
   },
   {
-    q: "Can I export my fine-tuned models to run locally in Ollama or HuggingFace?",
-    a: "Yes! Unlike closed chatbots where your assistant is permanently locked to a third-party platform, Fikram allows Business and Pro users to export trained model checkpoints. You can convert weights to GGUF format to run locally on your own machine using Ollama, or push them directly to your Hugging Face repository.",
+    q: "How do citations work for video, audio, and scanned PDFs?",
+    a: "Every response generated by Fikram includes clickable citation badges. For PDFs and scanned books, clicking a citation shows the exact page number ([p. 18]) and snippet. For video lectures and audio recordings, the citation anchors to the exact timestamp ([12:45]), allowing you or your users to jump straight to that moment in the media.",
+  },
+  {
+    q: "How do credits work and what is included in the 50 free credits?",
+    a: "Credits power AI processing: 1 credit per question answered, and ~1 credit per knowledge chunk embedded. The 50 free credits you receive at signup allow you to index a multi-page document or recording and chat with your assistant 40+ times with zero commitment and no credit card required.",
   },
   {
     q: "Is my uploaded proprietary data safe and private?",
-    a: "Absolutely. Each assistant's knowledge base is strictly isolated inside PostgreSQL using pgvector row-level tenant security. Your documents, transcripts, and recordings are encrypted in transit and at rest, and are NEVER used to train external public foundation models.",
-  },
-  {
-    q: "How does citation grounding prevent AI hallucinations?",
-    a: "Instead of letting an LLM guess answers from general internet training data, Fikram uses Section-Aware Retrieval Augmented Generation (RAG). Before answering, it finds the exact matching chunks in your uploaded content and forces the model to construct its answer strictly from those sources, citing the specific page number or audio timestamp for every claim.",
+    a: "Yes. Each assistant's knowledge base is strictly isolated inside PostgreSQL using pgvector row-level tenant partitioning. Your uploaded documents, transcripts, and media are encrypted in transit and at rest, and are NEVER shared or used to train public foundation models.",
   },
 ];
 
 const STEPS = [
   {
     num: "01",
-    title: "Upload Any Content or Speech",
-    desc: "Drop your PDFs, video lectures, voice memos, scanned books, or audio datasets. Fikram's multimodal pipeline transcribes and parses every detail.",
+    title: "Upload Any Document, Video, or Audio",
+    desc: "Drop your PDFs, video lectures, voice memos, scanned books, or web URLs. Fikram's multimodal pipeline transcribes and parses every detail automatically.",
   },
   {
     num: "02",
-    title: "Intelligent Embeddings & Acoustic Alignment",
-    desc: "In under 30 seconds, your content is mapped into a vector knowledge base, or aligned phonetically with sub-phonemic Makharij detection.",
+    title: "Section-Aware Embedding in Under 30s",
+    desc: "Your content is mapped into a vector knowledge base that preserves chapter headers, clauses, and timestamps without cutting sentences in half.",
   },
   {
     num: "03",
-    title: "Chat with Citations or Export Weights",
-    desc: "Deploy a verified assistant that never hallucinates, or export your custom fine-tuned model directly to Ollama or Hugging Face Hub.",
+    title: "Chat with 100% Verified Citations",
+    desc: "Ask any question and receive accurate answers with clickable page and timestamp proofs. Share your assistant via link or embed it anywhere.",
   },
 ];
 
@@ -344,27 +339,17 @@ const STATS = [
   { value: "140+", label: "Languages Supported" },
   { value: "30s", label: "Instant Setup Time" },
   { value: "50", label: "Free Signup Credits" },
-  { value: "0%", label: "Vendor Lock-in (Ollama/HF)" },
+  { value: "0.0%", label: "Hallucination Rate" },
 ];
 
 const RAG_LOG_LINES = [
-  { text: '✓ Uploaded "fiqh-foundations.pdf" (64 pages) + "lecture-04.mp3"', type: "success" },
-  { text: "→ Google Document AI & Whisper transcription active...", type: "info" },
-  { text: "  184 hierarchical knowledge chunks indexed", type: "dim" },
-  { text: '? "What are the rules of phonetic articulation in Surah Al-Baqarah?"', type: "info" },
-  { text: "  Found 4 high-confidence sources with pgvector cosine similarity...", type: "dim" },
-  { text: "✓ Answer generated with verifiable citations [p. 18, p. 42, audio 12:45]", type: "success" },
-  { text: "✓ Knowledge Assistant ready for public or private deployment", type: "success" },
-];
-
-const ASR_LOG_LINES = [
-  { text: '✓ Audio waveform ingested: "recitation-sample-surah-fatiha.wav"', type: "success" },
-  { text: "→ Running obadx QPS Multi-Level CTC Acoustic Model...", type: "info" },
-  { text: "  Acoustic Frame Rate: 50Hz · Context Window: 30,000ms", type: "dim" },
-  { text: "→ Phonetic Alignment: [b-i-s-m-i-l-l-a-a-h-i-r-r-a-h-m-a-a-n]", type: "info" },
-  { text: "✓ Makharij Check: Halq (Throat) & Jowf (Cavity) verified", type: "success" },
-  { text: "✓ Sifat Analysis: Hams, Jahr, Qalqalah matched with 98.6% confidence", type: "success" },
-  { text: "✓ Phoneme Error Rate (PER): 1.8% · Ready to export to GGUF/Ollama", type: "success" },
+  { text: '✓ Ingested "fiqh-foundations.pdf" (64 pages) + "lecture-04.mp4" (48 mins)', type: "success" },
+  { text: "→ Google Document AI OCR & Whisper speech transcription active...", type: "info" },
+  { text: "  Section-aware chunking: 184 hierarchical sections indexed", type: "dim" },
+  { text: '? "What are the core consensus rules on contracts discussed in Chapter 3?"', type: "info" },
+  { text: "  Adaptive Top-K retrieval matched 4 high-confidence sources in pgvector...", type: "dim" },
+  { text: "✓ Answer synthesized with exact citations [p. 18, p. 42, video 14:22]", type: "success" },
+  { text: "✓ Assistant verified and ready to query or share publicly", type: "success" },
 ];
 
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS; direction?: number }) {
@@ -460,7 +445,6 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [useCaseIdx, setUseCaseIdx] = useState(0);
-  const [activePreviewMode, setActivePreviewMode] = useState<"rag" | "asr">("rag");
   const [visibleLogs, setVisibleLogs] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
   const [selectedLangCategory, setSelectedLangCategory] = useState<LangCategory>("arabic");
@@ -479,21 +463,16 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    setVisibleLogs(0);
-    setProgressWidth(0);
-    const logTimer = setTimeout(() => {
-      setProgressWidth(100);
-    }, 200);
-    return () => clearTimeout(logTimer);
-  }, [activePreviewMode]);
+    const t = setTimeout(() => setProgressWidth(100), 300);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
-    const currentLogs = activePreviewMode === "rag" ? RAG_LOG_LINES : ASR_LOG_LINES;
-    if (visibleLogs < currentLogs.length) {
+    if (visibleLogs < RAG_LOG_LINES.length) {
       const t = setTimeout(() => setVisibleLogs((v) => v + 1), 500);
       return () => clearTimeout(t);
     }
-  }, [visibleLogs, activePreviewMode]);
+  }, [visibleLogs]);
 
   const observeReveal = useCallback((node: HTMLElement | null) => {
     if (!node) return;
@@ -512,8 +491,6 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, []);
 
-  const activeLogs = activePreviewMode === "rag" ? RAG_LOG_LINES : ASR_LOG_LINES;
-
   return (
     <div className={styles.page}>
       {/* ── Navigation Bar ── */}
@@ -524,7 +501,7 @@ export default function LandingPage() {
           </div>
           <div className={styles.navLinks}>
             <a href="#languages" className={styles.navLink}>140+ Languages</a>
-            <a href="#advantages" className={styles.navLink}>Advantages</a>
+            <a href="#advantages" className={styles.navLink}>RAG Advantages</a>
             <a href="#comparison" className={styles.navLink}>Why Fikram</a>
             <a href="#how-it-works" className={styles.navLink}>How It Works</a>
             <a href="#pricing" className={styles.navLink}>Pricing</a>
@@ -556,7 +533,7 @@ export default function LandingPage() {
         {mobileNavOpen && (
           <div className={styles.mobileNavMenu}>
             <a href="#languages" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>140+ Languages</a>
-            <a href="#advantages" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Advantages</a>
+            <a href="#advantages" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>RAG Advantages</a>
             <a href="#comparison" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Why Fikram</a>
             <a href="#how-it-works" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>How It Works</a>
             <a href="#pricing" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
@@ -577,21 +554,22 @@ export default function LandingPage() {
         <div className={styles.heroContent}>
           <div className={styles.heroBadge}>
             <span className={styles.heroBadgeDot} />
-            Proprietary Multimodal & Acoustic AI Engine
+            Multimodal Knowledge Intelligence · 140+ Languages
           </div>
 
           <h1 className={styles.heroHeadline}>
-            Turn Your Knowledge & Speech into<br />
-            <span className="text-gradient">an AI That Truly Understands</span>
+            Turn Any Document, Video, or Audio<br />
+            <span className="text-gradient">into an AI That Truly Knows It All</span>
           </h1>
 
           <p className={styles.heroSubline}>
-            Ingest PDFs, audio recordings, video lectures, and scanned books with 100% verified citations.
-            Train custom speech and phonetic models across 140+ languages. Zero hallucinations. Ready in 30 seconds.
+            Ingest PDFs, video lectures, voice notes, and scanned books.
+            Our section-aware RAG preserves chapter context and provides 100% verified citations across 140+ languages.
+            Zero hallucinations. Ready in 30 seconds.
           </p>
 
           <div className={styles.modelTicker}>
-            <span className={styles.modelTickerLabel}>Engineered for</span>
+            <span className={styles.modelTickerLabel}>Trusted by</span>
             <span key={useCaseIdx} className={styles.modelTickerName}>
               {HERO_USE_CASES[useCaseIdx]}
             </span>
@@ -603,96 +581,53 @@ export default function LandingPage() {
               <Sparkles size={18} style={{ marginRight: 8 }} />
               Start Free (50 Credits)
             </Link>
-            <a href="#languages" className="btn btn-secondary btn-lg">
-              Explore 140+ Languages
+            <a href="#advantages" className="btn btn-secondary btn-lg">
+              Explore RAG Features
             </a>
           </div>
 
           <p className={styles.heroNote}>
-            No credit card required · Instant 50 credits · Open weights export to Ollama & Hugging Face
+            No credit card required · Instant 50 credits · Upload video, audio, OCR &amp; PDFs in 30 seconds
           </p>
         </div>
 
-        {/* Dual-Mode Live Demo Card */}
+        {/* Live Multimodal RAG Demo Card */}
         <div className={styles.heroVisual} ref={heroCardRef}>
-          {/* Mode Switcher */}
-          <div className={styles.heroToggleWrap}>
-            <button
-              className={`${styles.heroToggleBtn} ${activePreviewMode === "rag" ? styles.heroToggleBtnActive : ""}`}
-              onClick={() => setActivePreviewMode("rag")}
-            >
-              <FileText size={14} />
-              Multimodal RAG & Citations
-            </button>
-            <button
-              className={`${styles.heroToggleBtn} ${activePreviewMode === "asr" ? styles.heroToggleBtnActive : ""}`}
-              onClick={() => setActivePreviewMode("asr")}
-            >
-              <Mic size={14} />
-              Acoustic Phonetics & Tajweed
-            </button>
-          </div>
-
           <div className={styles.heroCard}>
             <div className={styles.heroCardHeader}>
               <div className="terminal-dot red" />
               <div className="terminal-dot yellow" />
               <div className="terminal-dot green" />
               <span className={styles.heroCardTitle}>
-                {activePreviewMode === "rag" ? "Smart Assistant — Citation Grounding Engine" : "Acoustic Alignment — QPS Tajweed Model"}
+                Multimodal RAG Engine — Live Knowledge Ingestion
               </span>
               <span className="badge badge-success" style={{ marginLeft: "auto" }}>
                 <span className="status-dot done" />
-                Live Engine
+                Ready
               </span>
             </div>
 
             <div className={styles.heroCardBody}>
-              {activePreviewMode === "rag" ? (
-                <>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Knowledge Source</span>
-                    <span className={styles.heroCardValue}>PDFs, Scanned OCR, MP4 Video, MP3 Audio</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Indexing Speed</span>
-                    <span className={styles.heroCardValue}>184 Chunks in 2.8s (Hierarchical)</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Verification</span>
-                    <span className={styles.heroCardValue}>Exact Page numbers & Audio Timestamps</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Hallucination Rate</span>
-                    <span className={styles.heroCardValue} style={{ color: "#00E5C8", fontWeight: 700 }}>0.0% (Ground truth cited)</span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Acoustic Backbone</span>
-                    <span className={styles.heroCardValue}>obadx QPS / Meta w2v-BERT 2.0 (143 langs)</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Articulation Precision</span>
-                    <span className={styles.heroCardValue}>Makharij + Sifat (Qalqalah, Ghunnah, Hams)</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Phoneme Error Rate (PER)</span>
-                    <span className={styles.heroCardValue} style={{ color: "#00E5C8", fontWeight: 700 }}>1.8% (Industry Lowest)</span>
-                  </div>
-                  <div className={styles.heroCardRow}>
-                    <span className={styles.heroCardLabel}>Model Export</span>
-                    <span className={styles.heroCardValue}>Ollama GGUF & Hugging Face Hub ready</span>
-                  </div>
-                </>
-              )}
+              <div className={styles.heroCardRow}>
+                <span className={styles.heroCardLabel}>Supported Ingestion</span>
+                <span className={styles.heroCardValue}>Video (MP4), Audio (WAV/MP3), Scanned OCR, PDFs</span>
+              </div>
+              <div className={styles.heroCardRow}>
+                <span className={styles.heroCardLabel}>Chunking Engine</span>
+                <span className={styles.heroCardValue}>Section-Aware (Preserves Headings &amp; Chapters)</span>
+              </div>
+              <div className={styles.heroCardRow}>
+                <span className={styles.heroCardLabel}>Verification</span>
+                <span className={styles.heroCardValue}>Exact Page [p. 18] &amp; Video Timestamp [14:22]</span>
+              </div>
+              <div className={styles.heroCardRow}>
+                <span className={styles.heroCardLabel}>Hallucination Rate</span>
+                <span className={styles.heroCardValue} style={{ color: "#00E5C8", fontWeight: 700 }}>0.0% (Ground truth cited)</span>
+              </div>
 
               <div className={styles.heroProgressSection}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span className={styles.heroCardLabel}>
-                    {activePreviewMode === "rag" ? "Multimodal Indexing & Verification" : "Acoustic Alignment & Sifat Check"}
-                  </span>
+                  <span className={styles.heroCardLabel}>Hierarchical Knowledge Indexing</span>
                   <span className={styles.heroCardValue}>{progressWidth}%</span>
                 </div>
                 <div className="progress-bar">
@@ -707,9 +642,9 @@ export default function LandingPage() {
               </div>
 
               <div className={styles.heroLogs}>
-                {activeLogs.map((line, i) => (
+                {RAG_LOG_LINES.map((line, i) => (
                   <span
-                    key={`${activePreviewMode}-${i}`}
+                    key={i}
                     className={`terminal-line ${line.type} ${styles.logLine}`}
                     style={{
                       opacity: i < visibleLogs ? 1 : 0,
@@ -720,7 +655,7 @@ export default function LandingPage() {
                     {line.text}
                   </span>
                 ))}
-                {visibleLogs < activeLogs.length && <span className={styles.cursor}>▋</span>}
+                {visibleLogs < RAG_LOG_LINES.length && <span className={styles.cursor}>▋</span>}
               </div>
             </div>
           </div>
@@ -741,15 +676,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Section: Global Reach & 140+ Languages ── */}
+      {/* ── Section: Global Reach & 140+ Languages for RAG ── */}
       <section id="languages" className={`section ${styles.langSection}`} ref={observeReveal}>
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">Global Language Intelligence</span>
-            <h2>140+ Languages Supported Worldwide<br />with Sub-Phonetic Precision</h2>
+            <h2>140+ Languages Supported for Multilingual<br />&amp; Cross-Lingual Knowledge Search</h2>
             <p>
-              Pre-trained on Meta XLS-R (128 languages) and Meta w2v-BERT 2.0 (143 languages).
-              From classical Arabic recitation rules to Asian, European, and African dialects — Fikram understands what other models miss.
+              Upload documents, recorded lectures, or books in Arabic, Urdu, French, Spanish, Bahasa, or English.
+              Ask in one language, search across documents in another. Fikram handles complex scripts, diacritics, and regional dialects effortlessly.
             </p>
           </div>
 
@@ -782,50 +717,50 @@ export default function LandingPage() {
             ))}
           </div>
 
-          {/* Sub-Phonetic Technical Spotlight Card */}
+          {/* Multilingual RAG Spotlight Card */}
           <div className={styles.langSpotlightCard} data-reveal>
             <div className={styles.langSpotlightGrid}>
               <div>
-                <span className="badge badge-gradient" style={{ marginBottom: 12 }}>Exclusive Deep Tech</span>
+                <span className="badge badge-gradient" style={{ marginBottom: 12 }}>Proprietary Multilingual Pipeline</span>
                 <h3 className={styles.langSpotlightHead}>
-                  Why Standard AI Fails at Recitation & Dialects — and How Fikram Solves It
+                  Why Standard RAG Fails at Complex Scripts — and How Fikram Solves It
                 </h3>
                 <p className={styles.langSpotlightText}>
-                  Generic models (Whisper, Siri, Google Speech) only predict rough dictionary words. They cannot tell if a speaker articulated from the throat (Halq) or tongue (Lisan), whether heavy letters (Tafkheem) were flattened, or if Madd durations were respected.
+                  Generic search engines choke on Arabic diacritics (Tashkeel), Urdu Nastaliq, and compound languages. They blindly slice sentences across arbitrary character limits and fail to match queries if word endings differ.
                   <br /><br />
-                  Fikram uses <strong>two-level acoustic CTC alignment</strong> (Phonemes + Sifat). It listens at 50 frames per second to evaluate acoustic resonance and pinpoint exact articulation discrepancies down to the millisecond.
+                  Fikram uses <strong>768-dimensional multimodal embeddings with diacritic-tolerant semantic matching</strong>. You can ask a question in English or Urdu, and Fikram retrieves the precise truth from Arabic or French source documents with 100% verified citations.
                 </p>
                 <div className={styles.langPillsRow}>
-                  <span className={styles.langPill}><Check size={14} /> Makharij Alignment</span>
-                  <span className={styles.langPill}><Check size={14} /> Qalqalah & Ghunnah Detection</span>
-                  <span className={styles.langPill}><Check size={14} /> Tafkheem / Tarqeeq Tracking</span>
-                  <span className={styles.langPill}><Check size={14} /> 140+ Cross-Lingual Transfer</span>
+                  <span className={styles.langPill}><Check size={14} /> Cross-Lingual Search</span>
+                  <span className={styles.langPill}><Check size={14} /> Arabic Tashkeel Normalization</span>
+                  <span className={styles.langPill}><Check size={14} /> Scanned Book OCR</span>
+                  <span className={styles.langPill}><Check size={14} /> Nastaliq &amp; Devanagari Parsing</span>
                 </div>
               </div>
 
               <div className={styles.langSimBox}>
                 <div className={styles.simHeader}>
-                  <span>ACOUSTIC FRAME ANALYSIS</span>
-                  <span className={styles.simMatchTag}>99.4% CONFIDENCE</span>
+                  <span>CROSS-LINGUAL RETRIEVAL PREVIEW</span>
+                  <span className={styles.simMatchTag}>COSINE SIMILARITY: 0.94</span>
                 </div>
                 <div className={styles.simRow}>
-                  <span>Makhraj (Articulation)</span>
-                  <span style={{ color: "#00E5C8" }}>أدنى الحلق (Adna Al-Halq) ✓</span>
+                  <span>User Query (English)</span>
+                  <span style={{ color: "#fff" }}>&quot;What are the rules of compensation?&quot;</span>
                 </div>
                 <div className={styles.simRow}>
-                  <span>Sifat: Hams vs Jahr</span>
-                  <span style={{ color: "#00E5C8" }}>مهموس (Whispered) ✓</span>
+                  <span>Source Text (Arabic)</span>
+                  <span style={{ color: "#00E5C8" }}>ضوابط التعويض في الفقه الإسلامي</span>
                 </div>
                 <div className={styles.simRow}>
-                  <span>Sifat: Isti&apos;la (Elevation)</span>
-                  <span style={{ color: "#00E5C8" }}>مستفل (Lowered) ✓</span>
+                  <span>Document Anchor</span>
+                  <span style={{ color: "#00E5C8" }}>fiqh-foundations.pdf [p. 18]</span>
                 </div>
                 <div className={styles.simRow}>
-                  <span>Madd Elongation</span>
-                  <span style={{ color: "#00E5C8" }}>2 Harakah (412ms) ✓</span>
+                  <span>Synthesized Answer</span>
+                  <span style={{ color: "#00E5C8" }}>English response with [p. 18] badge</span>
                 </div>
                 <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                  Powered by obadx QPS &amp; Meta w2v-BERT 2.0 acoustic engine
+                  Powered by Gemini 768-dim embeddings &amp; Groq Llama 3 streaming
                 </div>
               </div>
             </div>
@@ -833,15 +768,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Section: Proprietary Advantages ("Built Different") ── */}
+      {/* ── Section: Proprietary RAG Advantages ("Built Different") ── */}
       <section id="advantages" className="section" ref={observeReveal}>
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">Proprietary Advantages</span>
             <h2>Built Different: What You Won&apos;t Find<br />in Any Generic Chatbot</h2>
             <p>
-              Most platforms wrap basic OpenAI APIs in a chat window. Fikram is a complete AI studio and factory
-              giving you multimodal ingestion, sub-phonetic accuracy, and open model weight export.
+              Most platforms wrap basic ChatGPT in a simple text box. Fikram is an enterprise-grade multimodal RAG studio
+              handling videos, audio lectures, scanned books, and section-aware chunking with zero hallucinations.
             </p>
           </div>
 
@@ -925,8 +860,8 @@ export default function LandingPage() {
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">How It Works</span>
-            <h2>Three Simple Steps to Production AI</h2>
-            <p>No machine learning degree. No servers to maintain. Upload your material and launch in seconds.</p>
+            <h2>Three Simple Steps to an Expert AI</h2>
+            <p>No machine learning knowledge needed. No servers to maintain. Upload your content and launch in seconds.</p>
           </div>
 
           <div className={styles.stepsGrid}>
@@ -941,30 +876,30 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Section: Live Model Marketplace Marquee ── */}
+      {/* ── Section: Model Ecosystem Marquee ── */}
       <section className={styles.showcaseSection} ref={observeReveal}>
         <div className={styles.showcaseGlow} />
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
-            <span className="section-label">Model Ecosystem</span>
-            <h2>Pre-Integrated Foundation Models &amp; Architectures</h2>
-            <p>Fine-tune with LoRA, run high-speed inference, or export open weights to run locally on your own hardware.</p>
+            <span className="section-label">Inference Engine</span>
+            <h2>Powered by Frontier &amp; Edge LLM Architectures</h2>
+            <p>Sub-second Groq Llama 3 streaming, Google Gemini Flash multimodal vision, and resilient enterprise Vertex AI fallbacks.</p>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "30px" }}>
             <div>
-              <div style={{ paddingLeft: "24px", marginBottom: "12px", opacity: 0.6, fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "1px" }}>Supported Frontier LLMs &amp; Speech Backbones</div>
+              <div style={{ paddingLeft: "24px", marginBottom: "12px", opacity: 0.6, fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "1px" }}>High-Speed Inference &amp; Reasoning Engines</div>
               <MarqueeRow items={FRONTIER_MODELS} direction={1} />
             </div>
             <div>
-              <div style={{ paddingLeft: "24px", marginBottom: "12px", opacity: 0.6, fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "1px" }}>Edge &amp; Local Runtimes (Ollama, Gemma, Qwen)</div>
+              <div style={{ paddingLeft: "24px", marginBottom: "12px", opacity: 0.6, fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "1px" }}>Lightweight &amp; Multimodal Vision Models</div>
               <MarqueeRow items={LIGHTWEIGHT_MODELS} direction={-1} />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Section: Live Pricing Table ── */}
+      {/* ── Section: Live Polar Pricing Table ── */}
       <section id="pricing" className="section" ref={observeReveal}>
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
@@ -972,7 +907,7 @@ export default function LandingPage() {
             <h2>Start Free. Upgrade as You Grow.</h2>
             <p>
               Receive 50 free credits instantly when you sign up. No credit card required.
-              Upgrade anytime for dedicated enterprise compute, video RAG, and custom GPU training.
+              Upgrade anytime for unlimited assistants, full video RAG, and dedicated enterprise compute.
             </p>
           </div>
 
@@ -1042,7 +977,7 @@ export default function LandingPage() {
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">Got Questions?</span>
             <h2>Frequently Asked Questions</h2>
-            <p>Everything you need to know about our language models, citations, file formats, and data security.</p>
+            <p>Everything you need to know about our multilingual RAG, citations, media formats, and data security.</p>
           </div>
 
           <div className={styles.faqGrid} data-reveal>
@@ -1078,15 +1013,15 @@ export default function LandingPage() {
             </h2>
             <p className={styles.finalCtaDesc}>
               Join scholars, educators, medical specialists, and researchers building verified,
-              hallucination-free AI assistants and custom speech models today.
+              hallucination-free AI assistants powered by their own knowledge.
             </p>
             <div className={styles.finalCtaBtns}>
               <Link href="/auth/signup" className="btn btn-primary btn-lg">
                 <Sparkles size={18} style={{ marginRight: 8 }} />
                 Get Started Free (50 Credits)
               </Link>
-              <a href="#languages" className="btn btn-secondary btn-lg">
-                Explore 140+ Languages
+              <a href="#advantages" className="btn btn-secondary btn-lg">
+                Explore RAG Advantages
               </a>
             </div>
           </div>
@@ -1102,14 +1037,14 @@ export default function LandingPage() {
                 <FikraLogo size={32} showText />
               </div>
               <p className={styles.footerTagline}>
-                The AI factory and studio where experts build citation-backed knowledge assistants and fine-tune speech models across 140+ languages.
+                The AI platform where experts build verified, citation-backed knowledge assistants from video, audio, OCR, and documents across 140+ languages.
               </p>
             </div>
             <div className={styles.footerLinks}>
               <div className={styles.footerCol}>
                 <div className={styles.footerColTitle}>Capabilities</div>
                 <a href="#languages" className={styles.footerLink}>140+ Languages</a>
-                <a href="#advantages" className={styles.footerLink}>Proprietary Advantages</a>
+                <a href="#advantages" className={styles.footerLink}>RAG Advantages</a>
                 <a href="#comparison" className={styles.footerLink}>Why Fikram</a>
                 <a href="#how-it-works" className={styles.footerLink}>How It Works</a>
               </div>
@@ -1131,7 +1066,7 @@ export default function LandingPage() {
           <div className={styles.footerBottom}>
             <span>© 2026 Fikram. All rights reserved.</span>
             <span style={{ color: "var(--text-disabled)", fontSize: "0.8125rem" }}>
-              Engineered with sub-phonemic precision for global experts.
+              Engineered with citation-backed precision for global experts.
             </span>
           </div>
         </div>
