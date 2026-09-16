@@ -63,6 +63,20 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // Session-based custom rules & prompt state (persisted per-user in localStorage)
+  const [sessionPrompt, setSessionPrompt] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(`mf_expert_prompt_${expertId}`);
+      if (stored) {
+        setSessionPrompt(stored);
+      }
+    } catch {}
+  }, [expertId]);
+
+  const effectivePrompt = sessionPrompt !== null ? sessionPrompt : (expert?.system_prompt || "");
+  const isCustomized = sessionPrompt !== null && sessionPrompt.trim() !== (expert?.system_prompt || "").trim();
 
   // Sidebar and Conversation state (collapsed by default on mobile)
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -334,7 +348,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
              url: downloadUrl,
              mimeType: pendingAttachment.mimeType,
              filename: pendingAttachment.file.name
-          }
+          },
+          systemPrompt: effectivePrompt || undefined,
         });
         setPendingAttachment(null);
       } else {
@@ -346,6 +361,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             .filter((m) => m.role === "user" || m.role === "model")
             .slice(-10)
             .map((m) => ({ role: m.role, content: m.content })),
+          systemPrompt: effectivePrompt || undefined,
         });
       }
 
@@ -660,16 +676,21 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className={styles.headerActions}>
-            {isOwner && (
-              <button
-                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
-                onClick={() => setEditModalOpen(true)}
-                title="Edit assistant rules and system prompt"
-              >
-                <Settings2 size={16} />
-                <span className={styles.btnLabel}>Edit Settings</span>
-              </button>
-            )}
+            <button
+              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${isCustomized ? styles.actionBtnCustomized : ""}`}
+              onClick={() => setEditModalOpen(true)}
+              title={
+                isCustomized
+                  ? "Personal session rules active (click to edit or reset)"
+                  : isOwner
+                  ? "Edit assistant rules (Session or Creator Default)"
+                  : "Customize assistant rules for your chat session"
+              }
+            >
+              <Settings2 size={16} />
+              <span className={styles.btnLabel}>{isCustomized ? "Rules (Custom)" : "Edit Rules"}</span>
+              {isCustomized && <span className={styles.customDot} />}
+            </button>
             <button
               className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
               onClick={() => setSourcesModalOpen(true)}
@@ -952,11 +973,38 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       {editModalOpen && expert && (
         <EditAssistantModal
           expertId={expert.id}
-          initialPrompt={expert.system_prompt || ""}
+          initialPrompt={effectivePrompt}
+          defaultPrompt={expert.system_prompt || ""}
+          isOwner={isOwner}
           onClose={() => setEditModalOpen(false)}
-          onUpdate={(newPrompt) => {
-            setExpert((prev: any) => prev ? { ...prev, system_prompt: newPrompt } : prev);
+          onSaveSession={(newPrompt) => {
+            setSessionPrompt(newPrompt);
+            try {
+              localStorage.setItem(`mf_expert_prompt_${expert.id}`, newPrompt);
+            } catch {}
           }}
+          onResetSession={() => {
+            setSessionPrompt(null);
+            try {
+              localStorage.removeItem(`mf_expert_prompt_${expert.id}`);
+            } catch {}
+          }}
+          onSaveGlobal={
+            isOwner
+              ? async (newPrompt) => {
+                  const res = await apiClient.patch<{ ok: boolean; expert?: any; error?: string }>(
+                    `/api/experts/${expert.id}`,
+                    { systemPrompt: newPrompt }
+                  );
+                  if (!res.ok) throw new Error(res.error || "Failed to update default rules");
+                  setExpert((prev: any) => (prev ? { ...prev, system_prompt: newPrompt } : prev));
+                  setSessionPrompt(null);
+                  try {
+                    localStorage.removeItem(`mf_expert_prompt_${expert.id}`);
+                  } catch {}
+                }
+              : undefined
+          }
         />
       )}
     </div>

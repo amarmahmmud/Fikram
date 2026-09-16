@@ -39,7 +39,15 @@ export async function POST(
 
     // Parse JSON body
     const body = await req.json();
-    const { message, history, conversationId, attachment } = body;
+    const {
+      message,
+      history,
+      conversationId,
+      attachment,
+      systemPrompt,
+      reasoningMode,
+      webSearchEnabled,
+    } = body;
 
     // Process file attachment(s)
     const mediaAttachments: MediaAttachment[] = [];
@@ -197,15 +205,31 @@ export async function POST(
       `[Expert Chat] Route decision: ${decision.provider} → ${decision.fallback || "none"} | Reason: ${decision.reason}`,
     );
 
+    // Session-based custom instructions and parameters
+    const effectiveSystemPrompt =
+      typeof systemPrompt === "string" && systemPrompt.trim().length > 0
+        ? systemPrompt.trim().slice(0, 8000)
+        : (expert.system_prompt || `You are ${expert.name}, a knowledgeable expert.`);
+
+    const effectiveReasoningMode =
+      typeof reasoningMode === "string" && ["strict", "evaluative", "hybrid"].includes(reasoningMode)
+        ? (reasoningMode as any)
+        : metadata.reasoningMode;
+
+    const effectiveWebSearch =
+      typeof webSearchEnabled === "boolean"
+        ? webSearchEnabled
+        : metadata.webSearchEnabled;
+
     // Run RAG pipeline — automatically routes to Gemini if media attachments present
     const result = await generateRAGResponse(
       message.trim(),
       expertId,
-      expert.system_prompt || `You are ${expert.name}, a knowledgeable expert.`,
+      effectiveSystemPrompt,
       history || [],
       {
-        reasoningMode: metadata.reasoningMode,
-        webSearchEnabled: metadata.webSearchEnabled,
+        reasoningMode: effectiveReasoningMode,
+        webSearchEnabled: effectiveWebSearch,
         mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
         useEnterprise: decision.useEnterprise,
       }
