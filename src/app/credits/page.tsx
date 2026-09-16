@@ -12,12 +12,12 @@ type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 // ── Product catalog (displayed in the Buy Credits modal) ──
 const PRODUCTS = {
   subscriptions: [
-    { name: "Pro Plan", desc: "2,000 credits/month", priceLabel: "$19/mo", productId: "8f72db21-1114-4a9f-8157-47cb9b2e5000" },
-    { name: "Business Plan", desc: "10,000 credits/month", priceLabel: "$79/mo", productId: "bc6d568a-1f56-42ca-85b6-336b74d5fdae" },
+    { name: "Pro Plan", desc: "2,000 credits/month", priceLabel: "$19/mo", productId: "fd898064-a43d-48de-a996-bdf220b62fc7" },
+    { name: "Business Plan", desc: "10,000 credits/month", priceLabel: "$79/mo", productId: "a02142a9-f54a-4637-817e-cb32fb46c67c" },
   ],
   topups: [
-    { name: "Starter Pack", desc: "500 credits", priceLabel: "$10", productId: "50545e08-3bca-4798-a059-e1596bb5204a" },
-    { name: "Power Pack", desc: "2,500 credits", priceLabel: "$40", productId: "bbae00ef-894b-40c1-9eb9-b34369729371" },
+    { name: "Starter Pack", desc: "500 credits", priceLabel: "$10", productId: "00fff612-c08e-4bdd-b312-91617773e40b" },
+    { name: "Power Pack", desc: "2,500 credits", priceLabel: "$40", productId: "3b97ad74-1645-4d8e-9c3e-c39e401b5eb1" },
   ],
 };
 
