@@ -25,23 +25,39 @@ export async function POST(req: Request) {
       );
     }
 
+    // Determine base URL dynamically with fallbacks (env var, origin header, Vercel URL, or localhost)
+    const hostHeader = req.headers.get("host");
+    const originHeader = req.headers.get("origin");
+    const protocol = hostHeader && !hostHeader.includes("localhost") ? "https" : "http";
+    const appUrl = (
+      process.env.NEXT_PUBLIC_APP_URL ||
+      originHeader ||
+      (hostHeader ? `${protocol}://${hostHeader}` : "") ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
+    ).replace(/\/$/, "");
+
     // Create a Polar Checkout Session
-    // Pass supabase_user_id as metadata so the webhook can map back to our user
+    // Pass supabase_user_id as metadata & externalCustomerId so the webhook maps back accurately
     const checkout = await polar.checkouts.create({
       products: [productId],
-      successUrl: `${process.env.NEXT_PUBLIC_APP_URL}/credits?checkout=success`,
+      successUrl: `${appUrl}/credits?checkout=success`,
       metadata: {
         supabase_user_id: user.id,
         supabase_email: user.email ?? "",
       },
       customerEmail: user.email ?? undefined,
+      externalCustomerId: user.id,
     });
 
     return NextResponse.json({ url: checkout.url });
-  } catch (err) {
-    console.error("[checkout] Error creating checkout session:", err);
+  } catch (err: any) {
+    console.error("[checkout] Error creating checkout session:", {
+      message: err?.message,
+      statusCode: err?.statusCode || err?.status,
+      body: err?.body,
+    });
     return NextResponse.json(
-      { error: "Failed to create checkout session" },
+      { error: err?.message || "Failed to create checkout session" },
       { status: 500 },
     );
   }

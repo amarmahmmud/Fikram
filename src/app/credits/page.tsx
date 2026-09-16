@@ -39,10 +39,12 @@ function CreditsPageContent() {
   const searchParams = useSearchParams();
   const [balance, setBalance] = useState<number>(0);
   const [held, setHeld] = useState<number>(0);
+  const [plan, setPlan] = useState<string>("free");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   const isCheckoutSuccess = searchParams.get("checkout") === "success";
 
@@ -52,16 +54,17 @@ function CreditsPageContent() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // Fetch profile credits balance + held
+        // Fetch profile credits balance + held + plan
         const { data: profile } = await supabase
           .from("profiles")
-          .select("credits_balance, credits_held")
+          .select("credits_balance, credits_held, plan")
           .eq("id", user.id)
           .single();
 
         if (profile) {
           setBalance(profile.credits_balance);
           setHeld((profile as Record<string, unknown>).credits_held as number ?? 0);
+          setPlan(profile.plan || "free");
         }
 
         // Fetch user's credit transactions
@@ -126,16 +129,64 @@ function CreditsPageContent() {
     }
   }
 
+  async function handleManageBilling() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/customer-portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Could not open billing portal.");
+      }
+    } catch {
+      alert("Failed to connect to billing portal. Please try again.");
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
   return (
     <>
       <div className="topbar">
-        <span className="topbar-title">Credits &amp; Billing</span>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => setShowBuyModal(true)}
-        >
-          Buy More Credits
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="topbar-title">Credits &amp; Billing</span>
+          {plan !== "free" && (
+            <span
+              style={{
+                fontSize: "0.72rem",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                padding: "3px 8px",
+                borderRadius: "999px",
+                background: "rgba(0, 229, 200, 0.12)",
+                color: "var(--accent-primary, #00e5c8)",
+                border: "1px solid rgba(0, 229, 200, 0.28)",
+              }}
+            >
+              {plan} Tier
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {plan !== "free" && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={handleManageBilling}
+              disabled={portalLoading}
+              title="Manage subscription, update payment method, or view invoices"
+            >
+              {portalLoading ? "Opening…" : "Billing Portal"}
+            </button>
+          )}
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowBuyModal(true)}
+          >
+            Buy More Credits
+          </button>
+        </div>
       </div>
 
       <div className="page-content">

@@ -6,10 +6,18 @@
 
 import { Polar } from "@polar-sh/sdk";
 
+// Server environment: Allow explicit override via POLAR_SERVER ("sandbox" | "production")
+// This allows testing in sandbox on live Vercel deployments before switching to production.
+export const polarServer: "sandbox" | "production" =
+  (process.env.POLAR_SERVER as "sandbox" | "production") ||
+  (process.env.POLAR_ENV as "sandbox" | "production") ||
+  (process.env.NODE_ENV === "production" ? "production" : "sandbox");
+
 export const polar = new Polar({
   accessToken: process.env.POLAR_ACCESS_TOKEN!,
-  server: process.env.NODE_ENV === "production" ? "production" : "sandbox",
+  server: polarServer,
 });
+
 
 // ── Credit allowances per plan (server-side source of truth) ──
 // These values control how many credits the webhook grants on

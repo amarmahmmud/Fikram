@@ -33,17 +33,29 @@ const EVENT_TTL = 7 * 24 * 60 * 60; // 7 days in seconds
  * Returns true if we successfully claimed it (we should process it).
  * Returns false if another handler already claimed it (skip processing).
  *
- * This eliminates the race window that existed with separate
- * isProcessed() + markProcessed() calls — SET NX is atomic in Redis.
+ * If Redis is not provisioned or fails, safely falls back to true
+ * so Supabase's credit_transactions_reference_id_unique constraint handles idempotency.
  */
 async function claimEvent(eventId: string): Promise<boolean> {
-  // SET key value NX EX ttl — only sets if key does NOT exist
-  const result = await redis.set(`polar:event:${eventId}`, "1", { nx: true, ex: EVENT_TTL });
-  // Returns "OK" if set succeeded (we claimed it), null if key already existed
-  return result === "OK";
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return true;
+  }
+  try {
+    const result = await redis.set(`polar:event:${eventId}`, "1", { nx: true, ex: EVENT_TTL });
+    return result === "OK";
+  } catch (err) {
+    console.warn("[webhook] Redis claimEvent failed, relying on Supabase unique constraint:", err);
+    return true;
+  }
 }
 
 // ── Atomic credit grant via Supabase RPC ─────────────────────────────────────
+
+function toUuidOrUndefined(val: string | null | undefined): string | undefined {
+  if (!val) return undefined;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+  return isUuid ? val : undefined;
+}
 
 async function grantCredits(
   userId: string,
@@ -52,15 +64,21 @@ async function grantCredits(
   label: string,
   referenceId?: string,
 ) {
+  const safeReferenceId = toUuidOrUndefined(referenceId);
   const { error } = await (getSupabase().rpc as any)("grant_credits", {
     p_user_id: userId,
     p_amount: amount,
     p_type: type,
     p_label: label,
-    p_reference_id: referenceId ?? null,
+    p_reference_id: safeReferenceId ?? null,
   });
 
   if (error) {
+    // If unique constraint was violated, it's a duplicate delivery that already succeeded
+    if (error.code === "23505" || error.message?.includes("unique")) {
+      console.log(`[webhook] Duplicate event ${referenceId} ignored by database unique constraint.`);
+      return;
+    }
     console.error("[webhook] grant_credits RPC failed:", error);
     throw new Error(`grant_credits failed: ${error.message}`);
   }
@@ -77,18 +95,40 @@ async function updateUserPlan(userId: string, plan: string) {
   }
 }
 
-// ── Resolve Supabase user ID from metadata ───────────────────────────────────
+// ── Resolve Supabase user ID with multi-level fallback ───────────────────────
 
-function getUserId(metadata: Record<string, unknown> | null | undefined): string | null {
-  if (!metadata) return null;
-  const id = metadata.supabase_user_id;
-  return typeof id === "string" ? id : null;
+async function resolveUserId(data: any): Promise<string | null> {
+  if (!data) return null;
+
+  // 1. Explicit metadata on the order / subscription
+  if (data.metadata?.supabase_user_id && typeof data.metadata.supabase_user_id === "string") {
+    return data.metadata.supabase_user_id;
+  }
+
+  // 2. externalCustomerId on the customer object
+  if (data.customer?.externalId && typeof data.customer.externalId === "string") {
+    return data.customer.externalId;
+  }
+
+  // 3. Fallback: match profile by customer email in Supabase
+  const email = data.customer?.email || data.customerEmail;
+  if (email && typeof email === "string") {
+    const { data: profile } = await (getSupabase() as any)
+      .from("profiles")
+      .select("id")
+      .eq("email", email.trim().toLowerCase())
+      .maybeSingle();
+
+    if (profile?.id) return profile.id;
+  }
+
+  return null;
 }
 
 // ── Webhook handler using named event handlers for proper TypeScript typing ──
 
 export const POST = Webhooks({
-  webhookSecret: process.env.POLAR_WEBHOOK_SECRET!,
+  webhookSecret: process.env.POLAR_WEBHOOK_SECRET || "",
 
   // ── Order paid — this is where credits are actually granted ──
   onOrderPaid: async (payload) => {
@@ -100,9 +140,9 @@ export const POST = Webhooks({
       return;
     }
 
-    const userId = getUserId(order.metadata as Record<string, unknown> | null);
+    const userId = await resolveUserId(order);
     if (!userId) {
-      console.error("[webhook] order.paid missing supabase_user_id in metadata");
+      console.error("[webhook] order.paid missing user identification", { orderId: order.id, customer: order.customer });
       return;
     }
 
@@ -114,37 +154,35 @@ export const POST = Webhooks({
       return;
     }
 
-    if (billingReason === "subscription_create" || billingReason === "subscription_cycle") {
+    const planName = PRODUCT_PLAN_MAP[productId];
+    const topupCredits = TOPUP_CREDITS[productId];
+
+    if (planName) {
       // Subscription payment — grant monthly credit allowance
-      const planName = PRODUCT_PLAN_MAP[productId];
-      const credits = planName ? PLAN_CREDITS[planName] ?? 0 : 0;
+      const credits = PLAN_CREDITS[planName] ?? 0;
 
       if (credits > 0) {
         const label = billingReason === "subscription_create"
-          ? `${planName?.toUpperCase()} plan activated`
-          : `${planName?.toUpperCase()} monthly renewal`;
+          ? `${planName.toUpperCase()} plan activated`
+          : billingReason === "subscription_update"
+          ? `${planName.toUpperCase()} plan upgraded`
+          : `${planName.toUpperCase()} monthly renewal`;
 
         await grantCredits(userId, credits, "purchase", label, order.id);
-
-        if (planName) {
-          await updateUserPlan(userId, planName);
-        }
+        await updateUserPlan(userId, planName);
       }
-    } else if (billingReason === "purchase") {
+    } else if (topupCredits) {
       // One-off top-up purchase
-      const credits = TOPUP_CREDITS[productId] ?? 0;
-
-      if (credits > 0) {
-        await grantCredits(
-          userId,
-          credits,
-          "purchase",
-          `Credit top-up (${credits} credits)`,
-          order.id,
-        );
-      }
+      await grantCredits(
+        userId,
+        topupCredits,
+        "purchase",
+        `Credit top-up (${topupCredits} credits)`,
+        order.id,
+      );
+    } else {
+      console.warn(`[webhook] Unknown product ID received in order.paid: ${productId}`);
     }
-
   },
 
   // ── Subscription active — update plan field ──
@@ -154,14 +192,29 @@ export const POST = Webhooks({
 
     if (!(await claimEvent(eventId))) return;
 
-    const userId = getUserId(sub.metadata as Record<string, unknown> | null);
+    const userId = await resolveUserId(sub);
     if (!userId) return;
 
     const planName = PRODUCT_PLAN_MAP[sub.productId];
     if (planName) {
       await updateUserPlan(userId, planName);
     }
+  },
 
+  // ── Subscription updated — update plan field when customer upgrades/downgrades ──
+  onSubscriptionUpdated: async (payload) => {
+    const sub = payload.data;
+    const eventId = `updated:${sub.id}:${sub.modifiedAt || Date.now()}`;
+
+    if (!(await claimEvent(eventId))) return;
+
+    const userId = await resolveUserId(sub);
+    if (!userId) return;
+
+    const planName = PRODUCT_PLAN_MAP[sub.productId];
+    if (planName) {
+      await updateUserPlan(userId, planName);
+    }
   },
 
   // ── Subscription canceled — note it, keep existing credits ──
@@ -171,9 +224,8 @@ export const POST = Webhooks({
 
     if (!(await claimEvent(eventId))) return;
 
-    const userId = getUserId(sub.metadata as Record<string, unknown> | null);
+    const userId = await resolveUserId(sub);
     console.log(`[webhook] Subscription canceled for user ${userId ?? "unknown"}. Credits preserved.`);
-
   },
 
   // ── Subscription revoked — downgrade to free ──
@@ -183,11 +235,10 @@ export const POST = Webhooks({
 
     if (!(await claimEvent(eventId))) return;
 
-    const userId = getUserId(sub.metadata as Record<string, unknown> | null);
+    const userId = await resolveUserId(sub);
     if (userId) {
       await updateUserPlan(userId, "free");
       console.log(`[webhook] Subscription revoked for user ${userId}. Plan set to free.`);
     }
-
   },
 });
