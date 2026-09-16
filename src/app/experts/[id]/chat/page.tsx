@@ -902,7 +902,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 </button>
                 <textarea
                   className={styles.chatInput}
-                  placeholder={`Ask ${expert.name} a question, or pitch an idea to validate...`}
+                  placeholder="Ask a question or pitch an idea..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}

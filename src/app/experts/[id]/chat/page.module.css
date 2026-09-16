@@ -961,7 +961,11 @@
 
   /* ── Input Bar on Mobile ── */
   .inputArea {
-    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sidebarFooter {
+    padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   }
 
   .inputRow {
@@ -977,10 +981,10 @@
   }
 
   .chatInput {
-    padding: 8px 12px;
+    padding: 9px 12px;
     font-size: 16px; /* Prevents auto-zoom on iOS Safari */
     border-radius: 10px;
-    min-height: 36px;
+    min-height: 38px;
     line-height: 1.35;
   }
 }
