@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import styles from "./page.module.css";
 import { apiClient } from "@/lib/apiClient";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   ShieldCheck,
@@ -58,10 +59,23 @@ export default function NewExpertPage() {
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Optional AI Prompt Helper state
   const [showAiHelper, setShowAiHelper] = useState(false);
   const [selectedTone, setSelectedTone] = useState(TONE_PRESETS[0]);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Verify user is authenticated on mount
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        toast.error("Please sign in to create a smart assistant.");
+        router.push("/auth/signin?redirectTo=/experts/new");
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+  }, [router]);
 
   // Optional URL Ingestion state
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -84,6 +98,12 @@ export default function NewExpertPage() {
           webSearchEnabled,
         }),
       });
+      if (res.status === 401) {
+        toast.error("You must be signed in to create an assistant. Redirecting to sign in...");
+        router.push("/auth/signin?redirectTo=/experts/new");
+        return;
+      }
+
       const data = await res.json();
       if (data.ok && data.expert) {
         setExpertId(data.expert.id);
@@ -284,6 +304,12 @@ export default function NewExpertPage() {
             filename: file.name,
           }),
         });
+        if (res.status === 401) {
+          toast.error("Your session has expired. Please sign in again.");
+          router.push("/auth/signin?redirectTo=/experts/new");
+          return;
+        }
+
         if (!res.ok) {
           const text = await res.text();
           let errMsg = `Server returned ${res.status}`;
@@ -327,6 +353,16 @@ export default function NewExpertPage() {
 
   const totalChunks = files.reduce((a, f) => a + (f.chunksStored || 0), 0);
   const allDone = files.length > 0 && files.every((f) => f.status === "done");
+
+  if (checkingAuth) {
+    return (
+      <div className="page-content" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
+        <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+          Loading assistant creator...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
