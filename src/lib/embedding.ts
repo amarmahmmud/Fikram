@@ -217,7 +217,8 @@ export async function describeMediaWithGemini({
 
 // ── Embedding ────────────────────────────────────────────────────────────────
 
-const EMBEDDING_MODEL = "gemini-embedding-2";
+const VERTEX_EMBEDDING_MODEL = "text-embedding-004";
+const GEMINI_EMBEDDING_MODEL = "gemini-embedding-2";
 const EMBEDDING_DIMENSIONS = 768;
 
 /**
@@ -229,7 +230,6 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * Extracts retry delay from Gemini API 429 errors or falls back to exponential backoff.
  */
 function getRetryDelay(err: any, attempt: number): number {
-  // 1. Try to extract from structured errorDetails array (Google RPC format)
   if (err?.errorDetails && Array.isArray(err.errorDetails)) {
     const retryInfo = err.errorDetails.find(
       (d: any) => d["@type"] === "type.googleapis.com/google.rpc.RetryInfo"
@@ -240,24 +240,37 @@ function getRetryDelay(err: any, attempt: number): number {
     }
   }
 
-  // 2. Try to extract from the error message string directly
   if (err?.message) {
     const match = err.message.match(/retry in ([\d.]+)s/i);
     if (match) return Math.ceil(parseFloat(match[1]) * 1000);
   }
 
-  // 3. Fallback to exponential backoff with jitter
-  // attempt=1 => ~8s, attempt=2 => ~16s, attempt=3 => ~32s, attempt=4 => ~64s
   const baseDelay = Math.pow(2, attempt) * 4000;
   const jitter = baseDelay * 0.2 * Math.random();
   return baseDelay + jitter;
 }
 
 /**
- * Generate an embedding vector for a single text string with true round-robin
- * key rotation and automatic key cooldown on 429 quota limits.
+ * Generate an embedding vector for a single text string.
+ * PRIMARY: Vertex AI Enterprise (text-embedding-004, high throughput, zero 15 RPM bottlenecks).
+ * FALLBACK: Gemini Free API Key Pool with round-robin rotation.
  */
 export async function embedText(text: string): Promise<number[]> {
+  // ── 1. PRIMARY: Vertex AI Enterprise ───────────────────────────────────────
+  try {
+    const enterpriseClient = getEnterpriseClient();
+    const result = await enterpriseClient.models.embedContent({
+      model: VERTEX_EMBEDDING_MODEL,
+      contents: text,
+      config: { outputDimensionality: EMBEDDING_DIMENSIONS },
+    });
+    trackVertexSpend("embed_text", Math.ceil(text.length / 1000)).catch(console.error);
+    return result.embeddings?.[0]?.values || [];
+  } catch (vertexErr: any) {
+    console.warn(`[Embedding] Vertex AI primary unavailable (${vertexErr.message}), falling back to Gemini API keys...`);
+  }
+
+  // ── 2. FALLBACK: Free Gemini API Key Pool ───────────────────────────────────
   let attempts = 0;
 
   while (attempts < 5) {
@@ -266,7 +279,7 @@ export async function embedText(text: string): Promise<number[]> {
 
     try {
       const result = await client.models.embedContent({
-        model: EMBEDDING_MODEL,
+        model: GEMINI_EMBEDDING_MODEL,
         contents: text,
         config: { outputDimensionality: EMBEDDING_DIMENSIONS },
       });
@@ -276,38 +289,20 @@ export async function embedText(text: string): Promise<number[]> {
 
       if (isQuota) {
         markKeyQuotaCooling(key, 60_000);
-        console.warn(`[Embedding] Gemini key 429 quota hit, key placed on 60s cooldown (attempt ${attempts}/5)...`);
+        console.warn(`[Embedding] Gemini key 429 quota hit (attempt ${attempts}/5)...`);
 
         const keys = getGeminiApiKeys();
-        // If we have other keys in the pool, immediately try another healthy key without sleeping
         if (keys.length > 1 && attempts < keys.length) {
           await delay(100);
           continue;
         }
 
-        // If all keys are cooling or single key configured, delay before retry
         if (attempts < 5) {
-          const delayMs = Math.min(8000, getRetryDelay(err, attempts));
+          const delayMs = Math.min(6000, getRetryDelay(err, attempts));
           console.warn(`[Embedding] All keys cooling down, retrying in ${Math.round(delayMs / 1000)}s...`);
           await delay(delayMs);
           continue;
         }
-      }
-
-      // ── Vertex AI fallback for embeddings (enterprise path) ──
-      try {
-        console.warn(`[Embedding] Free keys exhausted, attempting Vertex AI fallback for embedding...`);
-        const enterpriseClient = getEnterpriseClient();
-        const result = await enterpriseClient.models.embedContent({
-          model: EMBEDDING_MODEL,
-          contents: text,
-          config: { outputDimensionality: EMBEDDING_DIMENSIONS },
-        });
-        trackVertexSpend("embed_text", Math.ceil(text.length / 1000)).catch(console.error);
-        console.log(`[Embedding] Vertex AI fallback succeeded`);
-        return result.embeddings?.[0]?.values || [];
-      } catch (vertexErr: any) {
-        console.warn(`[Embedding] Vertex AI fallback unavailable:`, vertexErr.message);
       }
     }
   }
@@ -316,21 +311,18 @@ export async function embedText(text: string): Promise<number[]> {
 }
 
 /**
- * Generate embeddings for multiple texts using parallel individual calls with
- * round-robin key distribution and gentle wave pacing to prevent quota spikes.
+ * Generate embeddings for multiple texts with parallel execution.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const CONCURRENCY = 4;
+  const CONCURRENCY = 6;
   const results: number[][] = new Array(texts.length);
   let completed = 0;
 
-  console.log(`[Embedding] Embedding ${texts.length} texts across API key pool (concurrency: ${CONCURRENCY})`);
+  console.log(`[Embedding] Embedding ${texts.length} texts (concurrency: ${CONCURRENCY})`);
 
-  // Process in waves of CONCURRENCY parallel requests
   for (let i = 0; i < texts.length; i += CONCURRENCY) {
     if (i > 0) {
-      // Gentle pacing between waves to prevent burst 429 quota spikes
-      await delay(150);
+      await delay(100);
     }
 
     const wave = texts.slice(i, i + CONCURRENCY);

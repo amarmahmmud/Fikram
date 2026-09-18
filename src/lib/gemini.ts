@@ -96,13 +96,22 @@ function setupGoogleCredentials(): boolean {
   // ── Strategy 2: JSON env var (Vercel / serverless) ──────────────────────
   // On Vercel there's no filesystem, so we read the JSON from an env var
   // and write it to a temp file that the GCP SDK can discover.
-  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  if (credentialsJson) {
+  const rawCredentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (rawCredentialsJson) {
     try {
-      const tmpPath = path.join(os.tmpdir(), "gcp-key.json");
-      if (!fs.existsSync(tmpPath)) {
-        fs.writeFileSync(tmpPath, credentialsJson, { mode: 0o600 });
+      let credentialsJson = rawCredentialsJson.trim();
+      // If user pasted base64 encoded credentials, decode it
+      if (!credentialsJson.startsWith("{") && credentialsJson.length > 50) {
+        try {
+          const decoded = Buffer.from(credentialsJson, "base64").toString("utf-8");
+          if (decoded.trim().startsWith("{")) {
+            credentialsJson = decoded.trim();
+          }
+        } catch { /* not base64 */ }
       }
+
+      const tmpPath = path.join(os.tmpdir(), "gcp-key.json");
+      fs.writeFileSync(tmpPath, credentialsJson, { mode: 0o600 });
       process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
       return true;
     } catch (err) {
@@ -128,16 +137,10 @@ function setupGoogleCredentials(): boolean {
 export function getGeminiApiKeys(): string[] {
   const keysStr = process.env.GOOGLE_GEMINI_API_KEYS;
   if (keysStr) {
-    const parsed = keysStr.split(",").map((k) => k.trim()).filter(Boolean);
-    if (parsed.length > 0) return parsed;
+    return keysStr.split(",").map((k) => k.trim()).filter(Boolean);
   }
-  const single = process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-  if (single) {
-    if (single.includes(",")) {
-      return single.split(",").map((k) => k.trim()).filter(Boolean);
-    }
-    return [single.trim()];
-  }
+  const single = process.env.GOOGLE_GEMINI_API_KEY;
+  if (single) return [single];
   return [];
 }
 
@@ -156,7 +159,7 @@ function getGenAIClientForKey(apiKey: string): GoogleGenAI {
 export function getEnterpriseClient(): GoogleGenAI {
   setupGoogleCredentials();
   const project = process.env.GOOGLE_CLOUD_PROJECT || "model-factory-505311";
-  const location = process.env.GOOGLE_CLOUD_LOCATION || "global";
+  const location = process.env.GOOGLE_CLOUD_LOCATION || "us-central1";
   return new GoogleGenAI({
     vertexai: true,
     project: project,
