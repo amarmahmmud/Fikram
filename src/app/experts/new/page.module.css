@@ -314,6 +314,7 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   font-size: 0.85rem;
+  min-width: 0;
 }
 
 .fileIcon {
@@ -323,6 +324,7 @@
 
 .fileName {
   flex: 1;
+  min-width: 90px;
   color: var(--text-primary);
   font-weight: 500;
   overflow: hidden;
@@ -334,13 +336,16 @@
   color: var(--text-muted);
   font-size: 0.75rem;
   font-family: var(--font-mono);
+  flex-shrink: 0;
 }
 
 .fileStatus {
   font-size: 0.75rem;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 6px;
+  max-width: 60%;
+  flex-shrink: 0;
 }
 
 .fileStatus_pending {
@@ -471,5 +476,19 @@
 .webToggleDesc {
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+@media (max-width: 520px) {
+  .fileRow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .fileName {
+    min-width: 120px;
+  }
+  .fileStatus {
+    max-width: 100%;
+    margin-left: auto;
+  }
 }
 

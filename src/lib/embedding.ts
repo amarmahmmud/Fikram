@@ -24,12 +24,43 @@ import { searchWeb, WebSearchResult } from "@/lib/web-search";
 import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
 import { trackVertexSpend } from "@/lib/vertex-budget";
 
+// ── Gemini Key Pool Management & Round-Robin Rotation ───────────────────────
 let currentEmbedKeyIndex = 0;
-function getEmbeddingModel() {
+// Map of apiKey -> timestamp until which the key is on cooldown (after a 429)
+const embedKeyCooldowns = new Map<string, number>();
+
+function getNextHealthyKey(): { client: GoogleGenAI; key: string } {
   const keys = getGeminiApiKeys();
   if (keys.length === 0) throw new Error("No Gemini API keys found for embeddings");
-  const key = keys[currentEmbedKeyIndex % keys.length];
-  return new GoogleGenAI({ apiKey: key });
+  const now = Date.now();
+
+  // 1. Try finding a key that is NOT on cooldown, rotating on EVERY single call
+  for (let i = 0; i < keys.length; i++) {
+    const candidateIdx = (currentEmbedKeyIndex + i) % keys.length;
+    const candidateKey = keys[candidateIdx];
+    const cooldownUntil = embedKeyCooldowns.get(candidateKey) || 0;
+    if (now >= cooldownUntil) {
+      currentEmbedKeyIndex = (candidateIdx + 1) % keys.length;
+      return { client: new GoogleGenAI({ apiKey: candidateKey }), key: candidateKey };
+    }
+  }
+
+  // 2. All keys are currently cooling down: pick the one that cools down earliest
+  let bestIdx = 0;
+  let minCooldown = Infinity;
+  for (let i = 0; i < keys.length; i++) {
+    const cooldownUntil = embedKeyCooldowns.get(keys[i]) || 0;
+    if (cooldownUntil < minCooldown) {
+      minCooldown = cooldownUntil;
+      bestIdx = i;
+    }
+  }
+  currentEmbedKeyIndex = (bestIdx + 1) % keys.length;
+  return { client: new GoogleGenAI({ apiKey: keys[bestIdx] }), key: keys[bestIdx] };
+}
+
+function markKeyQuotaCooling(key: string, durationMs = 60_000) {
+  embedKeyCooldowns.set(key, Date.now() + durationMs);
 }
 // ── Groq Key Rotation (doubles effective RPM) ────────────────────────────────
 
@@ -223,15 +254,18 @@ function getRetryDelay(err: any, attempt: number): number {
 }
 
 /**
- * Generate an embedding vector for a single text string with retry on 429 quota.
+ * Generate an embedding vector for a single text string with true round-robin
+ * key rotation and automatic key cooldown on 429 quota limits.
  */
 export async function embedText(text: string): Promise<number[]> {
   let attempts = 0;
+
   while (attempts < 5) {
     attempts++;
+    const { client, key } = getNextHealthyKey();
+
     try {
-      const model = getEmbeddingModel();
-      const result = await model.models.embedContent({
+      const result = await client.models.embedContent({
         model: EMBEDDING_MODEL,
         contents: text,
         config: { outputDimensionality: EMBEDDING_DIMENSIONS },
@@ -239,79 +273,83 @@ export async function embedText(text: string): Promise<number[]> {
       return result.embeddings?.[0]?.values || [];
     } catch (err: any) {
       const isQuota = err.status === 429 || err.message?.includes("429") || err.message?.includes("Quota");
-      
+
       if (isQuota) {
+        markKeyQuotaCooling(key, 60_000);
+        console.warn(`[Embedding] Gemini key 429 quota hit, key placed on 60s cooldown (attempt ${attempts}/5)...`);
+
         const keys = getGeminiApiKeys();
-        if (keys.length > 1) {
-          currentEmbedKeyIndex++;
-          console.warn(`[Embedding] Quota hit on embedText, rotating to key ${currentEmbedKeyIndex % keys.length + 1}/${keys.length}...`);
-          if (attempts < keys.length) continue;
+        // If we have other keys in the pool, immediately try another healthy key without sleeping
+        if (keys.length > 1 && attempts < keys.length) {
+          await delay(100);
+          continue;
+        }
+
+        // If all keys are cooling or single key configured, delay before retry
+        if (attempts < 5) {
+          const delayMs = Math.min(8000, getRetryDelay(err, attempts));
+          console.warn(`[Embedding] All keys cooling down, retrying in ${Math.round(delayMs / 1000)}s...`);
+          await delay(delayMs);
+          continue;
         }
       }
 
-      if (isQuota && attempts < 5) {
-        const delayMs = getRetryDelay(err, attempts);
-        console.warn(`[Embedding] Gemini quota hit on embedText, retrying in ${Math.round(delayMs / 1000)}s (attempt ${attempts}/5)...`);
-        await delay(delayMs);
-      } else {
-        // ── Vertex AI fallback for embeddings (extremely cheap, always allowed) ──
-        // Embedding calls cost ~$0.000025 per 1K chars on Vertex AI, so we
-        // always allow this fallback without budget checks.
-        try {
-          console.warn(`[Embedding] Free keys exhausted, falling back to Vertex AI for embedding...`);
-          const enterpriseClient = getEnterpriseClient();
-          const result = await enterpriseClient.models.embedContent({
-            model: EMBEDDING_MODEL,
-            contents: text,
-            config: { outputDimensionality: EMBEDDING_DIMENSIONS },
-          });
-          // Track the spend (non-blocking, fire-and-forget)
-          trackVertexSpend("embed_text", Math.ceil(text.length / 1000)).catch(console.error);
-          console.log(`[Embedding] Vertex AI fallback succeeded`);
-          return result.embeddings?.[0]?.values || [];
-        } catch (vertexErr: any) {
-          console.error(`[Embedding] Vertex AI fallback also failed:`, vertexErr.message);
-          throw err; // Throw the original error for better diagnostics
-        }
+      // ── Vertex AI fallback for embeddings (enterprise path) ──
+      try {
+        console.warn(`[Embedding] Free keys exhausted, attempting Vertex AI fallback for embedding...`);
+        const enterpriseClient = getEnterpriseClient();
+        const result = await enterpriseClient.models.embedContent({
+          model: EMBEDDING_MODEL,
+          contents: text,
+          config: { outputDimensionality: EMBEDDING_DIMENSIONS },
+        });
+        trackVertexSpend("embed_text", Math.ceil(text.length / 1000)).catch(console.error);
+        console.log(`[Embedding] Vertex AI fallback succeeded`);
+        return result.embeddings?.[0]?.values || [];
+      } catch (vertexErr: any) {
+        console.warn(`[Embedding] Vertex AI fallback unavailable:`, vertexErr.message);
       }
     }
   }
-  throw new Error("Failed to embed text after retries");
+
+  throw new Error("AI embedding service is busy. Please try again in a moment or upload a shorter document.");
 }
 
 /**
- * Generate embeddings for multiple texts using parallel individual calls.
- * The Gemini embedContent API only handles one text per call — "batch" arrays
- * get treated as a single content and return 1 embedding. So we parallelize
- * individual calls with a concurrency limit for speed.
+ * Generate embeddings for multiple texts using parallel individual calls with
+ * round-robin key distribution and gentle wave pacing to prevent quota spikes.
  */
 export async function embedTexts(texts: string[]): Promise<number[][]> {
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 4;
   const results: number[][] = new Array(texts.length);
   let completed = 0;
 
-  console.log(`[Embedding] Embedding ${texts.length} texts (concurrency: ${CONCURRENCY})`);
+  console.log(`[Embedding] Embedding ${texts.length} texts across API key pool (concurrency: ${CONCURRENCY})`);
 
   // Process in waves of CONCURRENCY parallel requests
   for (let i = 0; i < texts.length; i += CONCURRENCY) {
+    if (i > 0) {
+      // Gentle pacing between waves to prevent burst 429 quota spikes
+      await delay(150);
+    }
+
     const wave = texts.slice(i, i + CONCURRENCY);
-    const waveResults = await Promise.all(
-      wave.map((text, j) =>
-        embedText(text).then((embedding) => {
-          results[i + j] = embedding;
-          completed++;
-          if (completed % 20 === 0 || completed === texts.length) {
-            console.log(`[Embedding] Progress: ${completed}/${texts.length}`);
-          }
-        })
-      )
+    await Promise.all(
+      wave.map(async (text, j) => {
+        const embedding = await embedText(text);
+        results[i + j] = embedding;
+        completed++;
+        if (completed % 10 === 0 || completed === texts.length) {
+          console.log(`[Embedding] Progress: ${completed}/${texts.length}`);
+        }
+      })
     );
   }
 
   // Validate all embeddings were generated
   const missing = results.filter((r) => !r || r.length === 0).length;
   if (missing > 0) {
-    throw new Error(`${missing}/${texts.length} texts failed to embed`);
+    throw new Error(`${missing}/${texts.length} texts could not be indexed. Please try again.`);
   }
 
   return results;
@@ -397,31 +435,45 @@ function splitIntoSections(text: string): {
 }
 
 /**
- * Char-based sub-splitting WITHIN a single section, same logic as before
- * but scoped so a chunk can never cross a section boundary.
+ * Char-based sub-splitting WITHIN a single section, supporting multiple punctuation
+ * systems (Latin '. ', question/exclamation, and Ethiopic/Amharic '።' \u1362).
  */
-function splitSectionBody(body: string): string[] {
+function splitSectionBody(body: string, targetChunkSize = CHUNK_SIZE): string[] {
   const cleaned = body
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 
-  if (cleaned.length <= CHUNK_SIZE) {
+  if (cleaned.length <= targetChunkSize) {
     return cleaned.length > 0 ? [cleaned] : [];
   }
 
   const chunks: string[] = [];
   let start = 0;
   while (start < cleaned.length) {
-    let end = start + CHUNK_SIZE;
+    let end = start + targetChunkSize;
 
     if (end < cleaned.length) {
       const paragraphBreak = cleaned.lastIndexOf("\n\n", end);
-      if (paragraphBreak > start + CHUNK_SIZE * 0.4) {
+      if (paragraphBreak > start + targetChunkSize * 0.4) {
         end = paragraphBreak;
       } else {
-        const sentenceBreak = cleaned.lastIndexOf(". ", end);
-        if (sentenceBreak > start + CHUNK_SIZE * 0.4) {
+        // Support Latin sentence break ('. '), question break ('? '), exclamation ('! '),
+        // and Ethiopic/Amharic sentence break ('።' \u1362)
+        let sentenceBreak = cleaned.lastIndexOf(". ", end);
+        if (sentenceBreak === -1 || sentenceBreak < start + targetChunkSize * 0.4) {
+          const amharicBreak = cleaned.lastIndexOf("።", end);
+          if (amharicBreak > start + targetChunkSize * 0.4) {
+            sentenceBreak = amharicBreak;
+          }
+        }
+        if (sentenceBreak === -1 || sentenceBreak < start + targetChunkSize * 0.4) {
+          const qBreak = cleaned.lastIndexOf("? ", end);
+          if (qBreak > start + targetChunkSize * 0.4) {
+            sentenceBreak = qBreak;
+          }
+        }
+        if (sentenceBreak > start + targetChunkSize * 0.4) {
           end = sentenceBreak + 1;
         }
       }
@@ -444,16 +496,20 @@ function splitSectionBody(body: string): string[] {
 
 /**
  * Split text into section-aware, overlapping chunks optimized for retrieval.
- * Each chunk carries section metadata (title + tier) so retrieval/generation
- * can distinguish numbered "major" sections from catch-all "minor" ones,
- * instead of relying on embedding similarity alone.
+ * Uses adaptive chunk sizing so large documents (e.g. 50+ page PDFs) stay within
+ * a safe chunk count (~30 chunks), preventing free-tier quota exhaustion.
  */
 export function chunkForRetrieval(text: string): SectionChunk[] {
+  // Adaptive chunk size: If document is large, scale chunk size up so total chunk count
+  // remains manageable (under 30 chunks) and completes well within serverless timeouts.
+  const MAX_TARGET_CHUNKS = 30;
+  const targetChunkSize = Math.max(CHUNK_SIZE, Math.min(8000, Math.ceil(text.length / MAX_TARGET_CHUNKS)));
+
   const sections = splitIntoSections(text);
   const result: SectionChunk[] = [];
 
   sections.forEach((section, sectionIndex) => {
-    const subChunks = splitSectionBody(section.body);
+    const subChunks = splitSectionBody(section.body, targetChunkSize);
     subChunks.forEach((content, chunkIndexInSection) => {
       result.push({
         content,

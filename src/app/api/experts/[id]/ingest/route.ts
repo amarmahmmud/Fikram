@@ -260,8 +260,21 @@ export async function POST(
     });
   } catch (err: any) {
     console.error("[Ingest] Error:", err);
+    let userMessage = err.message || "Failed to process document";
+
+    // Translate technical RAG/AI errors into friendly user guidance for non-technical users
+    if (userMessage.includes("Failed to embed text") || userMessage.includes("429") || userMessage.includes("Quota") || userMessage.includes("busy")) {
+      userMessage = "AI indexing service is busy. Please try again in a moment or upload a shorter document.";
+    } else if (userMessage.includes("PAGE_LIMIT_EXCEEDED") || userMessage.includes("page limit")) {
+      userMessage = "This document exceeds the single-file page limit. Please split it into smaller documents.";
+    } else if (userMessage.includes("No extractable text") || userMessage.includes("Could not extract text")) {
+      userMessage = "Could not extract readable text from this file. Please verify it contains text and is not encrypted.";
+    } else if (userMessage.includes("timed out") || userMessage.includes("timeout") || userMessage.includes("504")) {
+      userMessage = "Document processing timed out. Please try a smaller file or split it into sections.";
+    }
+
     return NextResponse.json(
-      { error: err.message || "Failed to ingest document" },
+      { error: userMessage },
       { status: 500 }
     );
   }
