@@ -8,6 +8,7 @@ import type { Database } from "@/lib/supabase/types";
 import { PublishModal } from "@/components/PublishModal";
 import { apiClient } from "@/lib/apiClient";
 import { Globe, RotateCcw, Sparkles, Server, Package, Cpu, BarChart3, CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import ComingSoonButton from "@/components/ComingSoonButton";
 import { ASREvalReport, formatPER, perToGrade } from "@/lib/evaluator";
 import { TAJWEED_RULE_LABELS, TajweedRule } from "@/lib/qps-types";
 
@@ -280,14 +281,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   <Sparkles size={14} />
                   Test in Playground
                 </Link>
-                <Link
-                  href={`/new-job?retrain=${job.id}`}
+                <ComingSoonButton
+                  feature="retrain"
                   className="btn btn-sm btn-secondary"
                   style={{ gap: 6 }}
                 >
                   <RotateCcw size={14} />
                   Retrain
-                </Link>
+                </ComingSoonButton>
                 <button
                   className="btn btn-sm btn-secondary"
                   onClick={() => setPublishModalOpen(true)}
@@ -299,14 +300,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
               </>
             )}
             {isFailed && job.dataset_url && (
-              <Link
-                href={`/new-job?retrain=${job.id}`}
+              <ComingSoonButton
+                feature="retrain"
                 className="btn btn-sm btn-primary"
                 style={{ gap: 6 }}
               >
                 <RotateCcw size={14} />
                 Retry Training
-              </Link>
+              </ComingSoonButton>
             )}
           </div>
         </div>
@@ -595,14 +596,14 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
                   </Link>
                 )}
                 {(isCompleted || (isFailed && job.dataset_url)) && (
-                  <Link
-                    href={`/new-job?retrain=${job.id}`}
+                  <ComingSoonButton
+                    feature="retrain"
                     className="btn btn-secondary w-full"
                     style={{ textAlign: "center", gap: 6, display: "flex", alignItems: "center", justifyContent: "center" }}
                   >
                     <RotateCcw size={14} />
                     {isFailed ? "Retry with Same Dataset" : "Retrain with New Parameters"}
-                  </Link>
+                  </ComingSoonButton>
                 )}
 
                 {job.result_url && (

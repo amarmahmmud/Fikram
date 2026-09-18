@@ -7,6 +7,7 @@ import { MODELS, ASR_MODEL_CATEGORIES as MODEL_CATEGORIES } from "@/lib/models";
 import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
+import ComingSoonButton from "@/components/ComingSoonButton";
 import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight } from "lucide-react";
 
 interface HFModel {
@@ -296,13 +297,23 @@ export default function ModelsPage() {
                           >
                             <Edit2 size={14} /> Edit Details
                           </button>
-                          <Link 
-                            href={item.type === "smart_assistant" ? "/experts/new" : `/new-job?model=${encodeURIComponent(item.baseModel || "")}`}
-                            className="btn btn-primary btn-sm"
-                            style={{ flex: 1, gap: 4 }}
-                          >
-                            <Zap size={14} /> {item.type === "smart_assistant" ? "Improve" : "Retrain"}
-                          </Link>
+                          {item.type === "smart_assistant" ? (
+                            <Link 
+                              href="/experts/new"
+                              className="btn btn-primary btn-sm"
+                              style={{ flex: 1, gap: 4 }}
+                            >
+                              <Zap size={14} /> Improve
+                            </Link>
+                          ) : (
+                            <ComingSoonButton
+                              feature="retrain"
+                              className="btn btn-primary btn-sm"
+                              style={{ flex: 1, gap: 4 }}
+                            >
+                              <Zap size={14} /> Retrain
+                            </ComingSoonButton>
+                          )}
                         </div>
                       )}
 
@@ -343,7 +354,7 @@ export default function ModelsPage() {
             <div style={{ margin: "16px 0 20px" }}>
               <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
                 <Package size={18} /> Verified Base LLMs
-                <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Ready for GPU Fine-Tuning</span>
+                <span className="badge badge-default" style={{ fontSize: "0.65rem", background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))", borderColor: "rgba(245,158,11,0.2)", color: "#F59E0B" }}>Coming Soon</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
                 Curated open-source models tested for LoRA and QLoRA fine-tuning on Modal GPU clusters.
@@ -378,12 +389,12 @@ export default function ModelsPage() {
                       <span className={styles.creditsLabel}>Est. Credits</span>
                       <span className={styles.creditsValue}>{m.credits.min}–{m.credits.max}</span>
                     </div>
-                    <Link
-                      href={`/new-job?model=${encodeURIComponent(m.name)}`}
+                    <ComingSoonButton
+                      feature="fine-tune"
                       className="btn btn-primary btn-sm"
                     >
                       Fine-Tune ▷
-                    </Link>
+                    </ComingSoonButton>
                   </div>
                 </div>
               ))}
@@ -441,12 +452,12 @@ export default function ModelsPage() {
                       >
                         View on HF ↗
                       </a>
-                      <Link
-                        href={`/new-job?model=${encodeURIComponent(m.id)}`}
+                      <ComingSoonButton
+                        feature="use-base"
                         className="btn btn-primary btn-sm"
                       >
                         Use Base ▷
-                      </Link>
+                      </ComingSoonButton>
                     </div>
                   </div>
                 ))}
