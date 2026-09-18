@@ -22,16 +22,27 @@ const PAGES_PER_BATCH = 15;
  * Reuses the same credential setup as the Gemini/Vertex AI integration.
  */
 function ensureCredentials() {
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) return;
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS && fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) return;
 
-  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
-  if (credentialsJson) {
-    const tmpPath = path.join(os.tmpdir(), "gcp-key.json");
-    if (!fs.existsSync(tmpPath)) {
-      fs.writeFileSync(tmpPath, credentialsJson, { mode: 0o600 });
+  const rawJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (rawJson) {
+    try {
+      let credentialsJson = rawJson.trim();
+      if (!credentialsJson.startsWith("{") && credentialsJson.length > 50) {
+        try {
+          const decoded = Buffer.from(credentialsJson, "base64").toString("utf-8");
+          if (decoded.trim().startsWith("{")) credentialsJson = decoded.trim();
+        } catch { /* not base64 */ }
+      }
+      const tmpPath = path.join(os.tmpdir(), "gcp-key.json");
+      if (!fs.existsSync(tmpPath)) {
+        fs.writeFileSync(tmpPath, credentialsJson, { mode: 0o600 });
+      }
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
+      return;
+    } catch (err) {
+      console.error("[Document AI] Failed to write credentials:", err);
     }
-    process.env.GOOGLE_APPLICATION_CREDENTIALS = tmpPath;
-    return;
   }
 
   const defaultKeyPath = path.resolve(process.cwd(), "gcp-key.json");
