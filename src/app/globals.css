@@ -769,6 +769,7 @@ select.input {
 
 .credit-bar-track {
   flex: 1;
+  min-width: 36px;
   height: 4px;
   background: rgba(255,255,255,0.07);
   border-radius: var(--radius-full);

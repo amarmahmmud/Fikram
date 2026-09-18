@@ -105,12 +105,22 @@ export function KnowledgeModal({
         const { uploadUrl, downloadUrl } = await uploadRes.json();
         
         // Upload to R2 directly
-        const putRes = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type },
-        });
-        if (!putRes.ok) throw new Error("Failed to upload file to storage");
+        let putRes: Response;
+        try {
+          putRes = await fetch(uploadUrl, {
+            method: "PUT",
+            body: file,
+            headers: file.type ? { "Content-Type": file.type } : undefined,
+          });
+        } catch (netErr: any) {
+          console.error("Storage network error:", netErr);
+          throw new Error("Storage connection failed. Please check R2 CORS settings.");
+        }
+
+        if (!putRes.ok) {
+          console.error("Storage upload failed with status:", putRes.status);
+          throw new Error(`Storage upload failed (${putRes.status})`);
+        }
 
         // Send ingest request to backend
         const res = await fetch(`/api/experts/${expertId}/ingest`, {
@@ -122,6 +132,23 @@ export function KnowledgeModal({
             filename: file.name,
           }),
         });
+
+        if (!res.ok) {
+          const text = await res.text();
+          let errMsg = `Server returned ${res.status}`;
+          if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
+            errMsg = res.status === 504 ? "Processing timed out (504)." : `Server error (${res.status}).`;
+          } else {
+            try {
+              const parsed = JSON.parse(text);
+              errMsg = parsed.error || parsed.message || errMsg;
+            } catch {
+              errMsg = text && text.length < 150 ? text : errMsg;
+            }
+          }
+          throw new Error(errMsg);
+        }
+
         const data = await res.json();
 
         if (data.ok) {

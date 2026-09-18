@@ -56,9 +56,20 @@ export async function POST(req: Request) {
       statusCode: err?.statusCode || err?.status,
       body: err?.body,
     });
+
+    const isScopeError =
+      err?.statusCode === 403 ||
+      err?.status === 403 ||
+      String(err?.message || "").includes("insufficient_scope") ||
+      String(err?.body || "").includes("insufficient_scope");
+
+    const errorMessage = isScopeError
+      ? "Polar API configuration error: The access token is missing the 'checkouts:write' permission scope. Please create an access token with checkout permissions in the Polar developer dashboard."
+      : (err?.message || "Failed to create checkout session");
+
     return NextResponse.json(
-      { error: err?.message || "Failed to create checkout session" },
-      { status: 500 },
+      { error: errorMessage },
+      { status: isScopeError ? 403 : 500 },
     );
   }
 }

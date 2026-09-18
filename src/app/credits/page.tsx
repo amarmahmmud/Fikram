@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
 
@@ -115,7 +116,7 @@ function CreditsPageContent() {
 
   async function handleCheckout(productId: string) {
     if (!productId) {
-      alert("This product is not yet configured. Please check back soon.");
+      toast.info("This product is not yet configured. Please check back soon.");
       return;
     }
     setCheckoutLoading(productId);
@@ -129,10 +130,10 @@ function CreditsPageContent() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Failed to create checkout session");
+        toast.error(data.error || "Failed to create checkout session");
       }
     } catch {
-      alert("Something went wrong. Please try again.");
+      toast.error("Something went wrong. Please try again.");
     } finally {
       setCheckoutLoading(null);
     }
@@ -146,10 +147,10 @@ function CreditsPageContent() {
       if (data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Could not open billing portal.");
+        toast.error(data.error || "Could not open billing portal.");
       }
     } catch {
-      alert("Failed to connect to billing portal. Please try again.");
+      toast.error("Failed to connect to billing portal. Please try again.");
     } finally {
       setPortalLoading(false);
     }

@@ -41,16 +41,23 @@ export async function POST(req: Request) {
     });
 
     // Create a safe, unique file key organized by user (or temp directory for anonymous)
-    const safeName = filename.replace(/[^a-zA-Z0-9.\-_]/g, "");
+    const ext = filename.includes(".") ? `.${filename.split(".").pop()?.toLowerCase()}` : "";
+    const baseName = filename.replace(/\.[^/.]+$/, "");
+    let cleanName = baseName.replace(/[^a-zA-Z0-9.\-_]/g, "_").replace(/_+/g, "_").slice(0, 60);
+    if (!cleanName || cleanName === "_") {
+      cleanName = `doc_${Date.now()}`;
+    }
+    const safeName = `${cleanName}${ext}`;
     const fileKey = user 
       ? `datasets/${user.id}/${Date.now()}-${safeName}`
       : `temp/anonymous/${Date.now()}-${safeName}`;
 
     // 1. Generate PUT url for the browser to upload the file directly to R2 (expires in 1 hour)
+    // Note: Do NOT lock ContentType into the PutObject signature to avoid "SignatureDoesNotMatch"
+    // errors when browsers send subtle variations in Content-Type or charset.
     const putCommand = new PutObjectCommand({
       Bucket: bucket,
       Key: fileKey,
-      ContentType: contentType || "application/octet-stream",
     });
     const uploadUrl = await getSignedUrl(s3, putCommand, { expiresIn: 3600 });
 

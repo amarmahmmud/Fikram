@@ -27,6 +27,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const [userName, setUserName] = useState<string>("Loading...");
   const [userEmail, setUserEmail] = useState<string>("");
   const [credits, setCredits] = useState<number>(initialCredits ?? 100);
+  const [plan, setPlan] = useState<string>("free");
   const [initials, setInitials] = useState<string>("--");
   const [isOpen, setIsOpen] = useState(false);
 
@@ -52,12 +53,15 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
 
           const { data: profile } = await supabase
             .from("profiles")
-            .select("full_name, credits_balance, avatar_url")
+            .select("full_name, credits_balance, avatar_url, plan")
             .eq("id", user.id)
             .single();
 
           const displayName = profile?.full_name?.trim() || email.split("@")[0] || "User";
           setUserName(displayName);
+          if (profile?.plan) {
+            setPlan(profile.plan);
+          }
 
           if (profile?.credits_balance !== undefined && profile?.credits_balance !== null) {
             setCredits(profile.credits_balance);
@@ -170,19 +174,43 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
         </nav>
 
         {/* Credit bar */}
-        <div style={{ padding: "0 12px 12px" }}>
-          <Link href="/credits" onClick={() => setIsOpen(false)} style={{ textDecoration: "none", display: "block" }}>
-            <div className="credit-bar">
-              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
-              <div className="credit-bar-track">
-                <div className="credit-bar-fill" style={{ width: `${Math.min(100, Math.max(0, credits))}%` }} />
-              </div>
-              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", fontFamily: "var(--font-mono)" }}>
-                {credits}
-              </span>
+        {(() => {
+          const maxCredits =
+            plan === "enterprise" || plan === "business"
+              ? 10000
+              : plan === "pro"
+              ? 2000
+              : Math.max(100, credits);
+          const pct = Math.min(100, Math.max(0, Math.round((credits / maxCredits) * 100)));
+
+          return (
+            <div style={{ padding: "0 12px 12px" }}>
+              <Link href="/credits" onClick={() => setIsOpen(false)} style={{ textDecoration: "none", display: "block" }}>
+                <div className="credit-bar">
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
+                  <div className="credit-bar-track">
+                    <div className="credit-bar-fill" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span
+                    style={{
+                      fontSize: "0.8125rem",
+                      fontWeight: 600,
+                      color: "var(--text-primary)",
+                      whiteSpace: "nowrap",
+                      fontFamily: "var(--font-mono)",
+                      fontVariantNumeric: "tabular-nums",
+                      fontFeatureSettings: '"zero" 0',
+                      letterSpacing: "0.02em",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {credits.toLocaleString()}
+                  </span>
+                </div>
+              </Link>
             </div>
-          </Link>
-        </div>
+          );
+        })()}
 
         {/* User footer */}
         <div className="sidebar-footer">

@@ -287,12 +287,26 @@ export default function NewExpertPage() {
         const { uploadUrl, downloadUrl } = await uploadRes.json();
 
         // Upload directly to Cloudflare R2
-        const putRes = await fetch(uploadUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": mimeType || file.type },
-        });
-        if (!putRes.ok) throw new Error("Failed to upload file to storage");
+        let putRes: Response;
+        try {
+          putRes = await fetch(uploadUrl, {
+            method: "PUT",
+            body: file,
+            headers: mimeType ? { "Content-Type": mimeType } : undefined,
+          });
+        } catch (fetchErr: any) {
+          console.error("Direct storage PUT network error:", fetchErr);
+          throw new Error("Storage connection failed. Please check internet connection or R2 CORS configuration.");
+        }
+
+        if (!putRes.ok) {
+          const errStatus = putRes.status;
+          console.error("Storage upload failed with status:", errStatus);
+          if (errStatus === 403) {
+            throw new Error("Storage upload denied (403). Check Cloudflare R2 CORS or token permissions.");
+          }
+          throw new Error(`Failed to upload file to storage (${errStatus})`);
+        }
 
         // Send ingest request to backend
         const res = await fetch(`/api/experts/${expertId}/ingest`, {
@@ -313,8 +327,23 @@ export default function NewExpertPage() {
         if (!res.ok) {
           const text = await res.text();
           let errMsg = `Server returned ${res.status}`;
-          try { errMsg = JSON.parse(text).error || errMsg; } catch { errMsg = text || errMsg; }
-          if (res.status === 504) errMsg = "Processing timed out. File is too large for the current plan.";
+          // Check if response is raw HTML (e.g. Vercel 500 error page or timeout)
+          if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
+            if (res.status === 504) {
+              errMsg = "Processing timed out (504). File is too large for current plan.";
+            } else if (res.status === 500) {
+              errMsg = "Server processing error (500). Please try a smaller file or retry.";
+            } else {
+              errMsg = `Server error (${res.status}). Please try again.`;
+            }
+          } else {
+            try {
+              const parsed = JSON.parse(text);
+              errMsg = parsed.error || parsed.message || errMsg;
+            } catch {
+              errMsg = text && text.length < 150 ? text : errMsg;
+            }
+          }
           throw new Error(errMsg);
         }
         
@@ -658,8 +687,14 @@ export default function NewExpertPage() {
                         </span>
                       )}
                       {f.status === "error" && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <X size={12} /> {f.error}
+                        <span
+                          style={{ display: "inline-flex", alignItems: "center", gap: 4, maxWidth: "100%" }}
+                          title={f.error}
+                        >
+                          <X size={12} style={{ flexShrink: 0 }} />
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {f.error}
+                          </span>
                         </span>
                       )}
                     </span>
