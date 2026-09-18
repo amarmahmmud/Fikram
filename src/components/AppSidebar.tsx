@@ -26,7 +26,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
 
   const [userName, setUserName] = useState<string>("Loading...");
   const [userEmail, setUserEmail] = useState<string>("");
-  const [credits, setCredits] = useState<number>(initialCredits ?? 100);
+  const [credits, setCredits] = useState<number>(initialCredits ?? 50);
   const [plan, setPlan] = useState<string>("free");
   const [initials, setInitials] = useState<string>("--");
   const [isOpen, setIsOpen] = useState(false);
@@ -180,7 +180,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
               ? 10000
               : plan === "pro"
               ? 2000
-              : Math.max(100, credits);
+              : Math.max(50, credits);
           const pct = Math.min(100, Math.max(0, Math.round((credits / maxCredits) * 100)));
 
           return (

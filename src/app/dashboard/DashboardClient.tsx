@@ -104,7 +104,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
   const STATS = [
     { label: "Total Jobs",   value: String(totalJobs),     sub: "all time",      color: "var(--text-primary)" },
     { label: "Completed",    value: String(completedJobs), sub: "jobs finished", color: "var(--success)" },
-    { label: "Credits Used", value: String(creditsUsed),   sub: "of 100 free",   color: "var(--text-secondary)" },
+    { label: "Credits Used", value: String(creditsUsed),   sub: "of 50 free",   color: "var(--text-secondary)" },
     { label: "Credits Left", value: String(credits),       sub: "remaining",     color: credits < 20 ? "var(--warning)" : "var(--text-primary)" },
   ];
 
