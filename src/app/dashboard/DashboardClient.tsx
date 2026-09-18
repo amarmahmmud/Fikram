@@ -136,9 +136,9 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
         {/* ── Create Your AI ── */}
         <div className={styles.section}>
-          <div className={styles.sectionHeader} style={{ marginBottom: 20 }}>
+          <div className={styles.sectionIntro}>
             <h3 className={styles.sectionTitle}>Create Your AI</h3>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", marginTop: 4 }}>
+            <p className={styles.sectionSubtitle}>
               Start free with a Smart Assistant — upgrade to a Custom AI Model once you&apos;ve built up your content library.
             </p>
           </div>
@@ -158,7 +158,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 <li><Check size={14} className={styles.featureCheck} /> <span>Free to set up (no GPU cost)</span></li>
               </ul>
               <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
-                <span>Create Assistant</span>
+                <span>Create My AI Clone</span>
                 <ArrowRight size={14} />
               </Link>
             </div>
@@ -218,7 +218,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No jobs yet</p>
               <p style={{ fontSize: "0.875rem" }}>Create your first AI assistant or fine-tuning job to get started.</p>
               <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-                Create Assistant
+                Create My AI Clone
               </Link>
             </div>
           ) : (

@@ -145,6 +145,18 @@
   letter-spacing: -0.02em;
 }
 
+/* ── Section intro (stacked title + subtitle, for "Create Your AI" etc.) ── */
+.sectionIntro {
+  margin-bottom: 20px;
+}
+.sectionSubtitle {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  margin-top: 6px;
+  max-width: 540px;
+}
+
 .jobsList {
   background: rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(24px) saturate(160%);
@@ -165,10 +177,10 @@
 }
 .jobRow:last-child { border-bottom: none; }
 .jobRow:hover { background: rgba(255, 255, 255, 0.04); }
-.jobLeft  { display: flex; flex-direction: column; gap: 4px; }
-.jobRight { display: flex; align-items: center; gap: 12px; }
-.jobName  { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); }
-.jobMeta  { display: flex; align-items: center; gap: 8px; }
+.jobLeft  { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.jobRight { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.jobName  { font-size: 0.875rem; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobMeta  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Tiers grid */
 .tiersGrid {
@@ -360,21 +372,191 @@
 .modelTask    { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
 .modelCredits { font-size: 0.75rem; color: #00E5C8; font-weight: 600; font-family: var(--font-mono); }
 
+/* ══════════════════════════════════════════════════════════════
+   Responsive — Tablet (≤ 1024px)
+   ══════════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .statsRow    { grid-template-columns: repeat(2, 1fr); }
   .statsStrip  { grid-template-columns: repeat(2, 1fr); }
   .modelsGrid  { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Responsive — Mobile (≤ 640px)
+   ══════════════════════════════════════════════════════════════ */
 @media (max-width: 640px) {
-  .statsRow    { grid-template-columns: 1fr; }
-  .statsStrip  { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .modelsGrid  { grid-template-columns: 1fr; }
-  .tiersGrid   { grid-template-columns: 1fr; }
-  .welcomeRow  { flex-direction: column; }
-  .statChip    { padding: 10px 12px; }
-  .statChipValue { font-size: 1.1rem; }
+
+  /* ── Welcome ── */
+  .welcomeRow {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .welcomeTitle {
+    font-size: 1.25rem;
+    letter-spacing: -0.03em;
+  }
+
+  /* ── Sections ── */
+  .section {
+    margin-bottom: 24px;
+  }
+  .sectionIntro {
+    margin-bottom: 16px;
+  }
+  .sectionSubtitle {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+
+  /* ── Stats ── */
+  .statsRow   { grid-template-columns: 1fr; }
+  .statsStrip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .statChip {
+    padding: 10px 12px;
+    gap: 10px;
+    border-radius: 8px;
+  }
+  .statChipValue {
+    font-size: 1.1rem;
+  }
+  .statChipLabel {
+    font-size: 0.6875rem;
+  }
+  .statChipSub {
+    font-size: 0.625rem;
+  }
+
+  /* ── Tier cards (stack to 1 column) ── */
+  .tiersGrid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .tierCard {
+    padding: 20px 18px;
+    border-radius: 14px;
+  }
+  .tierIcon {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+  .tierTitle {
+    font-size: 1rem;
+  }
+  .tierDesc {
+    font-size: 0.78rem;
+    margin-bottom: 12px;
+  }
+  .tierFeatures {
+    margin: 0 0 16px;
+    gap: 5px;
+  }
+  .tierFeatures li {
+    font-size: 0.75rem;
+    gap: 6px;
+  }
+  .tierBadge,
+  .tierBadgePremium {
+    top: 12px;
+    right: 12px;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+  }
+
+  /* ── Jobs ── */
+  .jobRow {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+  .jobRight {
+    gap: 8px;
+  }
+  .jobName {
+    font-size: 0.8125rem;
+  }
+  .emptyJobs {
+    padding: 36px 16px;
+    border-radius: 12px;
+  }
+
+  /* ── Models ── */
+  .modelsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .modelCard {
+    padding: 14px;
+  }
+  .modelName {
+    font-size: 0.8125rem;
+  }
+
+  /* ── Quick start ── */
+  .quickStart {
+    padding: 20px 16px;
+    border-radius: 14px;
+    margin-bottom: 24px;
+  }
+  .quickStartContent {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .quickStartIcon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+  }
+  .quickStartBtn {
+    width: 100%;
+  }
+
+  /* Disable hover transforms on touch (prevents "sticky" hover on mobile) */
+  .tierCard:hover,
+  .statChip:hover {
+    transform: none;
+  }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Responsive — Small phones (≤ 400px)
+   ══════════════════════════════════════════════════════════════ */
 @media (max-width: 400px) {
-  .statsStrip  { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .welcomeTitle {
+    font-size: 1.125rem;
+  }
+  .statsStrip {
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .statChip {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .statChipValue {
+    font-size: 1rem;
+  }
+  .tierCard {
+    padding: 16px 14px;
+  }
+  .modelsGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .jobRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .jobRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
