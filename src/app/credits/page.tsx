@@ -47,6 +47,8 @@ function CreditsPageContent() {
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  useEffect(() => { document.title = "Credits & Billing — Fikram"; }, []);
+
   const isCheckoutSuccess = searchParams.get("checkout") === "success";
 
   useEffect(() => {

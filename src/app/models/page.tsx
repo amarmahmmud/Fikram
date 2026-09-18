@@ -54,6 +54,8 @@ const COMMUNITY_CATEGORIES = [
 export default function ModelsPage() {
   const [mainTab, setMainTab] = useState<"community" | "verified" | "huggingface">("community");
   const [search, setSearch] = useState("");
+
+  useEffect(() => { document.title = "Model Registry — Fikram"; }, []);
   const [activeCategory, setActiveCategory] = useState<ModelCategory | "all">("all");
   const [communityCategory, setCommunityCategory] = useState("All");
 

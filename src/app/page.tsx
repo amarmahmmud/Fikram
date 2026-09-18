@@ -106,7 +106,7 @@ const STATS = [
   { value: "30s", label: "Avg Setup Time" },
   { value: "50", label: "Free Credits at Signup" },
   { value: "∞", label: "Document Types" },
-  { value: "99.9%", label: "Answer Accuracy" }
+  { value: "100%", label: "Citation-Backed" }
 ];
 
 const LOG_LINES = [

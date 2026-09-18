@@ -81,7 +81,7 @@ export default function SignUpPage() {
           <span className={styles.promoBadgeIcon}><Gift size={20} /></span>
           <div>
             <div className={styles.promoBadgeTitle}>50 Free Credits on Signup</div>
-            <div className={styles.promoBadgeSub}>Enough to fine-tune 2–3 real AI models</div>
+            <div className={styles.promoBadgeSub}>Enough to create multiple AI assistants</div>
           </div>
         </div>
 
@@ -131,7 +131,7 @@ export default function SignUpPage() {
         </form>
 
         <p className={styles.authTerms}>
-          By signing up you agree to our <a href="#" className={styles.authSwitchLink}>Terms</a> and <a href="#" className={styles.authSwitchLink}>Privacy Policy</a>.
+          By signing up you agree to our <Link href="/#terms" className={styles.authSwitchLink}>Terms</Link> and <Link href="/#privacy" className={styles.authSwitchLink}>Privacy Policy</Link>.
         </p>
         <p className={styles.authSwitch}>
           Already have an account?{" "}

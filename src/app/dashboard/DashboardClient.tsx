@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
-import { Sparkles, Cpu, Check, ArrowRight, Layers } from "lucide-react";
+import { Sparkles, Cpu, Check, ArrowRight } from "lucide-react";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Job     = Database["public"]["Tables"]["jobs"]["Row"];
@@ -216,7 +216,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           {jobs.length === 0 ? (
             <div className={styles.emptyJobs}>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No jobs yet</p>
-              <p style={{ fontSize: "0.875rem" }}>Create your first AI assistant or fine-tuning job to get started.</p>
+              <p style={{ fontSize: "0.875rem" }}>Create your first AI assistant to get started.</p>
               <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
                 Create My AI Clone
               </Link>
@@ -267,30 +267,30 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           )}
         </div>
 
-        {/* ── Popular Base Models ── */}
+        {/* ── What You Can Build ── */}
         <div className={styles.section}>
           <div className={styles.sectionHeader}>
-            <h3 className={styles.sectionTitle}>Popular Base Models</h3>
-            <Link href="/models" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span>Browse all</span>
+            <h3 className={styles.sectionTitle}>What You Can Build</h3>
+            <Link href="/experts/new" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span>Create now</span>
               <ArrowRight size={13} />
             </Link>
           </div>
           <div className={styles.modelsGrid}>
             {[
-              { name: "Llama 3.1 8B", task: "Chat / Instruction", size: "8B",   credits: "20–40" },
-              { name: "Mistral 7B",   task: "General Purpose",    size: "7B",   credits: "15–35" },
-              { name: "Phi-3 Mini",   task: "Reasoning",          size: "3.8B", credits: "8–18" },
-              { name: "Gemma 2 9B",   task: "Chat / Instruction", size: "9B",   credits: "25–50" },
+              { name: "Course Advisor",    task: "Education",       size: "RAG", credits: "6" },
+              { name: "Legal Assistant",   task: "Legal & Compliance", size: "RAG", credits: "6" },
+              { name: "Health Coach",      task: "Healthcare",      size: "RAG", credits: "6" },
+              { name: "Finance Analyst",   task: "Finance",         size: "RAG", credits: "6" },
             ].map((m) => (
               <div key={m.name} className={`card card-hover ${styles.modelCard}`}>
                 <div className={styles.modelCardHeader}>
-                  <div className={styles.modelIcon}><Layers size={18} /></div>
-                  <span className="badge badge-default">{m.size}</span>
+                  <div className={styles.modelIcon}><Sparkles size={18} /></div>
+                  <span className="badge badge-indigo" style={{ fontSize: "0.625rem" }}>{m.size}</span>
                 </div>
                 <div className={styles.modelName}>{m.name}</div>
                 <div className={styles.modelTask}>{m.task}</div>
-                <div className={styles.modelCredits}>~{m.credits} credits</div>
+                <div className={styles.modelCredits}>~{m.credits} credits to set up</div>
               </div>
             ))}
           </div>

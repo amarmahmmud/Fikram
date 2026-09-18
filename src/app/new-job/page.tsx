@@ -12,6 +12,7 @@ import PipelineProgressOverlay, { PipelineEvent } from "@/components/PipelinePro
 import WaveformCorrector from "@/components/WaveformCorrector";
 import type { ASRDatasetPair, PhonemeLabel } from "@/lib/qps-types";
 import { Zap, Check, Headphones, Rocket, ArrowLeft, ArrowRight } from "lucide-react";
+import ComingSoonModal from "@/components/ComingSoonModal";
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -27,6 +28,8 @@ export default function NewJobPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [step, setStep] = useState<Step>(1);
+  const [showComingSoon, setShowComingSoon] = useState(true);
+
 
   // ── Step 1: Audio Upload / Dataset ──
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -313,6 +316,16 @@ export default function NewJobPage() {
   };
 
   return (
+    <>
+      {showComingSoon && (
+        <ComingSoonModal
+          feature="fine-tune"
+          onClose={() => {
+            setShowComingSoon(false);
+            router.push("/dashboard");
+          }}
+        />
+      )}
     <div className={styles.container}>
       {/* Sidebar / Stepper */}
       <div className={styles.sidebar}>
@@ -701,5 +714,6 @@ export default function NewJobPage() {
         />
       )}
     </div>
+    </>
   );
 }

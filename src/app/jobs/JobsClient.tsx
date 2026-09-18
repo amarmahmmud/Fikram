@@ -217,7 +217,7 @@ function ConfirmModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onCancel, loading]);
 
-  const typeLabel = itemType === "job" ? "fine-tuning job" : "smart assistant";
+  const typeLabel = itemType === "job" ? "training job" : "smart assistant";
 
   return (
     <div className={styles.modalOverlay} onClick={loading ? undefined : onCancel} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
@@ -481,7 +481,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
     <>
       {/* ── Topbar ── */}
       <div className="topbar">
-        <span className="topbar-title">Fine-Tuning Jobs</span>
+        <span className="topbar-title">My Creations</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
             className="btn btn-ghost btn-sm"

@@ -21,6 +21,8 @@ export default function BrowseModelsPage() {
   const [localStats, setLocalStats] = useState<Record<string, { likes: number; chats: number }>>({});
   const [likeInProgress, setLikeInProgress] = useState<Set<string>>(new Set());
 
+  useEffect(() => { document.title = "Browse Models — Fikram"; }, []);
+
   useEffect(() => {
     apiClient.get<any>("/api/community")
       .then((data) => {
@@ -166,7 +168,7 @@ export default function BrowseModelsPage() {
             <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models
           </h1>
           <p className={styles.subtitle}>
-            Discover and try specialized AI assistants and fine-tuned models created by the community.
+            Discover and try specialized AI assistants and custom models built by the community.
           </p>
         </div>
       </div>

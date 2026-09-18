@@ -37,6 +37,7 @@ import {
   Check,
   Share2,
 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Message {
   id?: string;
@@ -444,7 +445,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       "video/mp4", "video/webm",
     ];
     if (!validTypes.includes(file.type)) {
-      alert("Unsupported file type. Please upload an image, audio, or video file.");
+      toast.error("Unsupported file type. Please upload an image, audio, or video file.");
       return;
     }
 
@@ -453,7 +454,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       : file.type.startsWith("audio/") ? 25 * 1024 * 1024
       : 20 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
+      toast.error(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
       return;
     }
 
@@ -523,7 +524,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       }, 1000);
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      alert("Could not access the microphone. Please check your permissions.");
+      toast.error("Could not access the microphone. Please check your browser permissions.");
     }
   };
 

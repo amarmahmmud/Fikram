@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import { CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -13,6 +14,8 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { document.title = "Settings — Fikram"; }, []);
 
   useEffect(() => {
     async function loadProfile() {
@@ -57,7 +60,7 @@ export default function SettingsPage() {
       }
     } catch (err) {
       console.error("Error saving profile:", err);
-      alert("Failed to save settings");
+      toast.error("Failed to save settings. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -135,12 +138,15 @@ export default function SettingsPage() {
         {/* Notifications */}
         <div className={styles.section}>
           <div className={styles.sectionHead}>
-            <h3 className={styles.sectionTitle}>Notifications</h3>
-            <p className={styles.sectionDesc}>Choose which event alerts are enabled for your account.</p>
+            <h3 className={styles.sectionTitle}>
+              Notifications
+              <span style={{ marginLeft: 8, fontSize: "0.625rem", fontWeight: 600, padding: "2px 8px", borderRadius: 100, background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))", border: "1px solid rgba(245,158,11,0.2)", color: "#F59E0B", textTransform: "uppercase", letterSpacing: "0.5px", verticalAlign: "middle" }}>Coming Soon</span>
+            </h3>
+            <p className={styles.sectionDesc}>Email notifications are coming soon. Toggle your preferences now and we&apos;ll enable them when ready.</p>
           </div>
 
           {[
-            { key: "jobComplete" as keyof typeof notify, label: "Job Completed", desc: "Notification when a fine-tuning job finishes successfully" },
+            { key: "jobComplete" as keyof typeof notify, label: "Job Completed", desc: "Notification when a training job finishes successfully" },
             { key: "jobFailed"   as keyof typeof notify, label: "Job Failed",    desc: "Notification when a job encounters a training error" },
             { key: "credits"     as keyof typeof notify, label: "Low Credits",   desc: "Notification when your credit balance drops below 20" },
           ].map((n) => (
