@@ -206,7 +206,7 @@ export async function DELETE(
         {
           underReview: true,
           activeUsagePercentage: Math.round(activeUsagePercentage),
-          error: "Deletion application under review: This published assistant is actively used by 30% or more of active platform users. To maintain service continuity for active users, your deletion request is under administrative review and will be processed once verified.",
+          error: "Deletion application under review: This published RAG AI Expert is actively used by 30% or more of active platform users. To maintain service continuity for active users, your deletion request is under administrative review and will be processed once verified.",
         },
         { status: 423 }
       );

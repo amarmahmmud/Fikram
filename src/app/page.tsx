@@ -42,7 +42,7 @@ const FEATURES = [
   {
     badge: "Multimodal",
     title: "Beyond Text — Images, Audio & Video",
-    desc: "Upload images, audio files, or video content. Your AI assistant understands and answers questions across all media types.",
+    desc: "Upload images, audio files, or video content. Your RAG AI Expert understands and answers questions across all media types.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="18" x="3" y="3" rx="2" />
@@ -54,7 +54,7 @@ const FEATURES = [
   {
     badge: "Privacy",
     title: "Your Data, Your AI",
-    desc: "Your content stays private and secure. Each assistant is isolated to your account with enterprise-grade encryption.",
+    desc: "Your content stays private and secure. Each RAG AI Expert is isolated to your account with enterprise-grade encryption.",
     icon: (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
@@ -116,7 +116,7 @@ const LOG_LINES = [
   { text: '? "What foods are best for recovery?"', type: "info" },
   { text: "  Found 3 relevant sources...", type: "dim" },
   { text: "✓ Answer generated with citations [p.12, p.34]", type: "success" },
-  { text: "✓ Assistant ready to share", type: "success" },
+  { text: "✓ RAG AI Expert ready to share", type: "success" },
 ];
 
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
@@ -320,7 +320,7 @@ export default function LandingPage() {
           </h1>
 
           <p className={styles.heroSubline}>
-            Upload your documents, and get an intelligent AI assistant powered by your
+            Upload your documents, and get an intelligent RAG AI Expert powered by your
             own knowledge — ready in seconds. No code, no ML expertise needed.
           </p>
 
@@ -362,7 +362,7 @@ export default function LandingPage() {
             </div>
             <div className={styles.heroCardBody}>
               <div className={styles.heroCardRow}>
-                <span className={styles.heroCardLabel}>Assistant</span>
+                <span className={styles.heroCardLabel}>RAG Expert</span>
                 <span className={styles.heroCardValue}>
                   <span key={useCaseIdx} className={styles.valueSwap}>{HERO_USE_CASES[useCaseIdx]}</span>
                 </span>
@@ -467,7 +467,7 @@ export default function LandingPage() {
             <span className="section-label">Features</span>
             <h2>Everything you need to<br />build your expert AI</h2>
             <p>
-              From document to deployed assistant in seconds —
+              From document to deployed RAG AI Expert in seconds —
               Fikram handles the complexity so you can focus on your expertise.
             </p>
           </div>
@@ -490,7 +490,7 @@ export default function LandingPage() {
         <div className="container">
           <div className={styles.sectionHead} data-reveal>
             <span className="section-label">How It Works</span>
-            <h2>Three steps to your<br />AI-powered assistant</h2>
+            <h2>Three steps to your<br />RAG AI Expert</h2>
             <p>No ML expertise. No infrastructure headaches. Upload your content and start chatting in seconds.</p>
           </div>
 
@@ -514,7 +514,7 @@ export default function LandingPage() {
             <span className="section-label">Pricing</span>
             <h2 style={{ marginTop: 18 }}>Start free.<br />Scale when you&apos;re ready.</h2>
             <p style={{ marginTop: 18, fontSize: "1.0625rem" }}>
-              Get 50 free credits when you sign up — enough to create your first AI assistant
+              Get 50 free credits when you sign up — enough to create your first RAG AI Expert
               and chat 45+ times. No credit card. No commitment.
             </p>
 
@@ -554,7 +554,7 @@ export default function LandingPage() {
                 <FikraLogo size={32} showText />
               </div>
               <p className={styles.footerTagline}>
-                The platform where experts build AI assistants powered by their own knowledge.
+                The platform where experts build RAG AI Experts powered by their own knowledge.
               </p>
             </div>
             <div className={styles.footerLinks}>

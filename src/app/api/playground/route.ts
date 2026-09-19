@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         adapter_prefix: adapterPrefix,
         base_model: job.base_model,  // Tell Modal which base model to load
         messages: messages,
-        system_prompt: systemPrompt || "You are a helpful assistant trained on custom data.",
+        system_prompt: systemPrompt || "You are a helpful AI expert trained on custom data.",
         // Inference parameters (use defaults if not provided)
         ...(temperature !== undefined ? { temperature } : {}),
         ...(maxNewTokens !== undefined ? { max_new_tokens: maxNewTokens } : {}),

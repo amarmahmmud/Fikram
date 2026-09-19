@@ -564,14 +564,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           <BotOff size={32} />
         </div>
         <h3 style={{ marginBottom: 8, color: "var(--text-primary)", fontSize: "1.25rem", fontWeight: 600 }}>
-          Assistant Not Found
+          RAG AI Expert Not Found
         </h3>
         <p style={{ color: "var(--text-secondary)", maxWidth: 420, textAlign: "center", fontSize: "0.875rem", lineHeight: 1.5 }}>
-          This assistant may be private, under review, or the link may have expired.
+          This RAG AI Expert may be private, under review, or the link may have expired.
         </p>
         <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
           <Link href="/browse" className="btn btn-primary btn-sm">
-            Browse Assistants
+            Browse RAG AI Experts
           </Link>
           <Link href="/" className="btn btn-secondary btn-sm">
             Home
@@ -708,8 +708,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 isCustomized
                   ? "Personal session rules active (click to edit or reset)"
                   : isOwner
-                  ? "Edit assistant rules (Session or Creator Default)"
-                  : "Customize assistant rules for your chat session"
+                  ? "Edit RAG AI Expert rules (Session or Creator Default)"
+                  : "Customize RAG AI Expert rules for your chat session"
               }
             >
               <Settings2 size={16} />

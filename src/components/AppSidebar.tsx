@@ -10,7 +10,7 @@ import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/browse",    label: "Browse Models", icon: <Globe size={18} /> },
-  { href: "/experts/new", label: "New Assistant", icon: <Sparkles size={18} />, highlight: true },
+  { href: "/experts/new", label: "New AI Expert", icon: <Sparkles size={18} />, highlight: true },
   { href: "/jobs",      label: "Jobs", icon: <List size={18} /> },
   { href: "/models",    label: "Model Registry", icon: <Layers size={18} /> },
 ];

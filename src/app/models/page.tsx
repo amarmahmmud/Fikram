@@ -208,7 +208,7 @@ export default function ModelsPage() {
             className={`input ${styles.searchInput}`}
             placeholder={
               mainTab === "community" 
-                ? "Search public expert assistants by name, topic, or keyword..."
+                ? "Search public RAG AI Experts by name, topic, or keyword..."
                 : "Search foundation models by name, org, or architecture..."
             }
             value={search}
@@ -246,7 +246,7 @@ export default function ModelsPage() {
           )}
         </div>
 
-        {/* ── TAB 1: COMMUNITY PUBLISHED MODELS & ASSISTANTS ── */}
+        {/* ── TAB 1: COMMUNITY PUBLISHED MODELS & RAG AI EXPERTS ── */}
         {mainTab === "community" && (
           <div>
             <div style={{ margin: "16px 0 20px" }}>
@@ -255,12 +255,12 @@ export default function ModelsPage() {
                 <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Live & Ready to Chat</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
-                AI assistants and custom models created and published by experts on Fikram.
+                RAG AI Experts and custom models created and published by experts on Fikram.
               </p>
             </div>
 
             {communityLoading ? (
-              <div className={styles.emptyState}>Loading community assistants...</div>
+              <div className={styles.emptyState}>Loading community RAG AI Experts...</div>
             ) : filteredCommunity.length === 0 ? (
               <div className={styles.emptyState}>
                 <p>No community models match your search.</p>

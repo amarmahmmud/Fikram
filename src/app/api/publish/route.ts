@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         .single();
 
       if (fetchErr || !expert) {
-        return NextResponse.json({ error: "Assistant not found or access denied" }, { status: 404 });
+        return NextResponse.json({ error: "RAG AI Expert not found or access denied" }, { status: 404 });
       }
 
       // Build description with embedded category/tags metadata

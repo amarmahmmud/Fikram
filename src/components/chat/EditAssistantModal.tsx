@@ -60,7 +60,7 @@ export function EditAssistantModal({
     setSavingGlobal(true);
     try {
       await onSaveGlobal(prompt.trim());
-      toast.success("Default assistant instructions updated globally!");
+      toast.success("Default AI Expert instructions updated globally!");
       onClose();
     } catch (e: any) {
       toast.error(e?.message || "Failed to update default rules");
@@ -80,7 +80,7 @@ export function EditAssistantModal({
             </div>
             <div>
               <div className={styles.titleRow}>
-                <span className={styles.title}>Assistant Rules</span>
+                <span className={styles.title}>AI Expert Rules</span>
                 <span className={`${styles.scopeBadge} ${isOwner ? styles.scopeBadgeOwner : ""}`}>
                   {isOwner ? "Owner / Session" : "Session Only"}
                 </span>
@@ -101,7 +101,7 @@ export function EditAssistantModal({
           <div className={styles.scopeBanner}>
             <span className={styles.scopeBannerIcon}><ShieldCheck size={16} /></span>
             <div>
-              <strong>Personal Session Scope:</strong> Rules you add here will customize how the assistant responds to you in your chat. They will <em>not</em> overwrite the assistant for any other users.
+              <strong>Personal Session Scope:</strong> Rules you add here will customize how the AI Expert responds to you in your chat. They will <em>not</em> overwrite the AI Expert for any other users.
             </div>
           </div>
 

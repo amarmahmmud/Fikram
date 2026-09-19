@@ -81,7 +81,7 @@ export default function SignUpPage() {
           <span className={styles.promoBadgeIcon}><Gift size={20} /></span>
           <div>
             <div className={styles.promoBadgeTitle}>50 Free Credits on Signup</div>
-            <div className={styles.promoBadgeSub}>Enough to create multiple AI assistants</div>
+            <div className={styles.promoBadgeSub}>Enough to create multiple RAG AI Experts</div>
           </div>
         </div>
 

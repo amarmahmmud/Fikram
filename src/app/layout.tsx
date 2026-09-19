@@ -5,19 +5,19 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Fikram — Turn Your Expertise into AI",
   description:
-    "The platform where experts create AI assistants powered by their own knowledge. Upload your content, get an intelligent assistant in seconds — or train a fully custom model.",
-  keywords: ["AI assistant", "expert AI", "RAG", "custom training", "knowledge base", "LLM", "content creators"],
+    "The platform where experts create RAG AI Experts powered by their own knowledge. Upload your content, get a grounded RAG AI Expert in seconds — or train a fully custom model.",
+  keywords: ["RAG AI Expert", "expert AI", "RAG", "custom training", "knowledge base", "LLM", "content creators"],
   authors: [{ name: "Fikram" }],
   openGraph: {
     title: "Fikram — Turn Your Expertise into AI",
-    description: "Create AI assistants from your own knowledge. Ready in seconds, no code required.",
+    description: "Create RAG AI Experts from your own knowledge. Ready in seconds, no code required.",
     type: "website",
     siteName: "Fikram",
   },
   twitter: {
     card: "summary_large_image",
     title: "Fikram — Turn Your Expertise into AI",
-    description: "Create AI assistants from your own knowledge. Ready in seconds.",
+    description: "Create RAG AI Experts from your own knowledge. Ready in seconds.",
   },
 };
 

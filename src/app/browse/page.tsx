@@ -118,7 +118,7 @@ export default function BrowseModelsPage() {
       });
 
       if (err?.status === 401) {
-        toast.error("Please sign in to like models and assistants.");
+        toast.error("Please sign in to like models and RAG AI Experts.");
       }
     } finally {
       setLikeInProgress((prev) => {
@@ -168,7 +168,7 @@ export default function BrowseModelsPage() {
             <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models
           </h1>
           <p className={styles.subtitle}>
-            Discover and try specialized AI assistants and custom models built by the community.
+            Discover and try specialized RAG AI Experts and custom models built by the community.
           </p>
         </div>
       </div>

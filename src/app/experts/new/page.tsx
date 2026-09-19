@@ -99,7 +99,7 @@ export default function NewExpertPage() {
         }),
       });
       if (res.status === 401) {
-        toast.error("You must be signed in to create an assistant. Redirecting to sign in...");
+        toast.error("You must be signed in to create a RAG AI Expert. Redirecting to sign in...");
         router.push("/auth/signin?redirectTo=/experts/new");
         return;
       }
@@ -387,7 +387,7 @@ export default function NewExpertPage() {
     return (
       <div className="page-content" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
         <div style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-          Loading assistant creator...
+          Loading RAG AI Expert creator...
         </div>
       </div>
     );

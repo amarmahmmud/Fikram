@@ -17,18 +17,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "Name is required" }, { status: 400 });
     }
 
-    const systemInstruction = `You are an expert prompt engineer creating system prompts for RAG-based AI assistants.
-Generate a concise, highly effective system prompt (3-5 sentences) tailored for an AI assistant.
+    const systemInstruction = `You are an expert prompt engineer creating system prompts for RAG AI Experts.
+Generate a concise, highly effective system prompt (3-5 sentences) tailored for a RAG AI Expert.
 The system prompt should define:
-1. Role and Identity (who the assistant is)
+1. Role and Identity (who the RAG AI Expert is)
 2. Tone and Style (how it communicates)
 3. Retrieval & Boundary Grounding (rely strictly on provided context and state when information isn't available)
 
 Output ONLY the plain text of the system prompt. No markdown quotes, no explanations.`;
 
-    const userPrompt = `Create a system prompt for an AI assistant:
+    const userPrompt = `Create a system prompt for a RAG AI Expert:
 - Name: "${name}"
-- Description / Expertise: "${description || "General knowledge assistant"}"
+- Description / Expertise: "${description || "General knowledge expert"}"
 - Preferred Tone: "${tone || "Professional, helpful, and clear"}"
 - Boundaries / Rules: "${boundaries || "Always base answers on the provided context. If uncertain, state that the knowledge base does not specify."}"`;
 

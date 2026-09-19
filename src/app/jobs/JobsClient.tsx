@@ -253,7 +253,7 @@ function ConfirmModal({
             ) : (
               <>
                 <TrashIcon size={14} />
-                Remove {itemType === "job" ? "Job" : "Assistant"}
+                Remove {itemType === "job" ? "Job" : "RAG AI Expert"}
               </>
             )}
           </button>
@@ -408,7 +408,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
       }
     } catch (err) {
       console.error(`Failed to fetch more ${isJobs ? 'jobs' : 'experts'}:`, err);
-      setToast({ message: `Failed to load more ${isJobs ? 'jobs' : 'assistants'}. Please try again.`, type: "error" });
+      setToast({ message: `Failed to load more ${isJobs ? 'jobs' : 'RAG AI Experts'}. Please try again.`, type: "error" });
     } finally {
       setLoadingMore(false);
     }
@@ -446,7 +446,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
         }
         setRemovingId(null);
         setToast({
-          message: deleteTarget.type === "job" ? "Job removed successfully" : "Assistant removed successfully",
+          message: deleteTarget.type === "job" ? "Job removed successfully" : "RAG AI Expert removed successfully",
           type: "success",
         });
       }, 350);
@@ -654,7 +654,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
               <p className={styles.emptyDesc}>
                 Create your first RAG AI Expert — it answers questions using your uploaded documents as a verified knowledge base.
               </p>
-              <Link href="/experts/new" className="btn btn-primary">Create First Assistant</Link>
+              <Link href="/experts/new" className="btn btn-primary">Create First RAG AI Expert</Link>
             </div>
           ) : (
             <>
@@ -702,7 +702,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
                         <button
                           className={`${styles.cardActionBtn} ${styles.deleteBtn}`}
                           onClick={() => setDeleteTarget({ type: "expert", id: exp.id, name: exp.name })}
-                          aria-label={`Remove assistant: ${exp.name}`}
+                          aria-label={`Remove RAG AI Expert: ${exp.name}`}
                         >
                           <TrashIcon size={13} />
                         </button>
@@ -731,7 +731,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             <div className={styles.paginationInfo}>
               Showing{" "}
               <span className={styles.paginationInfoBold}>{currentItems.length}</span>
-              {" "}{activeTab === "experts" ? "assistant" : "job"}{currentItems.length !== 1 ? "s" : ""}
+              {" "}{activeTab === "experts" ? (currentItems.length !== 1 ? "RAG AI Experts" : "RAG AI Expert") : (currentItems.length !== 1 ? "jobs" : "job")}
               {!currentHasMore && !currentShowAllLoaded && (
                 <> · All loaded</>
               )}
@@ -761,7 +761,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             {currentShowAllLoaded && (
               <div className={styles.allLoadedIndicator}>
                 <CheckCircleIcon size={14} />
-                All {activeTab === "experts" ? "assistants" : "jobs"} loaded
+                All {activeTab === "experts" ? "RAG AI Experts" : "jobs"} loaded
               </div>
             )}
           </div>

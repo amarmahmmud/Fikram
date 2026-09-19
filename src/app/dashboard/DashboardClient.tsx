@@ -129,7 +129,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 {credits} credits
               </strong>{" "}
               remaining.
-              {jobs.length === 0 ? " Create your first AI assistant to get started." : ""}
+              {jobs.length === 0 ? " Create your first RAG AI Expert to get started." : ""}
             </p>
           </div>
         </div>
@@ -150,7 +150,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               <div className={styles.tierIcon}><Sparkles size={22} /></div>
               <h3 className={styles.tierTitle}>RAG AI Expert</h3>
               <p className={styles.tierDesc}>
-                Upload your content and get an accurate, citation-backed AI assistant in seconds. No training needed.
+                Upload your content and get an accurate, citation-backed RAG AI Expert in seconds. No training needed.
               </p>
               <ul className={styles.tierFeatures}>
                 <li><Check size={14} className={styles.featureCheck} /> <span>Ready in 10-30 seconds</span></li>
@@ -158,7 +158,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 <li><Check size={14} className={styles.featureCheck} /> <span>Free to set up (no GPU cost)</span></li>
               </ul>
               <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
-                <span>Create My AI Clone</span>
+                <span>Create RAG AI Expert</span>
                 <ArrowRight size={14} />
               </Link>
             </div>
@@ -216,9 +216,9 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           {jobs.length === 0 ? (
             <div className={styles.emptyJobs}>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No jobs yet</p>
-              <p style={{ fontSize: "0.875rem" }}>Create your first AI assistant to get started.</p>
+              <p style={{ fontSize: "0.875rem" }}>Create your first RAG AI Expert to get started.</p>
               <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-                Create My AI Clone
+                Create RAG AI Expert
               </Link>
             </div>
           ) : (
@@ -279,7 +279,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           <div className={styles.modelsGrid}>
             {[
               { name: "Course Advisor",    task: "Education",       size: "RAG", credits: "6" },
-              { name: "Legal Assistant",   task: "Legal & Compliance", size: "RAG", credits: "6" },
+              { name: "Legal Advisor",     task: "Legal & Compliance", size: "RAG", credits: "6" },
               { name: "Health Coach",      task: "Healthcare",      size: "RAG", credits: "6" },
               { name: "Finance Analyst",   task: "Finance",         size: "RAG", credits: "6" },
             ].map((m) => (
