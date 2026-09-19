@@ -255,184 +255,54 @@ export async function POST(req: Request) {
     // 5. Initialize Client & Synthesize Speech
     const client = getTTSClient();
 
-    // Strategy: We attempt streaming synthesis first for immediate playback latency.
-    // We wait for the very first event (chunk or error) to commit the HTTP response.
-    // If the bidirectional stream fails, we fall back to unary synthesizeSpeech.
-    return await new Promise<Response>((resolve) => {
-      let firstEventHandled = false;
-
-      // Create Duplex gRPC stream
-      const ttsStream = client.streamingSynthesize();
-
-      // Configure Web ReadableStream for client response
-      let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
-      const webStream = new ReadableStream<Uint8Array>({
-        start(ctrl) {
-          streamController = ctrl;
+    try {
+      const [unaryResult] = await client.synthesizeSpeech({
+        input: { text: cleanText },
+        voice: {
+          languageCode: finalLangCode,
+          name: finalVoiceName,
         },
-        cancel() {
-          try {
-            ttsStream.destroy();
-          } catch {}
+        audioConfig: {
+          audioEncoding: "MP3",
+          speakingRate,
         },
       });
 
-      // Handle stream data
-      ttsStream.on("data", (response: { audioContent?: Uint8Array | Buffer | null }) => {
-        if (response.audioContent && response.audioContent.length > 0) {
-          const chunk = new Uint8Array(response.audioContent);
-
-          if (!firstEventHandled) {
-            firstEventHandled = true;
-            // Enqueue first chunk and resolve response with streaming headers
-            streamController?.enqueue(chunk);
-            resolve(
-              new Response(webStream, {
-                status: 200,
-                headers: {
-                  "Content-Type": "audio/mpeg",
-                  "Transfer-Encoding": "chunked",
-                  "Cache-Control": "no-cache, no-store",
-                  "X-TTS-Language": finalLangCode,
-                  "X-TTS-Voice": finalVoiceName,
-                  "X-TTS-Chars": String(cleanText.length),
-                  "X-TTS-Remaining-Quota": String(quotaRemaining),
-                },
-              })
-            );
-          } else {
-            streamController?.enqueue(chunk);
-          }
-        }
-      });
-
-      // Handle stream end
-      ttsStream.on("end", () => {
-        try {
-          streamController?.close();
-        } catch {}
-      });
-
-      // Handle stream errors
-      ttsStream.on("error", async (err: unknown) => {
-        console.warn(`[TTS Streaming error]:`, (err as Error)?.message || err);
-
-        // If error occurred before first chunk was sent, attempt fallback to synthesizeSpeech
-        if (!firstEventHandled) {
-          firstEventHandled = true;
-
-          try {
-            console.log(`[TTS] Attempting unary synthesizeSpeech fallback for ${finalLangCode}...`);
-            const [unaryResult] = await client.synthesizeSpeech({
-              input: { text: cleanText },
-              voice: {
-                languageCode: finalLangCode,
-                name: finalVoiceName,
-              },
-              audioConfig: {
-                audioEncoding: "MP3",
-                speakingRate,
-              },
-            });
-
-            if (unaryResult.audioContent && unaryResult.audioContent.length > 0) {
-              const audioBuffer = Buffer.from(unaryResult.audioContent);
-              return resolve(
-                new Response(audioBuffer, {
-                  status: 200,
-                  headers: {
-                    "Content-Type": "audio/mpeg",
-                    "Content-Length": String(audioBuffer.length),
-                    "Cache-Control": "no-cache, no-store",
-                    "X-TTS-Language": finalLangCode,
-                    "X-TTS-Voice": finalVoiceName,
-                    "X-TTS-Fallback": "unary",
-                  },
-                })
-              );
-            }
-          } catch (unaryErr: unknown) {
-            console.error("[TTS Unary fallback failed]:", (unaryErr as Error)?.message || unaryErr);
-            // Classify error from unary call
-            const classified = classifyTTSError(unaryErr, finalLangCode, isPreview);
-            return resolve(
-              NextResponse.json(
-                {
-                  error: classified.error,
-                  code: classified.code,
-                  isPreview,
-                  languageCode: finalLangCode,
-                  details: classified.details,
-                },
-                { status: classified.status }
-              )
-            );
-          }
-
-          // If unary had empty audio or other condition
-          const classified = classifyTTSError(err, finalLangCode, isPreview);
-          return resolve(
-            NextResponse.json(
-              {
-                error: classified.error,
-                code: classified.code,
-                isPreview,
-                languageCode: finalLangCode,
-                details: classified.details,
-              },
-              { status: classified.status }
-            )
-          );
-        } else {
-          // If error happened mid-stream
-          try {
-            streamController?.error(err);
-          } catch {}
-        }
-      });
-
-      // Step A: Send configuration frame
-      try {
-        ttsStream.write({
-          streamingConfig: {
-            voice: {
-              languageCode: finalLangCode,
-              name: finalVoiceName,
-            },
-            audioConfig: {
-              audioEncoding: "MP3",
-              speakingRate,
-            },
-          },
-        });
-
-        // Step B: Send text frame
-        ttsStream.write({
-          input: {
-            text: cleanText,
-          },
-        });
-
-        ttsStream.end();
-      } catch (writeErr) {
-        if (!firstEventHandled) {
-          firstEventHandled = true;
-          const classified = classifyTTSError(writeErr, finalLangCode, isPreview);
-          return resolve(
-            NextResponse.json(
-              {
-                error: classified.error,
-                code: classified.code,
-                isPreview,
-                languageCode: finalLangCode,
-                details: classified.details,
-              },
-              { status: classified.status }
-            )
-          );
-        }
+      if (!unaryResult.audioContent || unaryResult.audioContent.length === 0) {
+        return NextResponse.json(
+          { error: "TTS provider returned empty audio content", code: "EMPTY_AUDIO" },
+          { status: 500 }
+        );
       }
-    });
+
+      const audioBuffer = Buffer.from(unaryResult.audioContent);
+
+      return new Response(audioBuffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Content-Length": String(audioBuffer.length),
+          "Cache-Control": "no-cache, no-store",
+          "X-TTS-Language": finalLangCode,
+          "X-TTS-Voice": finalVoiceName,
+          "X-TTS-Chars": String(cleanText.length),
+          "X-TTS-Remaining-Quota": String(quotaRemaining),
+        },
+      });
+    } catch (synthErr: unknown) {
+      console.error("[TTS Synthesis error]:", (synthErr as Error)?.message || synthErr);
+      const classified = classifyTTSError(synthErr, finalLangCode, isPreview);
+      return NextResponse.json(
+        {
+          error: classified.error,
+          code: classified.code,
+          isPreview,
+          languageCode: finalLangCode,
+          details: classified.details,
+        },
+        { status: classified.status }
+      );
+    }
   } catch (error: unknown) {
     const err = error as Error | undefined;
     console.error("[TTS API Route Exception]:", error);

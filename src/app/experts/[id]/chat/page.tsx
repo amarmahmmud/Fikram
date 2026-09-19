@@ -111,8 +111,46 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     playbackRate,
     disabledMap,
     togglePlayMessage,
+    stopCurrentPlayback,
     cyclePlaybackRate,
   } = useTextToSpeech();
+
+  // Auto-voice response state (Option A: first reply in each conversation auto-plays; persisted in localStorage)
+  const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
+
+  // Initialize autoVoiceEnabled from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("mf_auto_voice_enabled");
+      if (stored !== null) {
+        setAutoVoiceEnabled(stored === "true");
+      }
+    } catch {}
+  }, []);
+
+  // Toggle auto-voice on/off with persistence & user feedback
+  const handleToggleAutoVoice = useCallback(() => {
+    setAutoVoiceEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("mf_auto_voice_enabled", String(next));
+      } catch {}
+
+      if (!next) {
+        stopCurrentPlayback();
+        toast.info("Voice Auto-Play turned OFF", {
+          description: "Assistant will not speak automatically. Click Listen to play anytime.",
+          duration: 3500,
+        });
+      } else {
+        toast.success("Voice Auto-Play turned ON", {
+          description: "Assistant will speak the first reply in each conversation.",
+          duration: 3500,
+        });
+      }
+      return next;
+    });
+  }, [stopCurrentPlayback]);
 
   useEffect(() => {
     return () => {
@@ -451,7 +489,32 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           webSources: data.webSources,
         };
 
+        const prevModelCount = messages.filter((m) => m.role === "model").length;
+        const newModelIndex = messages.length + 1;
+
         setMessages((prev) => [...prev, newModelMsg]);
+
+        // Option A: Auto-play voice on the first assistant response in this conversation
+        if (prevModelCount === 0 && autoVoiceEnabled && data.reply) {
+          togglePlayMessage(data.reply, newModelIndex);
+
+          // Discovery toast with 1-click turn-off action
+          toast("🔊 Voice Response Active", {
+            description: "First responses speak automatically. You can toggle this off anytime.",
+            action: {
+              label: "Turn Off",
+              onClick: () => {
+                setAutoVoiceEnabled(false);
+                try {
+                  localStorage.setItem("mf_auto_voice_enabled", "false");
+                } catch {}
+                stopCurrentPlayback();
+                toast.info("Voice Auto-Play disabled.");
+              },
+            },
+            duration: 7000,
+          });
+        }
 
         // Sync conversation ID
         if (data.conversationId) {
@@ -768,6 +831,29 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className={styles.headerActions}>
+            {/* Auto-Voice Response Toggle (Option A) */}
+            <button
+              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${
+                autoVoiceEnabled ? styles.actionBtnVoiceActive : styles.actionBtnVoiceMuted
+              }`}
+              onClick={handleToggleAutoVoice}
+              title={
+                autoVoiceEnabled
+                  ? "Voice Auto-Play is ON (First reply speaks aloud). Click to turn OFF."
+                  : "Voice Auto-Play is OFF (Text only). Click to turn ON."
+              }
+              aria-label={
+                autoVoiceEnabled
+                  ? "Voice Auto-Play is enabled. Click to disable."
+                  : "Voice Auto-Play is disabled. Click to enable."
+              }
+            >
+              {autoVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              <span className={styles.btnLabel}>
+                {autoVoiceEnabled ? "Voice: ON" : "Voice: OFF"}
+              </span>
+              {autoVoiceEnabled && <span className={styles.voiceDot} />}
+            </button>
             <button
               className={`btn btn-secondary btn-sm ${styles.actionBtn} ${isCustomized ? styles.actionBtnCustomized : ""}`}
               onClick={() => setEditModalOpen(true)}
@@ -824,8 +910,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`${styles.messageBubble} ${msg.role === "user" ? styles.userBubble : styles.modelBubble
-                }`}
+              className={`${styles.messageBubble} ${
+                msg.role === "user" ? styles.userBubble : styles.modelBubble
+              } ${playingIndex === i ? styles.modelBubblePlaying : ""}`}
             >
               <div className={styles.messageContent}>
                 {/* Inline attachment display */}
@@ -932,10 +1019,13 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                             ) : playingIndex === i ? (
                               <>
                                 <Pause size={12} className={styles.pauseIcon} />
-                                <div className={styles.waveformContainer}>
+                                <div className={styles.waveformContainer} aria-hidden="true">
                                   <span className={`${styles.waveBar} ${styles.bar1}`} />
                                   <span className={`${styles.waveBar} ${styles.bar2}`} />
                                   <span className={`${styles.waveBar} ${styles.bar3}`} />
+                                  <span className={`${styles.waveBar} ${styles.bar4}`} />
+                                  <span className={`${styles.waveBar} ${styles.bar5}`} />
+                                  <span className={`${styles.waveBar} ${styles.bar6}`} />
                                 </div>
                                 <span>Playing</span>
                               </>

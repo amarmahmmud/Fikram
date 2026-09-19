@@ -407,6 +407,43 @@
   box-shadow: 0 0 6px var(--accent-primary);
 }
 
+.actionBtnVoiceActive {
+  border-color: rgba(0, 229, 200, 0.45) !important;
+  background: rgba(0, 229, 200, 0.08) !important;
+  color: var(--accent-primary) !important;
+}
+
+.actionBtnVoiceMuted {
+  opacity: 0.65;
+}
+
+.actionBtnVoiceMuted:hover {
+  opacity: 1;
+}
+
+.voiceDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  box-shadow: 0 0 8px var(--accent-primary);
+  animation: pulseVoiceDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseVoiceDot {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.3);
+  }
+}
+
 .btnLabel {
   display: inline;
 }
@@ -460,6 +497,12 @@
   color: var(--text-primary);
   border-bottom-left-radius: 4px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.modelBubblePlaying {
+  border-color: rgba(0, 229, 200, 0.45) !important;
+  box-shadow: 0 4px 24px rgba(0, 229, 200, 0.12), 0 0 0 1px rgba(0, 229, 200, 0.25) !important;
 }
 
 .messageContent {
@@ -652,44 +695,67 @@
   opacity: 1;
 }
 
-/* Animated Waveform Bars */
+/* Animated Waveform Bars (Pixel-Perfect Equalizer) */
 .waveformContainer {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 10px;
-  margin: 0 1px;
+  gap: 2.5px;
+  height: 14px;
+  margin: 0 2px;
 }
 
 .waveBar {
   display: inline-block;
-  width: 2px;
-  background: var(--accent-primary);
-  border-radius: 1px;
-  animation: wavePulse 1s ease-in-out infinite;
+  width: 2.5px;
+  background: linear-gradient(180deg, #00e5c0 0%, #38bdf8 100%);
+  border-radius: 2px;
+  animation: wavePulse 1.1s ease-in-out infinite alternate;
+  box-shadow: 0 0 6px rgba(0, 229, 200, 0.35);
+  transform-origin: bottom center;
 }
 
 .bar1 {
-  height: 4px;
-  animation-delay: 0s;
+  height: 6px;
+  animation-delay: 0.05s;
 }
 
 .bar2 {
-  height: 10px;
-  animation-delay: 0.2s;
+  height: 12px;
+  animation-delay: 0.25s;
 }
 
 .bar3 {
+  height: 15px;
+  animation-delay: 0.45s;
+}
+
+.bar4 {
+  height: 8px;
+  animation-delay: 0.15s;
+}
+
+.bar5 {
+  height: 14px;
+  animation-delay: 0.35s;
+}
+
+.bar6 {
   height: 6px;
-  animation-delay: 0.4s;
+  animation-delay: 0.55s;
 }
 
 @keyframes wavePulse {
-  0%, 100% {
-    transform: scaleY(0.4);
+  0% {
+    transform: scaleY(0.35);
+    opacity: 0.65;
   }
   50% {
-    transform: scaleY(1.2);
+    transform: scaleY(1.3);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleY(0.5);
+    opacity: 0.85;
   }
 }
 

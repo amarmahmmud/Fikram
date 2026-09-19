@@ -17,7 +17,7 @@ export function useTextToSpeech() {
   const [disabledMap, setDisabledMap] = useState<Record<number, DisabledState>>({});
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaSourceRef = useRef<MediaSource | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const playbackRateRef = useRef<PlaybackRate>(1.0);
 
@@ -39,14 +39,10 @@ export function useTextToSpeech() {
       audioRef.current = null;
     }
 
-    // 3. Close MediaSource if open
-    if (mediaSourceRef.current) {
-      try {
-        if (mediaSourceRef.current.readyState === "open") {
-          mediaSourceRef.current.endOfStream();
-        }
-      } catch {}
-      mediaSourceRef.current = null;
+    // 3. Revoke Blob Object URL if present
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
     }
 
     setPlayingIndex(null);
@@ -80,29 +76,7 @@ export function useTextToSpeech() {
     setPlaybackRate(nextRate);
   }, [setPlaybackRate]);
 
-  /**
-   * Fallback: accumulates chunks into a Blob URL when MSE is unsupported.
-   */
-  const fallbackBlobPlayback = useCallback(
-    async (response: Response, audio: HTMLAudioElement, index: number) => {
-      try {
-        const blob = await response.blob();
-        audio.src = URL.createObjectURL(blob);
-        setLoadingIndex(null);
-        setPlayingIndex(index);
-        await audio.play();
-      } catch (e: unknown) {
-        const err = e as { name?: string; message?: string };
-        if (err?.name !== "AbortError") {
-          console.error("[Blob playback error]:", e);
-          toast.error("Audio playback error.");
-        }
-        setLoadingIndex(null);
-        setPlayingIndex(null);
-      }
-    },
-    []
-  );
+
 
   /**
    * Play or toggle TTS for a specific message.
@@ -206,104 +180,17 @@ export function useTextToSpeech() {
           setLoadingIndex(null);
         };
 
-        // Determine if MediaSource is supported for streaming MP3 chunks
-        const canUseMSE =
-          typeof window !== "undefined" &&
-          "MediaSource" in window &&
-          MediaSource.isTypeSupported("audio/mpeg");
-
-        if (canUseMSE && response.body) {
-          const mediaSource = new MediaSource();
-          mediaSourceRef.current = mediaSource;
-          audio.src = URL.createObjectURL(mediaSource);
-
-          mediaSource.addEventListener("sourceopen", async () => {
-            let sourceBuffer: SourceBuffer | null = null;
-            try {
-              sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
-            } catch (sbErr) {
-              console.warn("[MSE addSourceBuffer failed, falling back to Blob]:", sbErr);
-              // Fallback: Read all chunks into blob
-              fallbackBlobPlayback(response, audio, index);
-              return;
-            }
-
-            const queue: Uint8Array[] = [];
-            let isAppending = false;
-            let firstChunkAppended = false;
-
-            const processQueue = () => {
-              if (
-                !sourceBuffer ||
-                sourceBuffer.updating ||
-                queue.length === 0 ||
-                mediaSource.readyState !== "open"
-              ) {
-                return;
-              }
-              const chunk = queue.shift();
-              if (chunk) {
-                isAppending = true;
-                try {
-                  sourceBuffer.appendBuffer(chunk as unknown as ArrayBuffer);
-                } catch (e) {
-                  console.warn("[MSE appendBuffer error]:", e);
-                }
-              }
-            };
-
-            sourceBuffer.addEventListener("updateend", () => {
-              isAppending = false;
-              if (!firstChunkAppended) {
-                firstChunkAppended = true;
-                setLoadingIndex(null);
-                setPlayingIndex(index);
-                audio.play().catch((playErr) => {
-                  console.warn("[Audio play error]:", playErr);
-                });
-              }
-              processQueue();
-            });
-
-            const reader = response.body?.getReader();
-            if (!reader) return;
-
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) {
-                  // Wait until buffer finishes updating before closing stream
-                  const checkEnd = setInterval(() => {
-                    if (sourceBuffer && !sourceBuffer.updating && queue.length === 0) {
-                      clearInterval(checkEnd);
-                      try {
-                        if (mediaSource.readyState === "open") {
-                          mediaSource.endOfStream();
-                        }
-                      } catch {}
-                    }
-                  }, 50);
-                  break;
-                }
-
-                if (value) {
-                  queue.push(value);
-                  if (!isAppending) {
-                    processQueue();
-                  }
-                }
-              }
-            } catch (streamErr: unknown) {
-              const err = streamErr as { name?: string };
-              if (err?.name !== "AbortError") {
-                console.error("[Stream read error]:", streamErr);
-              }
-            }
-          });
-        } else {
-          // Fallback if MSE is not available (e.g. mobile iOS Safari)
-          fallbackBlobPlayback(response, audio, index);
+        // Create Blob URL and play
+        const blob = await response.blob();
+        if (blobUrlRef.current) {
+          URL.revokeObjectURL(blobUrlRef.current);
         }
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = blobUrl;
+        audio.src = blobUrl;
+        setLoadingIndex(null);
+        setPlayingIndex(index);
+        await audio.play();
       } catch (err: unknown) {
         const error = err as { name?: string };
         if (error?.name === "AbortError") {
@@ -316,7 +203,7 @@ export function useTextToSpeech() {
         setPlayingIndex(null);
       }
     },
-    [playingIndex, loadingIndex, disabledMap, stopCurrentPlayback, fallbackBlobPlayback]
+    [playingIndex, loadingIndex, disabledMap, stopCurrentPlayback]
   );
 
   return {
