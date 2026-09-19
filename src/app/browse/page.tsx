@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, MessageCircle, Heart, Search, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
+import { MessageCircle, Heart, Search, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
@@ -179,8 +179,7 @@ export default function BrowseModelsPage() {
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>
-              <Globe size={32} className={styles.titleIcon} />
-              <span>Browse Models &amp; Experts</span>
+              <span>Browse Models</span>
             </h1>
             <p className={styles.subtitle}>
               Discover and chat with specialized RAG AI Experts created by the community — or create your own in seconds.
