@@ -495,7 +495,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             className="btn btn-secondary btn-sm"
             disabled
             style={{ opacity: 0.5, cursor: "not-allowed" }}
-            title="Custom Fine-Tuning is coming soon"
+            title="Custom Training is coming soon"
           >
             + New Job
           </button>
@@ -536,7 +536,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             disabled
             style={{ opacity: 0.5, cursor: "not-allowed" }}
           >
-            Fine-Tuning Jobs (Coming Soon)
+            Custom Training (Coming Soon)
             <span className={styles.tabCount}>{jobs.length}</span>
           </button>
         </div>
@@ -549,15 +549,15 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
               <div className={styles.emptyIcon}>
                 <BriefcaseIcon />
               </div>
-              <h3 className={styles.emptyTitle}>No fine-tuning jobs yet</h3>
+              <h3 className={styles.emptyTitle}>No training jobs yet</h3>
               <p className={styles.emptyDesc}>
-                Create your first fine-tuning job to start training a custom AI model on your data.
+                Custom model training is coming soon. You'll be able to train AI models on your own data.
               </p>
               <button
                 className="btn btn-primary"
                 disabled
                 style={{ opacity: 0.5, cursor: "not-allowed" }}
-                title="Custom Fine-Tuning is coming soon"
+                title="Custom Training is coming soon"
               >
                 Coming Soon
               </button>

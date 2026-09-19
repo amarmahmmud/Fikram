@@ -455,7 +455,7 @@ export default function ASRPlaygroundPage({ params }: { params: Promise<{ id: st
             <div className={styles.stepTitle}>Greedy CTC Decoding</div>
           </div>
           <div className={styles.stepBody}>
-            The fine-tuned Wav2Vec2 model outputs acoustic logits at 50Hz. CTC collapses consecutive repeated
+            The trained Wav2Vec2 model outputs acoustic logits at 50Hz. CTC collapses consecutive repeated
             tokens and strips <code>&lt;pad&gt;</code> blanks to yield the final phonetic transcription.
           </div>
         </div>
@@ -519,7 +519,7 @@ export default function ASRPlaygroundPage({ params }: { params: Promise<{ id: st
         <div className={styles.modelHeader}>
           <div className={styles.modelInfo}>
             <div className={styles.modelName}>
-              <span>{job?.name || "Fine-Tuned CTC Model"}</span>
+              <span>{job?.name || "Custom CTC Model"}</span>
               <span className="badge badge-success" style={{ gap: 4 }}>
                 <Check size={12} /> Active Checkpoint
               </span>

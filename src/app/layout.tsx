@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: "Fikram — Turn Your Expertise into AI",
   description:
     "The platform where experts create AI assistants powered by their own knowledge. Upload your content, get an intelligent assistant in seconds — or train a fully custom model.",
-  keywords: ["AI assistant", "expert AI", "RAG", "fine-tuning", "knowledge base", "LLM", "content creators"],
+  keywords: ["AI assistant", "expert AI", "RAG", "custom training", "knowledge base", "LLM", "content creators"],
   authors: [{ name: "Fikram" }],
   openGraph: {
     title: "Fikram — Turn Your Expertise into AI",

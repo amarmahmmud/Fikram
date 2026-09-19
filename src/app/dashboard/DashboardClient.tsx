@@ -163,7 +163,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </Link>
             </div>
 
-            {/* Custom Model — Fine-tuning (Coming Soon) */}
+            {/* Custom Model — Training (Coming Soon) */}
             <div className={styles.tierCard} style={{ opacity: 0.7, position: "relative" }}>
               <div className={styles.tierBadgePremium} style={{ background: "linear-gradient(135deg, #f59e0b, #f97316)" }}>Coming Soon</div>
               <div className={styles.tierIcon}><Cpu size={22} /></div>

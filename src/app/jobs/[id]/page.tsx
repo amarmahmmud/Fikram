@@ -197,7 +197,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     {
       id: "training",
       label: "Training",
-      friendlyLabel: "Fine-tuning on audio pairs",
+      friendlyLabel: "Training on audio pairs",
       techDetail: `${epochs} epochs × batch ${batchSize} | LR: ${lr} | CTC Loss`,
       status: isRunning && elapsedSec >= 45 ? "active" : isCompleted ? "done" : "pending",
       icon: Cpu,
@@ -236,7 +236,7 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     ? `We're loading ${job.base_model} onto the GPU and configuring the CTC adapter.`
     : activePhase?.id === "training"
     ? `Your model is learning to align audio with phonemes. Running ${epochs} epoch${epochs > 1 ? "s" : ""}.`
-    : "Processing your ASR fine-tuning job...";
+    : "Processing your ASR training job...";
 
   return (
     <>

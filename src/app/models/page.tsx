@@ -255,7 +255,7 @@ export default function ModelsPage() {
                 <span className="badge badge-success" style={{ fontSize: "0.65rem" }}>Live & Ready to Chat</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
-                AI assistants and custom fine-tuned models created and published by experts on Fikram.
+                AI assistants and custom models created and published by experts on Fikram.
               </p>
             </div>
 
@@ -281,7 +281,7 @@ export default function ModelsPage() {
                           <span className={styles.authorName}>{item.author.name}</span>
                         </div>
                         <span className={`badge ${item.type === "smart_assistant" ? "badge-indigo" : "badge-blue"}`}>
-                          {item.type === "smart_assistant" ? "Smart Assistant" : "Fine-Tuned"}
+                          {item.type === "smart_assistant" ? "Smart Assistant" : "Custom Model"}
                         </span>
                       </div>
 
@@ -359,7 +359,7 @@ export default function ModelsPage() {
                 <span className="badge badge-default" style={{ fontSize: "0.65rem", background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))", borderColor: "rgba(245,158,11,0.2)", color: "#F59E0B" }}>Coming Soon</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
-                Curated open-source models tested for LoRA and QLoRA fine-tuning on Modal GPU clusters.
+                Curated open-source models ready for LoRA and QLoRA training on Modal GPU clusters.
               </p>
             </div>
 
@@ -413,7 +413,7 @@ export default function ModelsPage() {
                 <span className="badge badge-default" style={{ fontSize: "0.65rem" }}>Live Registry</span>
               </h3>
               <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
-                Search and select any open-source model directly from HuggingFace to use as your base.
+                Search and explore open-source models from HuggingFace. Base model training support is coming soon.
               </p>
             </div>
 
