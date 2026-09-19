@@ -170,7 +170,8 @@ export default function BrowseModelsPage() {
         </Link>
         <Link href="/experts/new" className={`btn btn-primary btn-sm ${styles.topNavCta}`}>
           <Sparkles size={14} />
-          <span>Create RAG AI Expert</span>
+          <span className={styles.topNavCtaLong}>Create RAG AI Expert</span>
+          <span className={styles.topNavCtaShort}>Create Expert</span>
           <ArrowRight size={13} />
         </Link>
       </div>
@@ -182,7 +183,7 @@ export default function BrowseModelsPage() {
               <span>Browse Models</span>
             </h1>
             <p className={styles.subtitle}>
-              Discover and chat with specialized RAG AI Experts created by the community — or create your own in seconds.
+              Discover community RAG AI Experts or create your own in seconds.
             </p>
           </div>
           <div className={styles.headerCta}>
@@ -207,27 +208,28 @@ export default function BrowseModelsPage() {
           ))}
         </div>
 
-        <div className={styles.searchBar}>
-          <Search size={16} color="var(--text-muted)" />
-          <input 
-            type="text" 
-            placeholder="Search models..." 
-            className={styles.searchInput}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-        </div>
+        <div className={styles.filterControls}>
+          <div className={styles.searchBar}>
+            <Search size={16} color="var(--text-muted)" />
+            <input 
+              type="text" 
+              placeholder="Search models..." 
+              className={styles.searchInput}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
 
-        <select
-          className={styles.sortSelect}
-          style={{ marginLeft: "auto" }}
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortOption)}
-          aria-label="Sort models"
-        >
-          <option value="popular">Most Used</option>
-          <option value="newest">Newest First</option>
-        </select>
+          <select
+            className={styles.sortSelect}
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortOption)}
+            aria-label="Sort models"
+          >
+            <option value="popular">Most Used</option>
+            <option value="newest">Newest First</option>
+          </select>
+        </div>
       </div>
 
       {loading ? (
