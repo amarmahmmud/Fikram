@@ -37,8 +37,13 @@ import {
   Check,
   Share2,
   Copy,
+  Volume2,
+  VolumeX,
+  Pause,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 
 interface Message {
   id?: string;
@@ -98,6 +103,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [copiedShare, setCopiedShare] = useState(false);
   const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Text-to-Speech playback hook
+  const {
+    playingIndex,
+    loadingIndex,
+    playbackRate,
+    disabledMap,
+    togglePlayMessage,
+    cyclePlaybackRate,
+  } = useTextToSpeech();
 
   useEffect(() => {
     return () => {
@@ -872,6 +887,89 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                       </>
                     )}
                   </button>
+
+                  {/* Text-to-Speech Listen button & speed control for AI responses */}
+                  {msg.role !== "user" && (
+                    <div className={styles.ttsControls}>
+                      {disabledMap[i] ? (
+                        <button
+                          type="button"
+                          disabled
+                          className={`${styles.ttsBtn} ${styles.ttsDisabled}`}
+                          title={disabledMap[i].reason || "Audio not available for this language yet"}
+                          aria-label="Audio not available for this language yet"
+                        >
+                          <VolumeX size={12} />
+                          <span>Unavailable</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className={`${styles.ttsBtn} ${
+                              playingIndex === i ? styles.ttsPlaying : ""
+                            } ${loadingIndex === i ? styles.ttsLoading : ""}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              togglePlayMessage(msg.content, i);
+                            }}
+                            title={
+                              playingIndex === i
+                                ? "Pause speech"
+                                : loadingIndex === i
+                                ? "Synthesizing audio..."
+                                : "Listen to response"
+                            }
+                            aria-label={
+                              playingIndex === i
+                                ? "Pause speech"
+                                : loadingIndex === i
+                                ? "Synthesizing speech audio"
+                                : "Listen to response"
+                            }
+                          >
+                            {loadingIndex === i ? (
+                              <>
+                                <Loader2 size={12} className={styles.spinIcon} />
+                                <span>Synthesizing...</span>
+                              </>
+                            ) : playingIndex === i ? (
+                              <>
+                                <Pause size={12} className={styles.pauseIcon} />
+                                <div className={styles.waveformContainer}>
+                                  <span className={`${styles.waveBar} ${styles.bar1}`} />
+                                  <span className={`${styles.waveBar} ${styles.bar2}`} />
+                                  <span className={`${styles.waveBar} ${styles.bar3}`} />
+                                </div>
+                                <span>Playing</span>
+                              </>
+                            ) : (
+                              <>
+                                <Volume2 size={12} />
+                                <span>Listen</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Speed toggle pill: cycles 1x -> 1.5x -> 2x */}
+                          <button
+                            type="button"
+                            className={`${styles.ttsSpeedBtn} ${
+                              playingIndex === i ? styles.speedActive : ""
+                            }`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cyclePlaybackRate();
+                            }}
+                            title={`Playback speed: ${playbackRate}x (click to change: 1x / 1.5x / 2x)`}
+                            aria-label={`Current playback speed ${playbackRate}x. Click to change.`}
+                          >
+                            {playbackRate}x
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
