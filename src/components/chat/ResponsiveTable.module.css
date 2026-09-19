@@ -1,0 +1,407 @@
+.wrapper {
+  margin: 16px 0;
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Top Toolbar ── */
+.tableToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  backdrop-filter: blur(8px);
+}
+
+.toolbarLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scorecardBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, rgba(0, 229, 200, 0.15), rgba(199, 125, 255, 0.15));
+  border: 1px solid rgba(0, 229, 200, 0.3);
+  color: var(--accent-primary, #00E5C8);
+}
+
+.rowCountText {
+  font-size: 0.72rem;
+  color: var(--text-muted, #94a3b8);
+  font-weight: 500;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.copyBtn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.btnLabelText {
+  display: inline;
+}
+
+/* ── Segmented Toggle Buttons ── */
+.toggleGroup {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.toggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.toggleBtn:hover {
+  color: var(--text-primary, #fff);
+}
+
+.toggleActive {
+  background: rgba(0, 229, 200, 0.15);
+  color: var(--accent-primary, #00E5C8);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Mobile Cards View ── */
+.cardsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.cardItem {
+  background: rgba(16, 24, 39, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cardItem:hover {
+  border-color: rgba(0, 229, 200, 0.2);
+  background: rgba(22, 32, 51, 0.95);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cardTitle {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* Score Pills */
+.scorePill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.scoreHigh {
+  background: rgba(0, 229, 200, 0.15);
+  color: var(--accent-primary, #00E5C8);
+  border: 1px solid rgba(0, 229, 200, 0.35);
+  box-shadow: 0 0 10px rgba(0, 229, 200, 0.15);
+}
+
+.scoreMedium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.scoreLow {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+/* Progress bar track */
+.progressTrack {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.progressBar.scoreHigh {
+  background: linear-gradient(90deg, #00E5C8, #00ffde);
+}
+
+.progressBar.scoreMedium {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.progressBar.scoreLow {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cardField {
+  font-size: 0.84rem;
+  line-height: 1.55;
+  color: #cbd5e1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.fieldLabel {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-primary, #00E5C8);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.fieldValue {
+  color: #e2e8f0;
+}
+
+/* Standout Total Card */
+.totalCard {
+  background: linear-gradient(135deg, rgba(0, 229, 200, 0.12), rgba(199, 125, 255, 0.12));
+  border: 1px solid rgba(0, 229, 200, 0.35);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 16px rgba(0, 229, 200, 0.1);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.totalCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.totalTitle {
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.02em;
+}
+
+.totalScoreBadge {
+  font-size: 1.15rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #00E5C8, #C77DFF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: 0.03em;
+}
+
+.totalVerdictText {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #f1f5f9;
+  font-weight: 500;
+}
+
+/* ── Table View ── */
+.tableScrollWrapper {
+  position: relative;
+  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.scrollContainer {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  outline: none;
+}
+
+/* Dynamic Left & Right Scroll Shadows */
+.scrollFadeLeft {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 24px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0.95), transparent);
+  pointer-events: none;
+  z-index: 5;
+  animation: fadeIn 0.2s ease;
+}
+
+.scrollFadeRight {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  background: linear-gradient(270deg, rgba(15, 23, 42, 0.95), transparent);
+  pointer-events: none;
+  z-index: 5;
+  animation: fadeIn 0.2s ease;
+}
+
+.swipeHint {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid rgba(0, 229, 200, 0.3);
+  color: var(--accent-primary, #00E5C8);
+  font-size: 0.68rem;
+  font-weight: 600;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  animation: pulseHint 2s infinite ease-in-out;
+}
+
+@keyframes pulseHint {
+  0%, 100% { opacity: 0.85; transform: translateX(0); }
+  50% { opacity: 1; transform: translateX(3px); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.86rem;
+  min-width: 480px; /* Ensures columns stay readable during scroll */
+}
+
+/* Mobile adjustments */
+@media (max-width: 640px) {
+  .table {
+    font-size: 0.82rem;
+    min-width: 440px;
+  }
+
+  .btnLabelText {
+    display: none;
+  }
+
+  .copyBtn {
+    padding: 4px 6px;
+  }
+
+  .tableToolbar {
+    padding: 5px 8px;
+  }
+
+  .cardItem {
+    padding: 10px 12px;
+  }
+
+  .totalCard {
+    padding: 12px 14px;
+  }
+}

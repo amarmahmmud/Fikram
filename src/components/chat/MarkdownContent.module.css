@@ -2,25 +2,35 @@
   font-size: 0.92rem;
   line-height: 1.68;
   color: var(--text-primary, #e2e8f0);
-  word-break: break-word;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .markdownBody p {
   margin: 0 0 12px 0;
+  overflow-wrap: anywhere;
 }
 
 .markdownBody p:last-child {
   margin-bottom: 0;
 }
 
-/* Headings */
+/* ── Headings ── */
 .h1, .h2, .h3, .h4 {
   font-weight: 700;
   color: #fff;
-  margin: 20px 0 10px 0;
+  margin: 18px 0 10px 0;
   display: flex;
+  flex-wrap: wrap; /* CRITICAL: prevents single-line horizontal expansion */
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .h1 {
@@ -39,17 +49,12 @@
   color: #cbd5e1;
 }
 
-/* Tables / Scorecard */
-.tableContainer {
-  margin: 16px 0;
-  border-radius: 12px;
-  overflow-x: auto;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(12px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+.h4 {
+  font-size: 0.9rem;
+  color: #94a3b8;
 }
 
+/* ── Tables in Table Mode ── */
 .table {
   width: 100%;
   border-collapse: collapse;
@@ -63,10 +68,12 @@
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--accent-primary, #00E5C8);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  white-space: nowrap;
+  white-space: normal;
+  min-width: 110px;
+  vertical-align: middle;
 }
 
 .td {
@@ -74,6 +81,8 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   color: #e2e8f0;
   vertical-align: top;
+  min-width: 140px;
+  overflow-wrap: anywhere;
 }
 
 .table tr:hover td {
@@ -88,41 +97,45 @@
   color: #fff;
 }
 
-/* Dividers */
+/* ── Dividers ── */
 .divider {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
-  margin: 22px 0;
+  margin: 20px 0;
   border: none;
 }
 
-/* Lists */
+/* ── Lists ── */
 .bulletList, .orderedList {
-  margin: 10px 0 14px 20px;
+  margin: 8px 0 12px 18px;
   padding: 0;
+  min-width: 0;
 }
 
 .bulletList li, .orderedList li {
   margin-bottom: 6px;
-  padding-left: 4px;
+  padding-left: 2px;
+  overflow-wrap: anywhere;
 }
 
 .bulletList li::marker {
   color: var(--accent-primary, #00E5C8);
 }
 
-/* Blockquotes / Callouts */
+/* ── Blockquotes / Callouts ── */
 .blockquote {
-  margin: 14px 0;
-  padding: 12px 16px;
+  margin: 12px 0;
+  padding: 10px 14px;
   background: rgba(255, 255, 255, 0.03);
   border-left: 3px solid var(--accent-primary, #00E5C8);
   border-radius: 0 8px 8px 0;
   color: #cbd5e1;
   font-style: normal;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-/* Inline Code & Code Blocks */
+/* ── Inline Code & Enhanced Code Blocks ── */
 .inlineCode {
   background: rgba(255, 255, 255, 0.08);
   color: #fca5a5;
@@ -130,22 +143,126 @@
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85em;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.codeBlockContainer {
+  margin: 14px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #080c14;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.codeBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+}
+
+.codeLanguage {
+  font-weight: 700;
+  color: var(--accent-primary, #00E5C8);
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.05em;
+}
+
+.copyCodeBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: var(--text-secondary, #cbd5e1);
+  font-size: 0.7rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.copyCodeBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .codeBlock {
-  background: #090d16;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  margin: 0;
   padding: 12px 16px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85rem;
-  margin: 14px 0;
+  line-height: 1.55;
   color: #e2e8f0;
+  max-width: 100%;
 }
 
-/* Strong bolding */
+.codeBlock code {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ── Links ── */
+.link {
+  color: var(--accent-primary, #00E5C8);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease;
+  overflow-wrap: anywhere;
+}
+
+.link:hover {
+  color: #00ffde;
+}
+
+/* ── Strong ── */
 .strong {
   font-weight: 700;
   color: #fff;
+}
+
+/* ── Mobile Viewports ── */
+@media (max-width: 640px) {
+  .markdownBody {
+    font-size: 0.9rem;
+    line-height: 1.62;
+  }
+
+  .h1 {
+    font-size: 1.15rem;
+    margin: 16px 0 8px 0;
+  }
+
+  .h2 {
+    font-size: 1.02rem;
+    margin: 14px 0 8px 0;
+  }
+
+  .h3 {
+    font-size: 0.92rem;
+    margin: 12px 0 6px 0;
+  }
+
+  .bulletList, .orderedList {
+    margin-left: 14px;
+  }
+
+  .codeBlock {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+  }
+
+  .blockquote {
+    padding: 8px 12px;
+    margin: 10px 0;
+  }
 }
