@@ -23,6 +23,7 @@ import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
 import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
 import { trackVertexSpend } from "@/lib/vertex-budget";
+import { cleanRepetitionLoop } from "@/lib/text-cleaner";
 
 // ── Gemini Key Pool Management & Round-Robin Rotation ───────────────────────
 let currentEmbedKeyIndex = 0;
@@ -1137,9 +1138,16 @@ FINAL CHECK (READ THIS LAST BEFORE RESPONDING):
 Before you output your response, scan it for any company name. For each one, verify: Is every claim about this company (its product, its failure reason, its acquirer) explicitly stated in the Sources above or Live Web Intel? If you cannot verify it, DELETE that company from your response and describe the general failure pattern instead. Never force-fit real companies into fake narratives. Skipping a section is always better than fabricating one.`
     : "";
 
+  const antiRepetitionRule = `
+ANTI-REPETITION CONSTRAINT (CRITICAL):
+- Never repeat the same word, phrase, sentence, or structure consecutively.
+- Provide a progressive, varied, and naturally structured response.
+- When writing in Amharic, Ge'ez, or any other script, always use rich, natural vocabulary and complete every sentence naturally.`;
+
   const groundedSystemPrompt = `${systemPrompt}
 
 ${modeInstructions}
+${antiRepetitionRule}
 ${webInstruction}
 
 Internal Knowledge Base Sources:
@@ -1202,7 +1210,9 @@ ${finalGroundingBlock}`;
         systemInstruction: groundedSystemPrompt,
         generationConfig: {
           maxOutputTokens: 4096,
-          temperature: mode === "evaluative" ? 0.25 : 0.3,
+          temperature: mode === "evaluative" ? 0.25 : 0.6,
+          topP: 0.9,
+          topK: 40,
           ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
         },
         useEnterprise: options?.useEnterprise,
@@ -1236,8 +1246,9 @@ ${finalGroundingBlock}`;
       const completion = await getGroqClient().chat.completions.create({
         messages: groqHistory,
         model: "openai/gpt-oss-120b",
-        temperature: mode === "evaluative" ? 0.25 : 0.3,
+        temperature: mode === "evaluative" ? 0.25 : 0.6,
         max_completion_tokens: 4096,
+        top_p: 0.9,
       });
 
       draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
@@ -1268,9 +1279,11 @@ ${finalGroundingBlock}`;
             ],
             {
               generationConfig: {
-                maxOutputTokens: 4096,
-                temperature: mode === "evaluative" ? 0.25 : 0.3,
-              },
+              maxOutputTokens: 4096,
+              temperature: mode === "evaluative" ? 0.25 : 0.6,
+              topP: 0.9,
+              topK: 40,
+            },
             }
           );
           draft = geminiFallback.text()?.trim() ?? "I couldn't generate a response.";
@@ -1335,10 +1348,15 @@ ${finalGroundingBlock}`;
     }
   }
 
+  // ── Repetition loop guard ────────────────────────────────────────────────
+  // Detect and cleanly truncate any degenerate token loops before verification
+  draft = cleanRepetitionLoop(draft);
+
   // Fix 1: Verifier pass — check every company name against actual retrieved chunks
   // This catches the "sticky name" hallucination where the model uses real company
   // names but fabricates their business models/failure reasons to fit the pitch.
-  const reply = await verifyEntityClaims(draft, chunks, webResults);
+  const verifiedReply = await verifyEntityClaims(draft, chunks, webResults);
+  const reply = cleanRepetitionLoop(verifiedReply);
 
   return {
     reply,

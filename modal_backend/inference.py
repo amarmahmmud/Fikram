@@ -208,7 +208,65 @@ def _fix_bpe_text(text):
                 pass
         result.append(ch)
         i += 1
-    return "".join(result)
+# ── Repetition Loop Detection & Truncation ─────────────────────────────────────
+# High-precision detector for degenerate repetition loops (common in non-Latin
+# scripts like Amharic when autoregressive self-attention locks into a token sink).
+
+def _clean_repetition_loop(text: str) -> str:
+    if not text or len(text) < 40:
+        return text
+
+    import re as _re
+
+    # Pattern 1: Single word (2+ chars) repeated 4+ consecutive times with optional punctuation
+    single_word_pattern = _re.compile(r'(?:^|\s)([\w\-]{2,})(?:[\s,፣፤፦.!\-]+\1){3,}', _re.UNICODE)
+
+    # Pattern 2: Multi-word phrase (2-6 words) repeated 3+ consecutive times
+    phrase_pattern = _re.compile(r'(?:^|\s)((?:[\w\-]+[\s,፣፤]+){1,5}[\w\-]+)(?:[\s,፣፤፦.!\-]+\1){2,}', _re.UNICODE)
+
+    # Pattern 3: Repeated character sequences (>12 times for non-markdown chars)
+    char_repeat_pattern = _re.compile(r'([^\s\-=\|#*`~_])\1{12,}', _re.UNICODE)
+
+    earliest = -1
+
+    for pat in [single_word_pattern, phrase_pattern, char_repeat_pattern]:
+        m = pat.search(text)
+        if m:
+            if earliest == -1 or m.start() < earliest:
+                earliest = m.start()
+
+    if earliest == -1:
+        return text
+
+    truncated = text[:earliest].rstrip()
+
+    # If the repetition started on a bullet or numbered list item, cut back before it
+    lead_in = _re.search(r'(?:\r?\n|^)\s*(?:[-*+•]|\d+[.)])\s+[^\r\n]*$', truncated)
+    if lead_in and lead_in.start() > len(truncated) * 0.3:
+        truncated = truncated[:lead_in.start()].rstrip()
+
+    # Find a clean sentence boundary
+    boundaries = [m.end() for m in _re.finditer(r'(?:[\w]{2,}[.!?።፤]+(?:\s+|\r?\n|$)|(?:\r?\n){2,}|\r?\n(?=\s*[-*+•\d]))', truncated, _re.UNICODE)]
+    best = -1
+    for b in boundaries:
+        if b >= len(truncated) * 0.35 and b > best:
+            best = b
+
+    if best != -1:
+        truncated = truncated[:best].strip()
+    else:
+        last_nl = truncated.rfind("\n")
+        if last_nl > len(truncated) * 0.5:
+            truncated = truncated[:last_nl].strip()
+        else:
+            truncated = _re.sub(r'[\s\-,:፦፤]+$', '', truncated).strip()
+            if truncated and not _re.search(r'[.!?።]$', truncated):
+                is_ethiopic = bool(_re.search(r'[\u1200-\u137F]', truncated))
+                truncated += "።" if is_ethiopic else "."
+
+    print(f"[Repetition Guard] Degenerate loop cleaned: {len(text)} -> {len(truncated)} chars")
+    return truncated
+
 
 # ── Inference Web Endpoint ─────────────────────────────────────────────────────
 @app.cls(
@@ -486,6 +544,9 @@ class ModelInference:
                         do_sample=temperature > 0,
                         pad_token_id=pad_id,
                         eos_token_id=terminators,
+                        repetition_penalty=1.15,
+                        top_p=0.9,
+                        top_k=50,
                     )
             except Exception as gen_err:
                 # Fallback to greedy decoding if sampling fails on some architectures
@@ -497,6 +558,7 @@ class ModelInference:
                         do_sample=False,
                         pad_token_id=pad_id,
                         eos_token_id=terminators,
+                        repetition_penalty=1.15,
                     )
 
             # Decode only the generated response (skip the prompt tokens)
@@ -524,6 +586,9 @@ class ModelInference:
 
             # 4. Final cleanup — collapse excess whitespace
             reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
+
+            # 5. Repetition loop guard — detect and cleanly truncate degenerate loops
+            reply = _clean_repetition_loop(reply)
 
             print(f"[Inference] Generated reply ({len(reply)} chars) using {base_model_id} "
                   f"(family={self.family_name})")

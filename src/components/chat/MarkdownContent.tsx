@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ResponsiveTable } from "./ResponsiveTable";
 import { Check, Copy } from "lucide-react";
+import { cleanRepetitionLoop } from "@/lib/text-cleaner";
 import styles from "./MarkdownContent.module.css";
 
 interface MarkdownContentProps {
@@ -55,6 +56,8 @@ function CodeBlockWrapper({
 }
 
 export function MarkdownContent({ content }: MarkdownContentProps) {
+  const safeContent = cleanRepetitionLoop(content || "");
+
   return (
     <div className={styles.markdownBody}>
       <ReactMarkdown
@@ -103,7 +106,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
           },
         }}
       >
-        {content}
+        {safeContent}
       </ReactMarkdown>
     </div>
   );

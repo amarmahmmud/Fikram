@@ -44,6 +44,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { cleanRepetitionLoop } from "@/lib/text-cleaner";
 
 interface Message {
   id?: string;
@@ -303,7 +304,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             res.messages.map((m: any) => ({
               id: m.id,
               role: m.role,
-              content: m.content,
+              content: m.role === "model" ? cleanRepetitionLoop(m.content) : m.content,
               sources: m.sources,
               webSources: m.webSources,
             }))
@@ -319,7 +320,13 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     try {
       const localMsgs = localStorage.getItem(`mf_expert_msgs_${convId}`);
       if (localMsgs) {
-        setMessages(JSON.parse(localMsgs));
+        const parsed = JSON.parse(localMsgs);
+        setMessages(
+          parsed.map((m: any) => ({
+            ...m,
+            content: m.role === "model" ? cleanRepetitionLoop(m.content) : m.content,
+          }))
+        );
         return;
       }
     } catch { }
@@ -491,9 +498,10 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       }
 
       if (data.ok) {
+        const safeReply = cleanRepetitionLoop(data.reply || "");
         const newModelMsg: Message = {
           role: "model",
-          content: data.reply,
+          content: safeReply,
           sources: data.sources,
           webSources: data.webSources,
         };
@@ -503,8 +511,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setMessages((prev) => [...prev, newModelMsg]);
 
         // Option A: Auto-play voice on the very first assistant response in this conversation
-        if (isFirstUserMessage && autoVoiceEnabled && data.reply) {
-          togglePlayMessage(data.reply, newModelIndex);
+        if (isFirstUserMessage && autoVoiceEnabled && safeReply) {
+          togglePlayMessage(safeReply, newModelIndex);
 
           // Discovery toast with 1-click turn-off action
           toast("🔊 Voice Response Active", {
