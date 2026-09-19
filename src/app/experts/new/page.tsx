@@ -18,15 +18,107 @@ import {
   Check,
   X,
   ArrowRight,
+  ArrowLeft,
   UploadCloud,
   CheckCircle2,
   Image,
   FileAudio,
   Film,
-  Compass,
+  Target,
+  Sliders,
 } from "lucide-react";
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
+
+interface AlignmentOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+interface AlignmentQuestion {
+  id: string;
+  category: "audience" | "boundaries" | "structure";
+  categoryLabel: string;
+  question: string;
+  description: string;
+  options: AlignmentOption[];
+}
+
+const DEFAULT_ALIGNMENT_QUESTIONS: AlignmentQuestion[] = [
+  {
+    id: "q_audience",
+    category: "audience",
+    categoryLabel: "Target Audience",
+    question: "Who is the primary audience consulting this knowledge base?",
+    description: "Calibrates terminology, explanation depth, and prerequisite assumptions.",
+    options: [
+      {
+        id: "opt_clients",
+        label: "Direct Clients & Customers",
+        description: "Clear, practical explanations focused on solutions without internal complexity.",
+      },
+      {
+        id: "opt_team",
+        label: "Internal Team & Practitioners",
+        description: "Technical precision, operational workflows, and rigorous source cross-referencing.",
+      },
+      {
+        id: "opt_general",
+        label: "General Public & Learners",
+        description: "Approachable, foundational guidance with step-by-step conceptual clarity.",
+      },
+    ],
+  },
+  {
+    id: "q_boundaries",
+    category: "boundaries",
+    categoryLabel: "Grounding Boundaries",
+    question: "How should the assistant handle queries not found in the documents?",
+    description: "Establishes retrieval containment to protect against ungrounded extrapolation.",
+    options: [
+      {
+        id: "opt_strict",
+        label: "Strict Document Grounding",
+        description: "Decline immediately if unstated in the files. Never extrapolate or assume.",
+      },
+      {
+        id: "opt_bounded",
+        label: "Bounded Contextual Guidance",
+        description: "Synthesize from the documents; clearly state when bridging with general knowledge.",
+      },
+      {
+        id: "opt_referral",
+        label: "Summary with Human Referral",
+        description: "Offer a high-level summary and explicitly recommend consulting a verified expert.",
+      },
+    ],
+  },
+  {
+    id: "q_structure",
+    category: "structure",
+    categoryLabel: "Response Structure",
+    question: "What format best serves your users' day-to-day decision making?",
+    description: "Determines the layout, citation density, and information hierarchy of replies.",
+    options: [
+      {
+        id: "opt_actionable",
+        label: "Actionable Checklists & Key Points",
+        description: "Bullet points, bold takeaways, and explicit source citation references.",
+      },
+      {
+        id: "opt_detailed",
+        label: "In-Depth Analytical Walkthrough",
+        description: "Thorough paragraphs explaining underlying logic, mechanics, and nuance.",
+      },
+      {
+        id: "opt_executive",
+        label: "Executive Briefing",
+        description: "Distilled bottom-line synthesis upfront followed by essential supporting facts.",
+      },
+    ],
+  },
+];
 
 interface UploadedFile {
   file: File;
@@ -59,6 +151,20 @@ export default function NewExpertPage() {
   const [ingesting, setIngesting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Goal & Purpose Alignment State
+  const [alignmentQuestions, setAlignmentQuestions] = useState<AlignmentQuestion[]>(DEFAULT_ALIGNMENT_QUESTIONS);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({
+    q_audience: "opt_clients",
+    q_boundaries: "opt_bounded",
+    q_structure: "opt_actionable",
+  });
+  const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({});
+  const [showCustomInput, setShowCustomInput] = useState<Record<string, boolean>>({});
+  const [customDirectives, setCustomDirectives] = useState("");
+  const [ingestCurrentFile, setIngestCurrentFile] = useState<string>("");
+  const [ingestProgressIndex, setIngestProgressIndex] = useState<number>(0);
 
   const [showAiHelper, setShowAiHelper] = useState(false);
   const [selectedTone, setSelectedTone] = useState(TONE_PRESETS[0]);
@@ -247,7 +353,56 @@ export default function NewExpertPage() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function handleIngest() {
+  async function handleProceedToAlignment() {
+    if (!expertId || files.length === 0) return;
+    setStep(3);
+    setLoadingQuestions(true);
+
+    try {
+      // Gather light content snippets from text/code files client-side
+      const snippets: string[] = [];
+      for (const item of files.slice(0, 3)) {
+        const ext = item.file.name.toLowerCase().split(".").pop() || "";
+        if (["txt", "md", "csv", "json"].includes(ext) || item.file.type.startsWith("text/")) {
+          try {
+            const sample = await item.file.slice(0, 800).text();
+            if (sample.trim()) snippets.push(sample.slice(0, 400));
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      const res = await fetch("/api/experts/alignment-questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expertName: name.trim(),
+          description: description.trim(),
+          filenames: files.map((f) => f.file.name),
+          snippets,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.questions) && data.questions.length > 0) {
+        setAlignmentQuestions(data.questions);
+        const defaults: Record<string, string> = {};
+        data.questions.forEach((q: AlignmentQuestion) => {
+          if (q.options && q.options.length > 0) {
+            defaults[q.id] = q.options[0].id;
+          }
+        });
+        setSelectedAnswers(defaults);
+      }
+    } catch (err) {
+      console.warn("Could not fetch dynamic alignment questions, using enterprise fallbacks:", err);
+    } finally {
+      setLoadingQuestions(false);
+    }
+  }
+
+  async function runFileIngestion() {
     if (!expertId || files.length === 0) return;
     setIngesting(true);
 
@@ -255,6 +410,9 @@ export default function NewExpertPage() {
 
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === "done") continue;
+
+      setIngestCurrentFile(files[i].file.name);
+      setIngestProgressIndex(i + 1);
 
       setFiles((prev) =>
         prev.map((f, idx) => (idx === i ? { ...f, status: "uploading" } : f))
@@ -328,7 +486,6 @@ export default function NewExpertPage() {
         if (!res.ok) {
           const text = await res.text();
           let errMsg = `Server returned ${res.status}`;
-          // Check if response is raw HTML (e.g. Vercel 500 error page or timeout)
           if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
             if (res.status === 504) {
               errMsg = "Processing timed out (504). File is too large for current plan.";
@@ -377,8 +534,65 @@ export default function NewExpertPage() {
 
     setIngesting(false);
     if (!hasErrors) {
-      setStep(3);
+      setStep(4);
     }
+  }
+
+  async function handleConfirmAlignmentAndIngest() {
+    if (!expertId || files.length === 0) return;
+
+    // 1. Compile alignment directives
+    const directiveLines: string[] = [];
+    directiveLines.push("### OPERATIONAL RAG ALIGNMENT DIRECTIVES:");
+
+    let updatedReasoningMode = reasoningMode;
+
+    alignmentQuestions.forEach((q) => {
+      const isCustom = showCustomInput[q.id] && customAnswers[q.id]?.trim();
+      if (isCustom) {
+        directiveLines.push(`- ${q.categoryLabel}: ${customAnswers[q.id].trim()}`);
+      } else {
+        const chosenOptId = selectedAnswers[q.id];
+        const chosenOpt = q.options.find((o) => o.id === chosenOptId) || q.options[0];
+        if (chosenOpt) {
+          directiveLines.push(`- ${q.categoryLabel}: ${chosenOpt.label} — ${chosenOpt.description}`);
+          if (q.category === "boundaries") {
+            if (chosenOpt.id.includes("strict") || chosenOpt.label.toLowerCase().includes("strict")) {
+              updatedReasoningMode = "strict";
+            } else if (chosenOpt.id.includes("bounded") || chosenOpt.label.toLowerCase().includes("guidance")) {
+              updatedReasoningMode = "hybrid";
+            }
+          }
+        }
+      }
+    });
+
+    if (customDirectives.trim()) {
+      directiveLines.push(`- Operational Guardrails & Disclaimers: ${customDirectives.trim()}`);
+    }
+
+    const compiledDirectives = directiveLines.join("\n");
+    const mergedSystemPrompt = systemPrompt.trim()
+      ? `${systemPrompt.trim()}\n\n${compiledDirectives}`
+      : compiledDirectives;
+
+    // 2. Patch expert settings in database
+    try {
+      await fetch(`/api/experts/${expertId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: mergedSystemPrompt,
+          reasoningMode: updatedReasoningMode,
+          webSearchEnabled,
+        }),
+      });
+    } catch (patchErr) {
+      console.warn("Failed to patch expert alignment directives:", patchErr);
+    }
+
+    // 3. Run direct ingestion and vectorization
+    await runFileIngestion();
   }
 
   const totalChunks = files.reduce((a, f) => a + (f.chunksStored || 0), 0);
@@ -400,8 +614,8 @@ export default function NewExpertPage() {
         <span className="topbar-title">Create RAG AI Expert</span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Link href="/browse" className="btn btn-secondary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <Compass size={14} />
-            <span>Explore Existing Experts</span>
+            <Globe size={14} />
+            <span>Browse Models</span>
           </Link>
           <Link href="/dashboard" className="btn btn-ghost btn-sm">Back to Dashboard</Link>
         </div>
@@ -410,7 +624,7 @@ export default function NewExpertPage() {
       <div className="page-content">
         {/* Progress steps */}
         <div className={styles.steps}>
-          {["Expert Profile", "Upload Content", "Ready"].map((label, i) => (
+          {["Expert Profile", "Knowledge Sources", "Goal Alignment", "Ready"].map((label, i) => (
             <div
               key={label}
               className={`${styles.step} ${i + 1 <= step ? styles.stepActive : ""} ${i + 1 < step ? styles.stepDone : ""}`}
@@ -728,20 +942,20 @@ export default function NewExpertPage() {
             <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
               <button
                 className="btn btn-primary"
-                onClick={handleIngest}
-                disabled={files.length === 0 || ingesting}
+                onClick={handleProceedToAlignment}
+                disabled={files.length === 0}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
               >
-                <span>{ingesting ? "Processing..." : `Process ${files.length} source${files.length !== 1 ? "s" : ""}`}</span>
-                {!ingesting && <ArrowRight size={14} />}
+                <span>Proceed to Goal Alignment</span>
+                <ArrowRight size={14} />
               </button>
               {totalChunks > 0 && (
                 <button
                   className="btn btn-secondary"
-                  onClick={() => setStep(3)}
+                  onClick={() => setStep(4)}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                 >
-                  <span>{allDone ? "Continue" : `Continue with ${totalChunks} chunks`}</span>
+                  <span>Continue to Ready ({totalChunks} chunks)</span>
                   <ArrowRight size={14} />
                 </button>
               )}
@@ -749,17 +963,214 @@ export default function NewExpertPage() {
           </div>
         )}
 
-        {/* Step 3: Done */}
+        {/* Step 3: Goal & Purpose Alignment */}
         {step === 3 && (
-          <div className={styles.card} style={{ textAlign: "center" }}>
+          <div className={styles.card} style={{ maxWidth: 720 }}>
+            <div className={styles.alignmentHeaderBadge}>
+              <span className={styles.alignmentHeaderBadgeDot} />
+              <span>Pre-Indexing Alignment</span>
+            </div>
+            <h2 className={styles.cardTitle}>Knowledge &amp; Goal Alignment</h2>
+            <p className={styles.cardDesc}>
+              Establish operational guardrails, target persona, and grounding boundaries tailored to your uploaded documents before vectorizing.
+            </p>
+
+            {loadingQuestions ? (
+              <div className={styles.alignmentLoadingBox}>
+                <div className={styles.alignmentLoadingSpinner} />
+                <div className={styles.alignmentLoadingTitle}>Analyzing document context &amp; topics...</div>
+                <div className={styles.alignmentLoadingDesc}>
+                  Synthesizing source structure to formulate grounding rules and persona boundaries.
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className={styles.alignmentQuestionList}>
+                  {alignmentQuestions.map((q) => {
+                    const isAudience = q.category === "audience";
+                    const isBoundaries = q.category === "boundaries";
+
+                    return (
+                      <div key={q.id} className={styles.alignmentQuestionCard}>
+                        <div className={styles.alignmentCategoryRow}>
+                          <div className={styles.alignmentCategoryTag}>
+                            {isAudience ? (
+                              <Target size={13} />
+                            ) : isBoundaries ? (
+                              <ShieldCheck size={13} />
+                            ) : (
+                              <Sliders size={13} />
+                            )}
+                            <span>{q.categoryLabel}</span>
+                          </div>
+                        </div>
+
+                        <div className={styles.alignmentQuestionTitle}>{q.question}</div>
+                        <div className={styles.alignmentQuestionSubtitle}>{q.description}</div>
+
+                        <div className={styles.alignmentOptionsGrid}>
+                          {q.options.map((opt) => {
+                            const isSelected = selectedAnswers[q.id] === opt.id && !showCustomInput[q.id];
+
+                            return (
+                              <div
+                                key={opt.id}
+                                className={`${styles.alignmentOptionCard} ${isSelected ? styles.alignmentOptionCardActive : ""}`}
+                                onClick={() => {
+                                  setSelectedAnswers((prev) => ({ ...prev, [q.id]: opt.id }));
+                                  setShowCustomInput((prev) => ({ ...prev, [q.id]: false }));
+                                }}
+                              >
+                                <div className={styles.alignmentOptionHeader}>
+                                  <div className={`${styles.alignmentRadio} ${isSelected ? styles.alignmentRadioActive : ""}`}>
+                                    {isSelected && <div className={styles.alignmentRadioDot} />}
+                                  </div>
+                                  <span className={styles.alignmentOptionLabel}>{opt.label}</span>
+                                </div>
+                                <div className={styles.alignmentOptionDesc}>{opt.description}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Custom input override */}
+                        <div>
+                          {!showCustomInput[q.id] ? (
+                            <button
+                              type="button"
+                              className={styles.alignmentCustomToggle}
+                              onClick={() => setShowCustomInput((prev) => ({ ...prev, [q.id]: true }))}
+                            >
+                              Specify custom rule for this criteria
+                            </button>
+                          ) : (
+                            <input
+                              className={styles.alignmentCustomInput}
+                              placeholder={`Custom ${q.categoryLabel.toLowerCase()} instruction...`}
+                              value={customAnswers[q.id] || ""}
+                              onChange={(e) =>
+                                setCustomAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
+                              }
+                            />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Additional Guardrails & Disclaimers */}
+                <div className={styles.alignmentDirectivesCard}>
+                  <label className={styles.alignmentDirectivesLabel}>
+                    <ShieldCheck size={14} />
+                    <span>Additional Guardrails &amp; Disclaimers (Optional)</span>
+                  </label>
+                  <textarea
+                    className={styles.textarea}
+                    placeholder="e.g., Do not cite confidential pricing; Always append standard clinical disclaimer for health questions."
+                    value={customDirectives}
+                    onChange={(e) => setCustomDirectives(e.target.value)}
+                    rows={2}
+                  />
+                  <p className={styles.hint}>
+                    Explicit negative constraints, disclaimers, or mandatory citations to enforce on every reply.
+                  </p>
+                </div>
+
+                {/* Ingestion progress if active */}
+                {ingesting && (
+                  <div className={styles.ingestActiveCard}>
+                    <div className={styles.ingestStatusHeader}>
+                      <span>Vectorizing &amp; Indexing Knowledge ({ingestProgressIndex}/{files.length})</span>
+                      <span>{Math.round((ingestProgressIndex / files.length) * 100)}%</span>
+                    </div>
+                    <div className={styles.ingestProgressBar}>
+                      <div
+                        className={styles.ingestProgressFill}
+                        style={{ width: `${Math.max(10, (ingestProgressIndex / files.length) * 100)}%` }}
+                      />
+                    </div>
+                    <div className={styles.ingestFileText}>
+                      Processing: {ingestCurrentFile || "Embedding text chunks..."}
+                    </div>
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div className={styles.alignmentActions}>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setStep(2)}
+                    disabled={ingesting}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Back to Sources</span>
+                  </button>
+
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => {
+                        const defaults: Record<string, string> = {};
+                        alignmentQuestions.forEach((q) => {
+                          if (q.options[0]) defaults[q.id] = q.options[0].id;
+                        });
+                        setSelectedAnswers(defaults);
+                        setShowCustomInput({});
+                        toast.success("Applied recommended enterprise defaults.");
+                      }}
+                      disabled={ingesting}
+                    >
+                      Recommended Defaults
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleConfirmAlignmentAndIngest}
+                      disabled={ingesting || files.length === 0}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <span>{ingesting ? "Vectorizing..." : "Confirm Alignment & Ingest"}</span>
+                      {!ingesting && <ArrowRight size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Step 4: Done */}
+        {step === 4 && (
+          <div className={styles.card} style={{ textAlign: "center", maxWidth: 640 }}>
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--accent-primary)" }}>
-              <CheckCircle2 size={44} />
+              <CheckCircle2 size={46} />
             </div>
             <h2 className={styles.cardTitle}>Your RAG AI Expert is Ready</h2>
             <p className={styles.cardDesc}>
-              <strong>{name}</strong> has been created with <strong>{totalChunks} knowledge chunks</strong> from your content. Start chatting now.
+              <strong>{name}</strong> has been indexed with <strong>{totalChunks} knowledge chunks</strong> and aligned with your operational directives.
             </p>
-            <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 24 }}>
+
+            <div className={styles.summaryPills}>
+              {alignmentQuestions.map((q) => {
+                const isCustom = showCustomInput[q.id] && customAnswers[q.id]?.trim();
+                const chosenOpt = q.options.find((o) => o.id === selectedAnswers[q.id]);
+                const val = isCustom ? customAnswers[q.id].trim() : chosenOpt?.label || "Configured";
+
+                return (
+                  <div key={q.id} className={styles.summaryPill}>
+                    <span>{q.categoryLabel}:</span>
+                    <span className={styles.summaryPillStrong}>{val}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 24, flexWrap: "wrap" }}>
               <Link
                 href={`/experts/${expertId}/chat`}
                 className="btn btn-primary"
@@ -768,7 +1179,11 @@ export default function NewExpertPage() {
                 <span>Start Chatting</span>
                 <ArrowRight size={14} />
               </Link>
-              <Link href="/dashboard" className="btn btn-secondary">
+              <Link href="/browse" className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                <Globe size={14} />
+                <span>Browse Models</span>
+              </Link>
+              <Link href="/dashboard" className="btn btn-ghost">
                 Back to Dashboard
               </Link>
             </div>

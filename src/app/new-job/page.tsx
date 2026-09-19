@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Cpu, Sparkles, ArrowRight, ArrowLeft, Check, Bell, Layers, Zap, BarChart3, ShieldCheck, Compass } from "lucide-react";
+import { Cpu, Sparkles, ArrowRight, ArrowLeft, Check, Bell, Layers, Zap, BarChart3, ShieldCheck, Globe } from "lucide-react";
 import styles from "./page.module.css";
 
 const NOTIFY_STORAGE_KEY = "fikram_coming_soon_notify";
@@ -158,8 +158,8 @@ export default function NewJobPage() {
                 <ArrowRight size={15} />
               </Link>
               <Link href="/browse" className="btn btn-secondary">
-                <Compass size={15} />
-                <span>Explore Created Experts</span>
+                <Globe size={15} />
+                <span>Browse Models</span>
               </Link>
             </div>
           </div>

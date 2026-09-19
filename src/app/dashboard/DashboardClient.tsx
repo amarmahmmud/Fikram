@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
-import { Sparkles, Cpu, Check, ArrowRight, Compass, Globe } from "lucide-react";
+import { Sparkles, Cpu, Check, ArrowRight, Globe } from "lucide-react";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Job     = Database["public"]["Tables"]["jobs"]["Row"];
@@ -145,7 +145,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
             </div>
             <Link href="/browse" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
               <Globe size={14} />
-              <span>Explore Marketplace</span>
+              <span>Browse Models</span>
               <ArrowRight size={13} />
             </Link>
           </div>
@@ -171,8 +171,8 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                   <ArrowRight size={14} />
                 </Link>
                 <Link href="/browse" className={`btn btn-secondary ${styles.tierBtnSecondary}`}>
-                  <Compass size={15} />
-                  <span>Explore Existing Experts</span>
+                  <Globe size={15} />
+                  <span>Browse Models</span>
                 </Link>
               </div>
             </div>
@@ -239,8 +239,8 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                   <span>Create RAG AI Expert</span>
                 </Link>
                 <Link href="/browse" className="btn btn-secondary btn-sm">
-                  <Compass size={14} />
-                  <span>Explore Existing Experts</span>
+                  <Globe size={14} />
+                  <span>Browse Models</span>
                 </Link>
               </div>
             </div>
