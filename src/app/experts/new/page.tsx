@@ -435,36 +435,45 @@ export default function NewExpertPage() {
           else if (ext === "json") mimeType = "application/json";
         }
 
-        // Direct-to-R2 Architecture
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: mimeType || file.type }),
-        });
-        
-        if (!uploadRes.ok) throw new Error("Failed to get upload URL");
-        const { uploadUrl, downloadUrl } = await uploadRes.json();
+        // Direct-to-R2 Architecture with Server Fallback
+        let finalDownloadUrl: string | undefined;
 
-        // Upload directly to Cloudflare R2
-        let putRes: Response;
         try {
-          putRes = await fetch(uploadUrl, {
-            method: "PUT",
-            body: file,
-            headers: mimeType ? { "Content-Type": mimeType } : undefined,
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ filename: file.name, contentType: mimeType || file.type }),
           });
-        } catch (fetchErr: any) {
-          console.error("Direct storage PUT network error:", fetchErr);
-          throw new Error("Storage connection failed. Please check internet connection or R2 CORS configuration.");
+
+          if (uploadRes.ok) {
+            const { uploadUrl, downloadUrl } = await uploadRes.json();
+            const putRes = await fetch(uploadUrl, {
+              method: "PUT",
+              body: file,
+              headers: mimeType ? { "Content-Type": mimeType } : undefined,
+            });
+            if (putRes.ok) {
+              finalDownloadUrl = downloadUrl;
+            }
+          }
+        } catch (directErr) {
+          console.warn("[Upload] Direct browser R2 upload failed, trying server fallback:", directErr);
         }
 
-        if (!putRes.ok) {
-          const errStatus = putRes.status;
-          console.error("Storage upload failed with status:", errStatus);
-          if (errStatus === 403) {
-            throw new Error("Storage upload denied (403). Check Cloudflare R2 CORS or token permissions.");
+        // Seamless fallback to server-side upload if direct browser upload was blocked
+        if (!finalDownloadUrl) {
+          const formData = new FormData();
+          formData.append("file", file);
+          const fallbackRes = await fetch("/api/upload/file", {
+            method: "POST",
+            body: formData,
+          });
+          if (!fallbackRes.ok) {
+            const errData = await fallbackRes.json().catch(() => ({}));
+            throw new Error(errData.error || "Storage upload failed");
           }
-          throw new Error(`Failed to upload file to storage (${errStatus})`);
+          const fbData = await fallbackRes.json();
+          finalDownloadUrl = fbData.downloadUrl;
         }
 
         // Send ingest request to backend
@@ -472,7 +481,7 @@ export default function NewExpertPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            url: downloadUrl,
+            url: finalDownloadUrl,
             mimeType: mimeType || file.type,
             filename: file.name,
           }),

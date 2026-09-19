@@ -1,0 +1,19 @@
+Company: QuantumPay Financial Technologies
+Overview: QuantumPay is a next-generation real-time cross-border payments infrastructure platform founded in 2024.
+
+Key Products:
+1. QuantumRail: An instant settlement API operating across 42 currencies with a sub-500ms transaction finality.
+2. SmartCompliance AI: An automated AML/KYC fraud detection engine with a 99.8% precision score.
+3. TreasuryVault: Yield-bearing multi-currency treasury management accounts offering 4.8% APY.
+
+Fee Schedule:
+- Standard Tier: $0.15 flat fee + 0.1% transaction volume.
+- Enterprise Tier: $0.05 flat fee + 0.04% volume with dedicated node routing.
+
+Security & Certifications:
+- SOC 2 Type II certified
+- ISO 27001 compliant
+- End-to-end post-quantum cryptographic encryption (Kyber-768 standard)
+
+Contact & Support:
+- Enterprise support is available 24/7/365 via Slack Connect or priority hotline at +1-800-555-QPAY.
