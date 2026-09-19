@@ -8,7 +8,7 @@ import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import ComingSoonButton from "@/components/ComingSoonButton";
-import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight } from "lucide-react";
+import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight, Sparkles } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -171,6 +171,13 @@ export default function ModelsPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">Explore & Model Browser</span>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Sparkles size={14} />
+            <span>Create RAG AI Expert</span>
+            <ArrowRight size={13} />
+          </Link>
+        </div>
       </div>
 
       <div className="page-content">
@@ -200,6 +207,25 @@ export default function ModelsPage() {
             <Smile size={16} style={{ marginRight: 4 }} /> HuggingFace Hub (500+)
           </button>
         </div>
+
+        {/* ── Community Creation Callout ── */}
+        {mainTab === "community" && (
+          <div className={styles.communityCallout}>
+            <div className={styles.calloutText}>
+              <div className={styles.calloutTitle}>
+                <Sparkles size={16} color="var(--accent-primary)" />
+                <span>Build your own grounded RAG AI Expert</span>
+              </div>
+              <span className={styles.calloutDesc}>
+                Turn your documents, PDFs, audio, or video files into an interactive, citation-backed AI in seconds.
+              </span>
+            </div>
+            <Link href="/experts/new" className={`btn btn-primary btn-sm ${styles.calloutBtn}`}>
+              <span>Create Your Own RAG AI</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        )}
 
         {/* ── Search & Filter Bar ── */}
         <div className={styles.filterRow}>

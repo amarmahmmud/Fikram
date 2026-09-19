@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, MessageCircle, Heart, Search, ArrowRight, Sparkles } from "lucide-react";
+import { Globe, MessageCircle, Heart, Search, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
@@ -161,20 +161,38 @@ export default function BrowseModelsPage() {
   return (
     <div className={styles.pageWrapper}>
       <div className={styles.ambientGlow} />
+
+      {/* Top Navigation Bar */}
+      <div className={styles.topNav}>
+        <Link href="/dashboard" className={styles.backLink}>
+          <ArrowLeft size={16} />
+          <span>Dashboard</span>
+        </Link>
+        <Link href="/experts/new" className={`btn btn-primary btn-sm ${styles.topNavCta}`}>
+          <Sparkles size={14} />
+          <span>Create RAG AI Expert</span>
+          <ArrowRight size={13} />
+        </Link>
+      </div>
+
       <div className={styles.container}>
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>
-              <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models &amp; Experts
+              <Globe size={32} className={styles.titleIcon} />
+              <span>Browse Models &amp; Experts</span>
             </h1>
             <p className={styles.subtitle}>
-              Discover and try specialized RAG AI Experts and custom models built by the community.
+              Discover and chat with specialized RAG AI Experts created by the community — or create your own in seconds.
             </p>
           </div>
-          <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-            <Sparkles size={14} />
-            <span>Create RAG AI Expert</span>
-          </Link>
+          <div className={styles.headerCta}>
+            <Link href="/experts/new" className={`btn btn-primary ${styles.createCtaBtn}`}>
+              <Sparkles size={16} />
+              <span>Create Your Own RAG AI</span>
+              <ArrowRight size={15} />
+            </Link>
+          </div>
         </div>
 
       <div className={styles.filterBar}>
