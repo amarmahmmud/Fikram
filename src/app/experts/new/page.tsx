@@ -23,6 +23,7 @@ import {
   Image,
   FileAudio,
   Film,
+  Compass,
 } from "lucide-react";
 
 type Step = 1 | 2 | 3;
@@ -397,7 +398,13 @@ export default function NewExpertPage() {
     <>
       <div className="topbar">
         <span className="topbar-title">Create RAG AI Expert</span>
-        <Link href="/dashboard" className="btn btn-ghost btn-sm">Back to Dashboard</Link>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <Link href="/browse" className="btn btn-secondary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <Compass size={14} />
+            <span>Explore Existing Experts</span>
+          </Link>
+          <Link href="/dashboard" className="btn btn-ghost btn-sm">Back to Dashboard</Link>
+        </div>
       </div>
 
       <div className="page-content">
@@ -421,7 +428,10 @@ export default function NewExpertPage() {
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>Create Your Expert Profile</h2>
             <p className={styles.cardDesc}>
-              Define who your AI expert is. This shapes how it talks and presents itself to users.
+              Define who your AI expert is. This shapes how it talks and presents itself to users. Need inspiration?{" "}
+              <Link href="/browse" style={{ color: "var(--accent-primary)", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                See what other creators built
+              </Link>
             </p>
 
             <div className={styles.field}>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Cpu, Sparkles, ArrowRight, ArrowLeft, Check, Bell, Layers, Zap, BarChart3, ShieldCheck } from "lucide-react";
+import { Cpu, Sparkles, ArrowRight, ArrowLeft, Check, Bell, Layers, Zap, BarChart3, ShieldCheck, Compass } from "lucide-react";
 import styles from "./page.module.css";
 
 const NOTIFY_STORAGE_KEY = "fikram_coming_soon_notify";
@@ -151,10 +151,17 @@ export default function NewJobPage() {
                 citation-backed AI expert in 30 seconds.
               </p>
             </div>
-            <Link href="/experts/new" className="btn btn-primary">
-              <span>Create RAG AI Expert</span>
-              <ArrowRight size={15} />
-            </Link>
+            <div className={styles.calloutActions}>
+              <Link href="/experts/new" className="btn btn-primary">
+                <Sparkles size={15} />
+                <span>Create RAG AI Expert</span>
+                <ArrowRight size={15} />
+              </Link>
+              <Link href="/browse" className="btn btn-secondary">
+                <Compass size={15} />
+                <span>Explore Created Experts</span>
+              </Link>
+            </div>
           </div>
         </div>
       </div>

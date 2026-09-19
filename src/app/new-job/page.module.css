@@ -294,6 +294,14 @@
   margin: 0;
 }
 
+.calloutActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .topNav {

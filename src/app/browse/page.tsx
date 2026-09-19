@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { Globe, MessageCircle, Heart, Search, ArrowRight } from "lucide-react";
+import { Globe, MessageCircle, Heart, Search, ArrowRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
@@ -163,15 +163,19 @@ export default function BrowseModelsPage() {
       <div className={styles.ambientGlow} />
       <div className={styles.container}>
         <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>
-            <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models
-          </h1>
-          <p className={styles.subtitle}>
-            Discover and try specialized RAG AI Experts and custom models built by the community.
-          </p>
+          <div>
+            <h1 className={styles.title}>
+              <Globe size={28} style={{ marginRight: 8, verticalAlign: 'text-bottom' }} /> Browse Models &amp; Experts
+            </h1>
+            <p className={styles.subtitle}>
+              Discover and try specialized RAG AI Experts and custom models built by the community.
+            </p>
+          </div>
+          <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+            <Sparkles size={14} />
+            <span>Create RAG AI Expert</span>
+          </Link>
         </div>
-      </div>
 
       <div className={styles.filterBar}>
         <div className={styles.categoryFilters}>

@@ -199,6 +199,8 @@
   position: relative;
   transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 /* Luminous top border for tier cards */
 .tierCard::before {
@@ -323,10 +325,62 @@
   color: var(--text-secondary);
 }
 
+.tierActions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: auto;
+}
+
 .tierBtn {
   width: 100%;
   text-align: center;
   justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 14px rgba(0, 229, 200, 0.2);
+}
+
+.tierBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 229, 200, 0.3);
+}
+
+.tierBtnSecondary {
+  width: 100%;
+  text-align: center;
+  justify-content: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: -0.01em;
+}
+
+.tierBtnSecondary:hover {
+  background: rgba(0, 229, 200, 0.08);
+  border-color: rgba(0, 229, 200, 0.35);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 229, 200, 0.12);
+}
+
+.tierBtnSecondary:active {
+  transform: translateY(0);
 }
 
 .emptyJobs {
@@ -338,6 +392,15 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   color: var(--text-muted);
+}
+
+.emptyJobsActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 /* Models grid */

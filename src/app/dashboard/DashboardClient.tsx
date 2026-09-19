@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
-import { Sparkles, Cpu, Check, ArrowRight } from "lucide-react";
+import { Sparkles, Cpu, Check, ArrowRight, Compass, Globe } from "lucide-react";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Job     = Database["public"]["Tables"]["jobs"]["Row"];
@@ -136,11 +136,18 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
         {/* ── Create Your AI ── */}
         <div className={styles.section}>
-          <div className={styles.sectionIntro}>
-            <h3 className={styles.sectionTitle}>Create Your AI</h3>
-            <p className={styles.sectionSubtitle}>
-              Start free with a RAG AI Expert — upgrade to a Custom AI Model once you&apos;ve built up your content library.
-            </p>
+          <div className={styles.sectionHeader} style={{ marginBottom: 14 }}>
+            <div>
+              <h3 className={styles.sectionTitle}>Create Your AI</h3>
+              <p className={styles.sectionSubtitle} style={{ marginTop: 2 }}>
+                Start free with a RAG AI Expert — or see what others in the community have built.
+              </p>
+            </div>
+            <Link href="/browse" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <Globe size={14} />
+              <span>Explore Marketplace</span>
+              <ArrowRight size={13} />
+            </Link>
           </div>
           <div className={styles.tiersGrid}>
 
@@ -157,10 +164,17 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 <li><Check size={14} className={styles.featureCheck} /> <span>Answers grounded in your text with citations</span></li>
                 <li><Check size={14} className={styles.featureCheck} /> <span>Free to set up (no GPU cost)</span></li>
               </ul>
-              <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
-                <span>Create RAG AI Expert</span>
-                <ArrowRight size={14} />
-              </Link>
+              <div className={styles.tierActions}>
+                <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
+                  <Sparkles size={15} />
+                  <span>Create RAG AI Expert</span>
+                  <ArrowRight size={14} />
+                </Link>
+                <Link href="/browse" className={`btn btn-secondary ${styles.tierBtnSecondary}`}>
+                  <Compass size={15} />
+                  <span>Explore Existing Experts</span>
+                </Link>
+              </div>
             </div>
 
             {/* Custom Model — Training (Coming Soon) */}
@@ -176,16 +190,18 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 <li><Check size={14} className={styles.featureCheck} /> <span>Sounds authentically like you in every response</span></li>
                 <li><Check size={14} className={styles.featureCheck} /> <span>Best for creators with an established content library</span></li>
               </ul>
-              <button
-                className={`btn btn-secondary ${styles.tierBtn}`}
-                disabled
-                style={{ opacity: 0.5, cursor: "not-allowed" }}
-              >
-                Coming Soon
-              </button>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 12, textAlign: "center" }}>
-                We&apos;re working on this · Stay tuned
-              </p>
+              <div className={styles.tierActions}>
+                <button
+                  className={`btn btn-secondary ${styles.tierBtn}`}
+                  disabled
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Coming Soon
+                </button>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "4px 0 0", textAlign: "center" }}>
+                  We&apos;re working on this · Stay tuned
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -215,11 +231,18 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
           {jobs.length === 0 ? (
             <div className={styles.emptyJobs}>
-              <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No jobs yet</p>
-              <p style={{ fontSize: "0.875rem" }}>Create your first RAG AI Expert to get started.</p>
-              <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>
-                Create RAG AI Expert
-              </Link>
+              <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No creations yet</p>
+              <p style={{ fontSize: "0.875rem" }}>Create your first RAG AI Expert or explore what others have built.</p>
+              <div className={styles.emptyJobsActions}>
+                <Link href="/experts/new" className="btn btn-primary btn-sm">
+                  <Sparkles size={14} />
+                  <span>Create RAG AI Expert</span>
+                </Link>
+                <Link href="/browse" className="btn btn-secondary btn-sm">
+                  <Compass size={14} />
+                  <span>Explore Existing Experts</span>
+                </Link>
+              </div>
             </div>
           ) : (
             <div className={styles.jobsList}>
