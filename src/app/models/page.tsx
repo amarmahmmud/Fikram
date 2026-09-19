@@ -281,7 +281,7 @@ export default function ModelsPage() {
                           <span className={styles.authorName}>{item.author.name}</span>
                         </div>
                         <span className={`badge ${item.type === "smart_assistant" ? "badge-indigo" : "badge-blue"}`}>
-                          {item.type === "smart_assistant" ? "Smart Assistant" : "Custom Model"}
+                          {item.type === "smart_assistant" ? "RAG AI Expert" : "Custom Model"}
                         </span>
                       </div>
 

@@ -231,7 +231,7 @@ export default function BrowseModelsPage() {
                   <span className={styles.authorName}>{item.author.name}</span>
                 </div>
                 <span className={item.type === "smart_assistant" ? styles.badgeSmart : styles.badgeCustom}>
-                  {item.type === "smart_assistant" ? "Smart Assistant" : "Custom AI"}
+                  {item.type === "smart_assistant" ? "RAG AI Expert" : "Custom AI"}
                 </span>
               </div>
 

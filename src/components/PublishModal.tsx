@@ -115,7 +115,7 @@ export function PublishModal({
             <div>
               <div className={styles.title}>Publish & Share to Public</div>
               <div className={styles.subtitle}>
-                {type === "expert" ? "Smart Assistant" : "Custom Model"}
+                {type === "expert" ? "RAG AI Expert" : "Custom Model"}
               </div>
             </div>
           </div>

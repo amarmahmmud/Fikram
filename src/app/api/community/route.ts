@@ -92,7 +92,7 @@ export async function GET() {
         const cleanDescription = descText
           .replace(/\[Category:\s*[^\]]+\]/gi, "")
           .replace(/\[Tags:\s*[^\]]+\]/gi, "")
-          .trim() || "Grounded smart assistant with verified knowledge base.";
+          .trim() || "Grounded RAG AI Expert with verified knowledge base.";
 
         dynamicItems.push({
           id: exp.id,
@@ -101,7 +101,7 @@ export async function GET() {
           description: cleanDescription,
           category,
           author: { name: authorName, avatarUrl: profile?.avatar_url || undefined },
-          baseModel: "Smart Assistant (RAG)",
+          baseModel: "RAG AI Expert",
           likesCount: exp.likes_count || 0,
           chatsCount: exp.chats_count || 0,
           publishedAt: exp.created_at,

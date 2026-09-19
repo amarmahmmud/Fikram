@@ -688,7 +688,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                   </span>
                 ) : (
                   <span className={styles.modeBadgeSmart}>
-                    <Scale size={12} /> Smart Assistant
+                    <Scale size={12} /> RAG AI Expert
                   </span>
                 )}
                 {expertMetadata?.webSearchEnabled && (

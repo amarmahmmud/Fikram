@@ -354,7 +354,7 @@ export default function LandingPage() {
               <div className="terminal-dot red" />
               <div className="terminal-dot yellow" />
               <div className="terminal-dot green" />
-              <span className={styles.heroCardTitle}>Smart Assistant — Live Demo</span>
+              <span className={styles.heroCardTitle}>RAG AI Expert — Live Demo</span>
               <span className="badge badge-success" style={{ marginLeft: "auto" }}>
                 <span className="status-dot done" />
                 Ready

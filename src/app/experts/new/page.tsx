@@ -69,7 +69,7 @@ export default function NewExpertPage() {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) {
-        toast.error("Please sign in to create a smart assistant.");
+        toast.error("Please sign in to create a RAG AI Expert.");
         router.push("/auth/signin?redirectTo=/experts/new");
       } else {
         setCheckingAuth(false);
@@ -396,7 +396,7 @@ export default function NewExpertPage() {
   return (
     <>
       <div className="topbar">
-        <span className="topbar-title">Create Smart Assistant</span>
+        <span className="topbar-title">Create RAG AI Expert</span>
         <Link href="/dashboard" className="btn btn-ghost btn-sm">Back to Dashboard</Link>
       </div>
 
@@ -745,7 +745,7 @@ export default function NewExpertPage() {
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--accent-primary)" }}>
               <CheckCircle2 size={44} />
             </div>
-            <h2 className={styles.cardTitle}>Your Smart Assistant is Ready</h2>
+            <h2 className={styles.cardTitle}>Your RAG AI Expert is Ready</h2>
             <p className={styles.cardDesc}>
               <strong>{name}</strong> has been created with <strong>{totalChunks} knowledge chunks</strong> from your content. Start chatting now.
             </p>

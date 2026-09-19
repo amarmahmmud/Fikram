@@ -139,16 +139,16 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           <div className={styles.sectionIntro}>
             <h3 className={styles.sectionTitle}>Create Your AI</h3>
             <p className={styles.sectionSubtitle}>
-              Start free with a Smart Assistant — upgrade to a Custom AI Model once you&apos;ve built up your content library.
+              Start free with a RAG AI Expert — upgrade to a Custom AI Model once you&apos;ve built up your content library.
             </p>
           </div>
           <div className={styles.tiersGrid}>
 
-            {/* Smart Assistant — RAG */}
+            {/* RAG AI Expert */}
             <div className={`${styles.tierCard} ${styles.tierRecommended}`}>
               <div className={styles.tierBadge}>Recommended</div>
               <div className={styles.tierIcon}><Sparkles size={22} /></div>
-              <h3 className={styles.tierTitle}>Smart Assistant</h3>
+              <h3 className={styles.tierTitle}>RAG AI Expert</h3>
               <p className={styles.tierDesc}>
                 Upload your content and get an accurate, citation-backed AI assistant in seconds. No training needed.
               </p>

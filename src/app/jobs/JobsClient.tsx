@@ -217,7 +217,7 @@ function ConfirmModal({
     return () => window.removeEventListener("keydown", handleKey);
   }, [onCancel, loading]);
 
-  const typeLabel = itemType === "job" ? "training job" : "smart assistant";
+  const typeLabel = itemType === "job" ? "training job" : "RAG AI Expert";
 
   return (
     <div className={styles.modalOverlay} onClick={loading ? undefined : onCancel} role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
@@ -265,10 +265,10 @@ function ConfirmModal({
 
 /* ─── Helper: clean description from bracket config tags ─── */
 function cleanDescription(desc: string | null): string {
-  if (!desc) return "Grounded smart assistant with verified knowledge base.";
+  if (!desc) return "Grounded RAG AI Expert with verified knowledge base.";
   return desc
     .replace(/\[(Category|Tags|Mode|WebSearch):[^\]]+\]/gi, "")
-    .trim() || "Grounded smart assistant with verified knowledge base.";
+    .trim() || "Grounded RAG AI Expert with verified knowledge base.";
 }
 
 /* ─── Helper: relative date ─── */
@@ -528,7 +528,7 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
             role="tab"
             aria-selected={activeTab === "experts"}
           >
-            Smart Assistants
+            RAG AI Experts
             <span className={styles.tabCount}>{experts.length}</span>
           </button>
           <button
@@ -650,9 +650,9 @@ export default function JobsClient({ jobs: initialJobs, experts: initialExperts 
               <div className={styles.emptyIcon}>
                 <BotIcon />
               </div>
-              <h3 className={styles.emptyTitle}>No smart assistants yet</h3>
+              <h3 className={styles.emptyTitle}>No RAG AI Experts yet</h3>
               <p className={styles.emptyDesc}>
-                Create your first RAG smart assistant — it answers questions using your uploaded documents as a verified knowledge base.
+                Create your first RAG AI Expert — it answers questions using your uploaded documents as a verified knowledge base.
               </p>
               <Link href="/experts/new" className="btn btn-primary">Create First Assistant</Link>
             </div>

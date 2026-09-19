@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({ ok: true, item: updatedJob, isPublished: Boolean(published) });
     } else if (type === "expert") {
-      // 2. Fetch the smart assistant / expert
+      // 2. Fetch the RAG AI Expert / expert
       const { data: expert, error: fetchErr } = await supabase
         .from("experts")
         .select("*")
