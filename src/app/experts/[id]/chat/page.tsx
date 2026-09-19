@@ -29,6 +29,7 @@ import {
   Settings2,
   ArrowLeft,
   ArrowUp,
+  ArrowDown,
   FileText,
   ShieldCheck,
   Flame,
@@ -209,6 +210,48 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const messagesAreaRef = useRef<HTMLDivElement>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
+  const isInitialLoadRef = useRef(true);
+  const userScrolledUpRef = useRef(false);
+
+  // Lock body/document scrolling while on the chat page (prevents mobile browser address bar jumps & window scroll)
+  useEffect(() => {
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    window.scrollTo(0, 0);
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+    };
+  }, []);
+
+  /** Safely scroll the messages container without scrolling the browser window or top bar */
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    if (!messagesAreaRef.current) return;
+    const container = messagesAreaRef.current;
+    if (behavior === "instant") {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      container.scrollTo({
+        top: container.scrollHeight,
+        behavior: "smooth",
+      });
+    }
+  }, []);
+
+  /** Track user scroll position in the messages container to detect scroll-up intent */
+  const handleMessagesScroll = useCallback(() => {
+    if (!messagesAreaRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = messagesAreaRef.current;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const isScrolledUp = distanceFromBottom > 120;
+    userScrolledUpRef.current = isScrolledUp;
+    setShowScrollBottom(isScrolledUp);
+  }, []);
 
   // Attachments & Mic
   const [pendingAttachment, setPendingAttachment] = useState<{ file: File; previewUrl?: string; mimeType: string } | null>(null);
@@ -290,6 +333,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   /** Select and load a conversation */
   const selectConversation = useCallback(async (convId: string, currentExpert?: any) => {
     setActiveConvId(convId);
+    isInitialLoadRef.current = true;
+    userScrolledUpRef.current = false;
+    setShowScrollBottom(false);
     if (typeof window !== "undefined" && window.innerWidth <= 768) {
       setSidebarOpen(false);
     }
@@ -369,10 +415,28 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     };
   }, [expertId]);
 
-  // Auto-scroll on new messages
+  // Smart auto-scroll: never scrolls the browser window/top bar, keeps welcome message visible on new chat
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+    if (isInitialLoadRef.current) {
+      // First load: if new chat (only welcome message or empty), stay at top so top bar & welcome are fully in view!
+      if (messages.length <= 1) {
+        if (messagesAreaRef.current) {
+          messagesAreaRef.current.scrollTop = 0;
+        }
+        isInitialLoadRef.current = false;
+        return;
+      }
+      // If loading an existing conversation with history, jump instantly to bottom without disorienting animation
+      scrollToBottom("instant");
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    // Subsequent updates: only auto-scroll if user has not scrolled up to read past messages
+    if (!userScrolledUpRef.current || sending) {
+      scrollToBottom("smooth");
+    }
+  }, [messages, sending, scrollToBottom]);
 
   /** Start a new chat */
   function handleNewChat() {
@@ -382,6 +446,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     }
     if (expert) {
       setMessages([getInitialWelcomeMessage(expert)]);
+    }
+    isInitialLoadRef.current = true;
+    userScrolledUpRef.current = false;
+    setShowScrollBottom(false);
+    if (messagesAreaRef.current) {
+      messagesAreaRef.current.scrollTop = 0;
     }
   }
 
@@ -435,6 +505,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         filename: pendingAttachment.file.name,
       };
     }
+    userScrolledUpRef.current = false;
+    setShowScrollBottom(false);
     setMessages((prev) => [...prev, userMessage]);
     setSending(true);
 
@@ -922,7 +994,11 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         </header>
 
         {/* Messages */}
-        <div className={styles.messagesArea}>
+        <div
+          className={styles.messagesArea}
+          ref={messagesAreaRef}
+          onScroll={handleMessagesScroll}
+        >
           {messages.map((msg, i) => (
             <div
               key={i}
@@ -1155,6 +1231,23 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
           <div ref={chatEndRef} />
         </div>
+
+        {/* Floating Scroll to Bottom Button */}
+        {showScrollBottom && (
+          <button
+            type="button"
+            className={styles.scrollToBottomBtn}
+            onClick={() => {
+              userScrolledUpRef.current = false;
+              setShowScrollBottom(false);
+              scrollToBottom("smooth");
+            }}
+            title="Scroll to latest message"
+            aria-label="Scroll to latest message"
+          >
+            <ArrowDown size={18} />
+          </button>
+        )}
 
         {/* Input Area */}
         <div className={styles.inputArea}>
