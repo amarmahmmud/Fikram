@@ -36,6 +36,7 @@ import {
   BotOff,
   Check,
   Share2,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,6 +54,28 @@ interface ConversationItem {
   title: string;
   created_at: string;
   updated_at: string;
+}
+
+function fallbackCopyText(text: string, onSuccess: () => void) {
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const successful = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    if (successful) {
+      onSuccess();
+    } else {
+      toast.error("Failed to copy message");
+    }
+  } catch {
+    toast.error("Failed to copy message");
+  }
 }
 
 export default function ExpertChatPage({ params }: { params: Promise<{ id: string }> }) {
@@ -73,6 +96,35 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [copiedShare, setCopiedShare] = useState(false);
+  const [copiedMessageIndex, setCopiedMessageIndex] = useState<number | null>(null);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
+
+  const handleCopyMessage = useCallback((text: string, index: number) => {
+    if (!text) return;
+
+    const onCopySuccess = () => {
+      setCopiedMessageIndex(index);
+      toast.success("Message copied to clipboard", { duration: 1800 });
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => {
+        setCopiedMessageIndex(null);
+      }, 2000);
+    };
+
+    if (typeof navigator !== "undefined" && navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onCopySuccess).catch(() => {
+        fallbackCopyText(text, onCopySuccess);
+      });
+    } else {
+      fallbackCopyText(text, onCopySuccess);
+    }
+  }, []);
 
   // Session-based custom rules & prompt state (persisted per-user in localStorage)
   const [sessionPrompt, setSessionPrompt] = useState<string | null>(null);
@@ -788,6 +840,40 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 )}
                 <MarkdownContent content={msg.content} />
               </div>
+
+              {/* Message Action Footer (Copy button for sent chat and AI responses) */}
+              {msg.content && msg.content.trim().length > 0 && (
+                <div
+                  className={`${styles.messageFooter} ${
+                    msg.role === "user" ? styles.userFooter : styles.modelFooter
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className={`${styles.copyMessageBtn} ${
+                      copiedMessageIndex === i ? styles.copied : ""
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCopyMessage(msg.content, i);
+                    }}
+                    title={copiedMessageIndex === i ? "Copied!" : "Copy message"}
+                    aria-label={copiedMessageIndex === i ? "Message copied" : "Copy message text"}
+                  >
+                    {copiedMessageIndex === i ? (
+                      <>
+                        <Check size={12} className={styles.copySuccessIcon} />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {/* Collapsible Verified Citations & Live Web Sources */}
               {((msg.sources && msg.sources.length > 0) ||

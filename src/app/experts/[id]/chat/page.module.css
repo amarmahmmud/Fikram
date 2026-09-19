@@ -470,6 +470,83 @@
   max-width: 100%;
 }
 
+/* ──────────────── Message Actions / Copy Button ──────────────── */
+.messageFooter {
+  display: flex;
+  align-items: center;
+  margin-top: 6px;
+  padding-top: 2px;
+}
+
+.userFooter {
+  justify-content: flex-end;
+}
+
+.modelFooter {
+  justify-content: flex-start;
+}
+
+.copyMessageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  line-height: 1.2;
+}
+
+.userBubble .copyMessageBtn {
+  border-color: rgba(0, 229, 200, 0.15);
+  background: rgba(0, 229, 200, 0.04);
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.messageBubble:hover .copyMessageBtn,
+.copyMessageBtn:focus-visible,
+.copyMessageBtn.copied {
+  opacity: 1;
+}
+
+.copyMessageBtn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.userBubble .copyMessageBtn:hover {
+  background: rgba(0, 229, 200, 0.12);
+  border-color: rgba(0, 229, 200, 0.35);
+  color: #fff;
+}
+
+.copyMessageBtn.copied,
+.userBubble .copyMessageBtn.copied {
+  background: rgba(0, 229, 200, 0.12);
+  border-color: rgba(0, 229, 200, 0.4);
+  color: var(--accent-primary);
+  opacity: 1;
+}
+
+.copySuccessIcon {
+  color: var(--accent-primary);
+  animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes popIn {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
 /* ──────────────── Collapsible Citations & Web Drawer ──────────────── */
 .sourcesAccordion {
   margin-top: 14px;
@@ -1104,6 +1181,12 @@
     max-width: 88%;
     align-self: flex-end;
     border-radius: 14px;
+  }
+
+  .copyMessageBtn {
+    opacity: 0.75;
+    padding: 4px 8px;
+    font-size: 0.72rem;
   }
 
   .sourcesGrid {
