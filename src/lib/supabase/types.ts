@@ -254,6 +254,10 @@ export interface Database {
           section_title: string | null;
           section_tier: string | null;
           section_index: number | null;
+          page_number: number | null;
+          doc_type: string | null;
+          media_url: string | null;
+          timestamp_range: string | null;
           created_at: string;
         };
         Insert: {
@@ -266,6 +270,10 @@ export interface Database {
           section_title?: string | null;
           section_tier?: string | null;
           section_index?: number | null;
+          page_number?: number | null;
+          doc_type?: string | null;
+          media_url?: string | null;
+          timestamp_range?: string | null;
           created_at?: string;
         };
         Update: {
@@ -278,6 +286,10 @@ export interface Database {
           section_title?: string | null;
           section_tier?: string | null;
           section_index?: number | null;
+          page_number?: number | null;
+          doc_type?: string | null;
+          media_url?: string | null;
+          timestamp_range?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -372,6 +384,8 @@ export interface Database {
           target_expert_id: string;
           match_count?: number;
           match_threshold?: number;
+          query_text?: string;
+          rrf_k?: number;
         };
         Returns: {
           id: string;
@@ -381,6 +395,11 @@ export interface Database {
           similarity: number;
           section_title: string | null;
           section_tier: string | null;
+          page_number: number | null;
+          doc_type: string | null;
+          media_url: string | null;
+          timestamp_range: string | null;
+          rrf_score?: number | null;
         }[];
       };
       increment_expert_likes: {

@@ -247,8 +247,11 @@ export async function POST(
 
     console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars, type: ${mediaCategory}, provider: ${usedProvider})`);
 
-    // Chunk, embed, and store
-    const result = await ingestDocument(expertId, text, filename);
+    // Chunk, embed, and store with rich metadata
+    const result = await ingestDocument(expertId, text, filename, {
+      docType: mediaCategory,
+      mediaUrl: url || undefined,
+    });
 
     return NextResponse.json({
       ok: true,

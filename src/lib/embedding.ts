@@ -184,11 +184,15 @@ export async function describeMediaWithGemini({
   if (isPdf) {
     prompt = `Extract ALL text content from this PDF document verbatim. `;
     prompt += `Preserve the document's structure: headings, paragraphs, lists, tables, and any visible text. `;
+    prompt += `For each page, output a delimiter on its own line exactly like '--- [Page X] ---' before that page's text (where X is 1, 2, 3...). `;
     prompt += `If the PDF contains scanned/image pages, use OCR to extract the text. `;
     prompt += `Output the full extracted text as a clean, structured document. Do NOT summarize or paraphrase — extract the actual content.`;
   } else {
     prompt = `Describe the contents of this ${isVideo ? "video" : isAudio ? "audio" : "image"} in high detail. `;
     prompt += `Include all spoken words, visible text (OCR), key subjects, and important events. `;
+    if (isVideo || isAudio) {
+      prompt += `Include approximate timestamp ranges in brackets, e.g. [00:15 - 00:45] or [01:20], at the beginning of each topic, section, or speaker turn. `;
+    }
     prompt += `Format the output as a clear, structured document that can be used for a knowledge base.`;
   }
 
@@ -358,6 +362,44 @@ export interface SectionChunk {
   sectionTier: "primary" | "secondary"; // primary = numbered major section, secondary = catch-all/bulleted
   sectionIndex: number;   // order of the section in the doc
   chunkIndexInSection: number;
+  pageNumber?: number | null;
+  docType?: string | null;
+  mediaUrl?: string | null;
+  timestampRange?: string | null;
+}
+
+export interface IngestMetadata {
+  docType?: string;
+  mediaUrl?: string;
+  pageNumber?: number;
+  timestampRange?: string;
+}
+
+export function inferDocType(filename: string): string {
+  const ext = filename.toLowerCase().split(".").pop() || "";
+  switch (ext) {
+    case "pdf": return "pdf";
+    case "png":
+    case "jpg":
+    case "jpeg":
+    case "webp":
+    case "gif":
+    case "heic":
+    case "heif": return "image";
+    case "mp3":
+    case "wav":
+    case "m4a":
+    case "ogg":
+    case "aac":
+    case "flac": return "audio";
+    case "mp4":
+    case "webm":
+    case "mov": return "video";
+    case "md": return "markdown";
+    case "csv": return "csv";
+    case "json": return "json";
+    default: return "text";
+  }
 }
 
 /**
@@ -374,24 +416,26 @@ function splitIntoSections(text: string): {
   title: string;
   tier: "primary" | "secondary";
   body: string;
+  startPage?: number | null;
 }[] {
   const lines = text.split("\n");
 
-  // Headers that mark the start of a "secondary" (catch-all / minor) block,
-  // even though they aren't numbered like the primary sections.
   const SECONDARY_HEADER_RE =
     /^(?:\d+\.\s+)?(additional notable advances|other science highlights|notes for|disclaimer)/i;
   const PRIMARY_HEADER_RE = /^\d+\.\s+\S/;
+  const PAGE_LINE_RE = /^---\s*\[Page\s*(\d+)\]\s*---$/i;
 
-  const sections: { title: string; tier: "primary" | "secondary"; body: string }[] = [];
+  const sections: { title: string; tier: "primary" | "secondary"; body: string; startPage?: number | null }[] = [];
   let currentTitle = "Preamble";
   let currentTier: "primary" | "secondary" = "primary";
+  let currentActivePage: number | null = null;
+  let currentSectionStartPage: number | null = null;
   let buffer: string[] = [];
 
   const flush = () => {
     const body = buffer.join("\n").trim();
     if (body.length > 0) {
-      sections.push({ title: currentTitle, tier: currentTier, body });
+      sections.push({ title: currentTitle, tier: currentTier, body, startPage: currentSectionStartPage });
     }
     buffer = [];
   };
@@ -399,10 +443,20 @@ function splitIntoSections(text: string): {
   for (const line of lines) {
     const trimmed = line.trim();
 
+    const pageMatch = trimmed.match(PAGE_LINE_RE);
+    if (pageMatch) {
+      currentActivePage = parseInt(pageMatch[1], 10);
+      if (currentSectionStartPage === null) {
+        currentSectionStartPage = currentActivePage;
+      }
+      continue;
+    }
+
     if (SECONDARY_HEADER_RE.test(trimmed)) {
       flush();
       currentTitle = trimmed;
       currentTier = "secondary";
+      currentSectionStartPage = currentActivePage;
       continue;
     }
 
@@ -410,6 +464,7 @@ function splitIntoSections(text: string): {
       flush();
       currentTitle = trimmed;
       currentTier = "primary";
+      currentSectionStartPage = currentActivePage;
       continue;
     }
 
@@ -417,10 +472,8 @@ function splitIntoSections(text: string): {
   }
   flush();
 
-  // If nothing matched (no numbered headers at all), treat the whole
-  // document as one primary section rather than losing content.
   if (sections.length === 0) {
-    return [{ title: "Document", tier: "primary", body: text.trim() }];
+    return [{ title: "Document", tier: "primary", body: text.trim(), startPage: currentSectionStartPage ?? currentActivePage }];
   }
 
   return sections;
@@ -491,24 +544,45 @@ function splitSectionBody(body: string, targetChunkSize = CHUNK_SIZE): string[] 
  * Uses adaptive chunk sizing so large documents (e.g. 50+ page PDFs) stay within
  * a safe chunk count (~30 chunks), preventing free-tier quota exhaustion.
  */
-export function chunkForRetrieval(text: string): SectionChunk[] {
+export function chunkForRetrieval(text: string, metadata?: IngestMetadata): SectionChunk[] {
   // Adaptive chunk size: If document is large, scale chunk size up so total chunk count
   // remains manageable (under 30 chunks) and completes well within serverless timeouts.
   const MAX_TARGET_CHUNKS = 30;
   const targetChunkSize = Math.max(CHUNK_SIZE, Math.min(8000, Math.ceil(text.length / MAX_TARGET_CHUNKS)));
 
+  const PAGE_MARKER_RE = /---\s*\[Page\s*(\d+)\]\s*---/i;
+  const TIMESTAMP_RE = /\[(\d{1,2}:\d{2}(?::\d{2})?(?:\s*-\s*\d{1,2}:\d{2}(?::\d{2})?)?)\]/;
+
+  let activePage: number | null = metadata?.pageNumber ?? null;
+
   const sections = splitIntoSections(text);
   const result: SectionChunk[] = [];
 
   sections.forEach((section, sectionIndex) => {
+    if (section.startPage != null) {
+      activePage = section.startPage;
+    }
+
     const subChunks = splitSectionBody(section.body, targetChunkSize);
     subChunks.forEach((content, chunkIndexInSection) => {
+      const pageMatch = content.match(PAGE_MARKER_RE);
+      if (pageMatch) {
+        activePage = parseInt(pageMatch[1], 10);
+      }
+
+      const timeMatch = content.match(TIMESTAMP_RE);
+      const timestampRange = timeMatch ? timeMatch[1] : (metadata?.timestampRange ?? null);
+
       result.push({
         content,
         sectionTitle: section.title,
         sectionTier: section.tier,
         sectionIndex,
         chunkIndexInSection,
+        pageNumber: activePage,
+        docType: metadata?.docType ?? null,
+        mediaUrl: metadata?.mediaUrl ?? null,
+        timestampRange,
       });
     });
   });
@@ -520,28 +594,23 @@ export function chunkForRetrieval(text: string): SectionChunk[] {
 
 /**
  * Chunk a document, embed each chunk, and store in Supabase — now with
- * section_title / section_tier / section_index columns so retrieval and
- * generation can reason about document structure, not just raw similarity.
- *
- * NOTE: requires the `expert_chunks` table to have `section_title` (text),
- * `section_tier` (text), and `section_index` (int) columns. Existing rows
- * without these columns will still work; add the columns via migration:
- *   ALTER TABLE expert_chunks
- *     ADD COLUMN section_title text,
- *     ADD COLUMN section_tier text,
- *     ADD COLUMN section_index int;
+ * section_title / section_tier / section_index, page_number, doc_type,
+ * media_url, and timestamp_range columns so retrieval and generation
+ * have rich source grounding.
  */
 export async function ingestDocument(
   expertId: string,
   text: string,
   filename: string,
+  metadata?: IngestMetadata,
 ): Promise<{ chunksStored: number }> {
   const supabase = await createClient();
-  const chunks = chunkForRetrieval(text);
+  const effectiveDocType = metadata?.docType || inferDocType(filename);
+  const chunks = chunkForRetrieval(text, { ...metadata, docType: effectiveDocType });
 
   console.log(
     `[RAG] Chunked "${filename}" into ${chunks.length} section-aware pieces ` +
-    `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections)`,
+    `(${new Set(chunks.map((c) => c.sectionTitle)).size} sections, type: ${effectiveDocType})`,
   );
 
   const embeddings = await embedTexts(chunks.map((c) => c.content));
@@ -566,6 +635,10 @@ export async function ingestDocument(
     section_title: chunk.sectionTitle,
     section_tier: chunk.sectionTier,
     section_index: chunk.sectionIndex,
+    page_number: chunk.pageNumber ?? metadata?.pageNumber ?? null,
+    doc_type: chunk.docType ?? effectiveDocType,
+    media_url: chunk.mediaUrl ?? metadata?.mediaUrl ?? null,
+    timestamp_range: chunk.timestampRange ?? metadata?.timestampRange ?? null,
   }));
 
   const BATCH_SIZE = 50;
@@ -585,32 +658,94 @@ export async function ingestDocument(
 // ── Retrieve ─────────────────────────────────────────────────────────────────
 
 export interface RetrievedChunk {
+  id?: string;
   content: string;
   source_filename: string;
   chunk_index: number;
   similarity: number;
   section_title?: string;
   section_tier?: "primary" | "secondary";
+  page_number?: number | null;
+  doc_type?: string | null;
+  media_url?: string | null;
+  timestamp_range?: string | null;
+  rrf_score?: number | null;
+}
+
+/**
+ * One-shot query expansion via Groq.
+ * Rewrites the user query into 2-3 search variants:
+ * 1. Original user query.
+ * 2. Cross-lingual translation (if non-English) or domain synonym expansion.
+ * 3. Dense keyword query for Postgres full-text search.
+ */
+export async function expandQueryWithGroq(query: string): Promise<string[]> {
+  const cleanQuery = query.trim();
+  if (!cleanQuery) return [query];
+
+  const groqKeys = getGroqApiKeys();
+  if (groqKeys.length === 0) return [cleanQuery];
+
+  const systemInstruction = `You are a search query expansion expert for a hybrid (pgvector cosine + Postgres FTS) knowledge retrieval engine.
+Given the user's query, output 2 to 3 distinct search query variants to maximize retrieval recall against an internal knowledge base.
+
+Rules:
+1. Variant 1: Keep the user's original query or core intent.
+2. Variant 2 (Cross-Lingual): If the query is NOT in English (e.g. Arabic, Spanish, French, Amharic), provide a precise English translation. If the query is ALREADY in English, provide an alternative phrasing focusing on technical terminology and domain synonyms.
+3. Variant 3: A concise keyword-dense query suitable for exact keyword/full-text search.
+
+Return strictly a JSON object with this format (no markdown, no other keys):
+{"variants": ["variant 1", "variant 2", "variant 3"]}`;
+
+  try {
+    const groqClient = getGroqClient();
+    const completion = await groqClient.chat.completions.create({
+      messages: [
+        { role: "system", content: systemInstruction },
+        { role: "user", content: `Query: "${cleanQuery}"` },
+      ],
+      model: "openai/gpt-oss-120b",
+      temperature: 0.1,
+      max_completion_tokens: 512,
+    });
+
+    const raw = completion.choices[0]?.message?.content?.trim() || "";
+    let jsonStr = raw;
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
+    }
+    const parsed = JSON.parse(jsonStr);
+    if (Array.isArray(parsed.variants) && parsed.variants.length > 0) {
+      const set = new Set<string>();
+      set.add(cleanQuery);
+      for (const v of parsed.variants) {
+        if (typeof v === "string" && v.trim().length > 0) {
+          set.add(v.trim());
+        }
+      }
+      const variants = Array.from(set).slice(0, 3);
+      console.log(`[RAG] Groq expanded query into ${variants.length} search variants:`, variants);
+      return variants;
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.warn(`[RAG] Groq query expansion warning (${errorMsg}), falling back to single query.`);
+  }
+
+  return [cleanQuery];
 }
 
 /**
  * Heuristic: broad/summarization-style queries need more chunks to reach
  * full coverage across sections than narrow factual lookups do.
- * Keeps the fix simple (no extra LLM call) while fixing the top-5-starves-
- * coverage problem that caused the "summarize the five breakthroughs" miss.
  */
 function adaptiveTopK(query: string, mode?: string): number {
-  // Evaluative mode always needs broad cross-document coverage
-  // (rubric + market sizing + competitor graveyard) regardless of query phrasing
   if (mode === "evaluative") return 10;
 
   const BROAD_QUERY_RE =
     /\b(summariz|summary|all|every|each|list|overview|entire|complete|full report)\b/i;
 
-  // Questions that assert a specific count ("two", "3", "the five", "how many")
-  // need MORE chunks, not fewer — the model can only catch a mismatched count
-  // if it actually sees every matching item, not just enough to fill the
-  // asserted number.
   const COUNT_ASSERTION_RE =
     /\b(how many|which (two|three|four|five|\d+)|name (two|three|four|five|\d+)|the (two|three|four|five|\d+))\b/i;
 
@@ -621,9 +756,8 @@ function adaptiveTopK(query: string, mode?: string): number {
 }
 
 /**
- * Retrieve the top-K most relevant chunks for a query from an expert's
- * knowledge base. topK now adapts to query breadth by default, but can
- * still be overridden explicitly.
+ * Retrieve the top-K most relevant chunks using parallel multi-query hybrid search
+ * (pgvector + Postgres full-text search) combined with Reciprocal Rank Fusion (RRF).
  */
 export async function retrieveChunks(
   query: string,
@@ -635,50 +769,82 @@ export async function retrieveChunks(
   const supabase = await createClient();
   const resolvedTopK = topK ?? adaptiveTopK(query, mode);
 
-  const queryEmbedding = await embedText(query);
+  // 1. One-shot query expansion via Groq (2-3 variants, including translation)
+  const variants = await expandQueryWithGroq(query);
 
-  const { data, error } = await supabase.rpc("match_expert_chunks", {
-    query_embedding: `[${queryEmbedding.join(",")}]`,
-    target_expert_id: expertId,
-    match_count: resolvedTopK,
-    match_threshold: matchThreshold,
+  // 2. Embed all query variants in parallel
+  const embeddings = await embedTexts(variants);
+
+  // 3. Execute hybrid search RPC in parallel for all variants
+  const searchPromises = variants.map(async (variant, i) => {
+    const emb = embeddings[i];
+    if (!emb || emb.length === 0) return [];
+
+    const { data, error } = await supabase.rpc("match_expert_chunks", {
+      query_embedding: `[${emb.join(",")}]`,
+      target_expert_id: expertId,
+      match_count: resolvedTopK,
+      match_threshold: matchThreshold,
+      query_text: variant,
+      rrf_k: 60,
+    });
+
+    if (error) {
+      console.warn(`[RAG] Hybrid retrieval error for variant "${variant}":`, error.message);
+      return [];
+    }
+
+    return ((data || []) as unknown) as RetrievedChunk[];
   });
 
-  if (error) {
-    console.error("[RAG] Retrieval error:", error);
-    throw new Error(`Retrieval failed: ${error.message}`);
-  }
+  const allVariantResults = await Promise.all(searchPromises);
 
-  let rows = data || [];
+  // 4. Merge and deduplicate using Reciprocal Rank Fusion across all variants
+  const RRF_K = 60;
+  const chunkMap = new Map<string, RetrievedChunk & { combinedRrf: number }>();
 
-  if (rows.length > 0 && rows[0].section_tier === undefined) {
-    // The RPC might not return the new columns. Fallback to fetching them by ID.
-    const ids = rows.map((r: any) => r.id).filter(Boolean);
-    if (ids.length > 0) {
-      const { data: chunksData } = await supabase
-        .from("expert_chunks")
-        .select("id, section_title, section_tier")
-        .in("id", ids);
+  allVariantResults.forEach((results) => {
+    results.forEach((row: RetrievedChunk, rankIdx: number) => {
+      const key = row.id || `${row.source_filename}_${row.chunk_index}`;
+      const rank = rankIdx + 1;
+      const rrfContribution = 1.0 / (RRF_K + rank);
 
-      if (chunksData) {
-        const chunksMap = new Map(chunksData.map((c) => [c.id, c]));
-        rows = rows.map((r: any) => ({
-          ...r,
-          section_title: chunksMap.get(r.id)?.section_title,
-          section_tier: chunksMap.get(r.id)?.section_tier,
-        }));
+      const existing = chunkMap.get(key);
+      if (existing) {
+        existing.combinedRrf += rrfContribution;
+        if ((row.similarity ?? 0) > (existing.similarity ?? 0)) {
+          existing.similarity = row.similarity;
+        }
+        if (!existing.page_number && row.page_number) existing.page_number = row.page_number;
+        if (!existing.doc_type && row.doc_type) existing.doc_type = row.doc_type;
+        if (!existing.media_url && row.media_url) existing.media_url = row.media_url;
+        if (!existing.timestamp_range && row.timestamp_range) existing.timestamp_range = row.timestamp_range;
+      } else {
+        chunkMap.set(key, {
+          id: row.id,
+          content: row.content,
+          source_filename: row.source_filename,
+          chunk_index: row.chunk_index,
+          similarity: row.similarity ?? 0,
+          section_title: row.section_title,
+          section_tier: row.section_tier,
+          page_number: row.page_number,
+          doc_type: row.doc_type,
+          media_url: row.media_url,
+          timestamp_range: row.timestamp_range,
+          rrf_score: row.rrf_score ?? rrfContribution,
+          combinedRrf: rrfContribution,
+        });
       }
-    }
-  }
+    });
+  });
 
-  return rows.map((row: any) => ({
-    content: row.content,
-    source_filename: row.source_filename,
-    chunk_index: row.chunk_index,
-    similarity: row.similarity,
-    section_title: row.section_title,
-    section_tier: row.section_tier,
-  }));
+  // Sort by combined RRF score descending and take top-K
+  const mergedChunks = Array.from(chunkMap.values())
+    .sort((a, b) => b.combinedRrf - a.combinedRrf)
+    .slice(0, resolvedTopK);
+
+  return mergedChunks;
 }
 
 // ── Generate (retrieve + prompt + answer) ────────────────────────────────────
@@ -716,6 +882,11 @@ export interface RAGResponse {
     similarity: number;
     sectionTitle?: string;
     sectionTier?: string;
+    pageNumber?: number | null;
+    docType?: string | null;
+    mediaUrl?: string | null;
+    timestampRange?: string | null;
+    rrfScore?: number | null;
   }[];
   webSources?: WebSearchResult[];
 }
@@ -839,13 +1010,12 @@ export async function generateRAGResponse(
     chunks.length > 0
       ? chunks
         .map((c, i) => {
-          const tierLabel = c.section_tier
-            ? ` | tier: ${c.section_tier}`
-            : "";
-          const sectionLabel = c.section_title
-            ? ` | section: "${c.section_title}"`
-            : "";
-          return `[Source ${i + 1} — ${c.source_filename}${sectionLabel}${tierLabel}]:\n${c.content}`;
+          const typeLabel = c.doc_type ? ` | type: ${c.doc_type}` : "";
+          const pageLabel = c.page_number ? ` | page: ${c.page_number}` : "";
+          const timeLabel = c.timestamp_range ? ` | time: ${c.timestamp_range}` : "";
+          const sectionLabel = c.section_title ? ` | section: "${c.section_title}"` : "";
+          const tierLabel = c.section_tier ? ` | tier: ${c.section_tier}` : "";
+          return `[Source ${i + 1} — ${c.source_filename}${typeLabel}${pageLabel}${timeLabel}${sectionLabel}${tierLabel}]:\n${c.content}`;
         })
         .join("\n\n")
       : "No relevant documents found in the internal knowledge base.";
@@ -1178,6 +1348,11 @@ ${finalGroundingBlock}`;
       similarity: c.similarity,
       sectionTitle: c.section_title,
       sectionTier: c.section_tier,
+      pageNumber: c.page_number,
+      docType: c.doc_type,
+      mediaUrl: c.media_url,
+      timestampRange: c.timestamp_range,
+      rrfScore: c.rrf_score,
     })),
     webSources: webResults,
   };

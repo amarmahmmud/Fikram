@@ -60,14 +60,13 @@ async function callDocumentAI(
   endpoint: string,
   pages?: number[]
 ): Promise<string> {
-  const body: any = {
+  const body: Record<string, unknown> = {
     rawDocument: {
       content: pdfBase64,
       mimeType: "application/pdf",
     },
-    // "imageless mode" — only return text, skip page image rendering.
-    // This doubles the per-request page limit (15 → 30) and is faster.
-    fieldMask: "text",
+    // Include page layout and text anchors to attribute text to exact page numbers
+    fieldMask: "text,pages.pageNumber,pages.layout.textAnchor",
   };
 
   if (pages) {
@@ -91,7 +90,43 @@ async function callDocumentAI(
   }
 
   const result = await response.json();
-  return result.document?.text || "";
+  const doc = result.document;
+  if (!doc?.text) return "";
+
+  const fullText = doc.text as string;
+  const docPages = doc.pages;
+
+  if (!Array.isArray(docPages) || docPages.length === 0) {
+    if (pages && pages.length === 1) {
+      return `--- [Page ${pages[0]}] ---\n${fullText}`;
+    }
+    return fullText;
+  }
+
+  const pageTexts: string[] = [];
+  for (let i = 0; i < docPages.length; i++) {
+    const p = docPages[i];
+    const pageNum = p.pageNumber || (pages && pages[i] ? pages[i] : i + 1);
+    const segments = p.layout?.textAnchor?.textSegments || [];
+    let pageText = "";
+
+    if (segments.length > 0) {
+      for (const seg of segments) {
+        const start = parseInt(seg.startIndex || "0", 10);
+        const end = parseInt(seg.endIndex || String(fullText.length), 10);
+        pageText += fullText.slice(start, end);
+      }
+    } else {
+      pageText = fullText;
+    }
+
+    const trimmed = pageText.trim();
+    if (trimmed.length > 0) {
+      pageTexts.push(`--- [Page ${pageNum}] ---\n${trimmed}`);
+    }
+  }
+
+  return pageTexts.length > 0 ? pageTexts.join("\n\n") : fullText;
 }
 
 /**
