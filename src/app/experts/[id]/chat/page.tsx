@@ -113,6 +113,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     togglePlayMessage,
     stopCurrentPlayback,
     cyclePlaybackRate,
+    primeAudio,
   } = useTextToSpeech();
 
   // Auto-voice response state (Option A: first reply in each conversation auto-plays; persisted in localStorage)
@@ -410,6 +411,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     const userMsg = input.trim();
     setInput("");
 
+    // Determine if this is the very first user interaction in this chat
+    const isFirstUserMessage = messages.filter((m) => m.role === "user").length === 0;
+
+    // Synchronously prime the HTML5 audio element under the user's click/keypress gesture
+    if (autoVoiceEnabled && isFirstUserMessage) {
+      primeAudio();
+    }
+
     // Build user message with optional attachment preview
     const userMessage: Message = { role: "user", content: userMsg };
     if (pendingAttachment) {
@@ -489,13 +498,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           webSources: data.webSources,
         };
 
-        const prevModelCount = messages.filter((m) => m.role === "model").length;
         const newModelIndex = messages.length + 1;
 
         setMessages((prev) => [...prev, newModelMsg]);
 
-        // Option A: Auto-play voice on the first assistant response in this conversation
-        if (prevModelCount === 0 && autoVoiceEnabled && data.reply) {
+        // Option A: Auto-play voice on the very first assistant response in this conversation
+        if (isFirstUserMessage && autoVoiceEnabled && data.reply) {
           togglePlayMessage(data.reply, newModelIndex);
 
           // Discovery toast with 1-click turn-off action

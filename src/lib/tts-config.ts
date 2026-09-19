@@ -40,7 +40,7 @@ export const SUPPORTED_TTS_LANGUAGES: Record<string, TTSLanguageConfig> = {
   "en-US": {
     languageCode: "en-US",
     languageName: "English (US)",
-    defaultVoice: "en-US-Journey-F",
+    defaultVoice: "en-US-Neural2-F",
     isPreview: false,
   },
   "am-ET": {
