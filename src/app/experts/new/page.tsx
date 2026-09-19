@@ -642,10 +642,7 @@ export default function NewExpertPage() {
           <div className={styles.card}>
             <h2 className={styles.cardTitle}>Create Your Expert Profile</h2>
             <p className={styles.cardDesc}>
-              Define who your AI expert is. This shapes how it talks and presents itself to users. Need inspiration?{" "}
-              <Link href="/browse" style={{ color: "var(--accent-primary)", textDecoration: "underline", display: "inline-flex", alignItems: "center", gap: 3 }}>
-                See what other creators built
-              </Link>
+              Define who your AI expert is. This shapes how it communicates and presents itself to users.
             </p>
 
             <div className={styles.field}>
@@ -681,7 +678,7 @@ export default function NewExpertPage() {
                     <span>Strict Grounding</span>
                   </div>
                   <div className={styles.modeDesc}>
-                    Answers strictly with words from your documents. Refuses if not in text. Best for HR, Legal, Compliance.
+                    Answers strictly from your uploaded files with exact citations.
                   </div>
                 </div>
 
@@ -694,7 +691,7 @@ export default function NewExpertPage() {
                     <span>Critical Thinker</span>
                   </div>
                   <div className={styles.modeDesc}>
-                    Uses documents as rubrics &amp; benchmarks. Evaluates new ideas using logic, economics, and sharp wit. Best for Roasts &amp; Audits.
+                    Uses your documents as benchmarks to evaluate ideas with critical analysis.
                   </div>
                 </div>
 
@@ -707,7 +704,7 @@ export default function NewExpertPage() {
                     <span>Balanced Hybrid</span>
                   </div>
                   <div className={styles.modeDesc}>
-                    Grounded in your files as primary foundation, but freely explains and extrapolates with world knowledge.
+                    Combines your files with general knowledge for broader conversational context.
                   </div>
                 </div>
               </div>
@@ -970,17 +967,17 @@ export default function NewExpertPage() {
               <span className={styles.alignmentHeaderBadgeDot} />
               <span>Pre-Indexing Alignment</span>
             </div>
-            <h2 className={styles.cardTitle}>Knowledge &amp; Goal Alignment</h2>
+            <h2 className={styles.cardTitle}>Goal Alignment</h2>
             <p className={styles.cardDesc}>
-              Establish operational guardrails, target persona, and grounding boundaries tailored to your uploaded documents before vectorizing.
+              Set the purpose, target audience, and response boundaries for your AI expert.
             </p>
 
             {loadingQuestions ? (
               <div className={styles.alignmentLoadingBox}>
                 <div className={styles.alignmentLoadingSpinner} />
-                <div className={styles.alignmentLoadingTitle}>Analyzing document context &amp; topics...</div>
+                <div className={styles.alignmentLoadingTitle}>Analyzing uploaded documents...</div>
                 <div className={styles.alignmentLoadingDesc}>
-                  Synthesizing source structure to formulate grounding rules and persona boundaries.
+                  Preparing alignment questions based on your content.
                 </div>
               </div>
             ) : (
@@ -1003,10 +1000,11 @@ export default function NewExpertPage() {
                             )}
                             <span>{q.categoryLabel}</span>
                           </div>
+                          <span className={styles.alignmentStepIndicator}>Step 3 of 4</span>
                         </div>
 
-                        <div className={styles.alignmentQuestionTitle}>{q.question}</div>
-                        <div className={styles.alignmentQuestionSubtitle}>{q.description}</div>
+                        <h4 className={styles.alignmentQuestionTitle}>{q.question}</h4>
+                        <p className={styles.alignmentQuestionSubtitle}>{q.description}</p>
 
                         <div className={styles.alignmentOptionsGrid}>
                           {q.options.map((opt) => {
@@ -1022,12 +1020,12 @@ export default function NewExpertPage() {
                                 }}
                               >
                                 <div className={styles.alignmentOptionHeader}>
-                                  <div className={`${styles.alignmentRadio} ${isSelected ? styles.alignmentRadioActive : ""}`}>
-                                    {isSelected && <div className={styles.alignmentRadioDot} />}
+                                  <div className={styles.alignmentRadioCircle}>
+                                    {isSelected && <div className={styles.alignmentRadioInner} />}
                                   </div>
                                   <span className={styles.alignmentOptionLabel}>{opt.label}</span>
                                 </div>
-                                <div className={styles.alignmentOptionDesc}>{opt.description}</div>
+                                <p className={styles.alignmentOptionDesc}>{opt.description}</p>
                               </div>
                             );
                           })}
@@ -1134,7 +1132,7 @@ export default function NewExpertPage() {
                       disabled={ingesting || files.length === 0}
                       style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                     >
-                      <span>{ingesting ? "Vectorizing..." : "Confirm Alignment & Ingest"}</span>
+                      <span>{ingesting ? "Indexing..." : "Confirm & Build Expert"}</span>
                       {!ingesting && <ArrowRight size={14} />}
                     </button>
                   </div>
@@ -1152,7 +1150,7 @@ export default function NewExpertPage() {
             </div>
             <h2 className={styles.cardTitle}>Your RAG AI Expert is Ready</h2>
             <p className={styles.cardDesc}>
-              <strong>{name}</strong> has been indexed with <strong>{totalChunks} knowledge chunks</strong> and aligned with your operational directives.
+              <strong>{name}</strong> is ready with <strong>{totalChunks} indexed knowledge chunks</strong>.
             </p>
 
             <div className={styles.summaryPills}>

@@ -71,8 +71,7 @@ export default function NewJobPage() {
           </h1>
 
           <p className={styles.subtitle}>
-            We are engineering high-throughput GPU training pipelines powered by NVIDIA A10G clusters.
-            Soon, you&apos;ll be able to fine-tune open-source foundation models with LoRA and QLoRA on your own datasets.
+            Soon, you&apos;ll be able to fine-tune foundation models on your own datasets to capture your unique voice and domain expertise.
           </p>
 
           {/* Highlights Grid */}
@@ -82,8 +81,8 @@ export default function NewJobPage() {
                 <Cpu size={20} />
               </div>
               <div className={styles.highlightContent}>
-                <h4>LoRA & QLoRA Tuning</h4>
-                <p>Train lightweight adapter weights that capture your exact style without high compute overhead.</p>
+                <h4>Efficient Fine-Tuning</h4>
+                <p>Adapt models to your voice without heavy infrastructure or compute overhead.</p>
               </div>
             </div>
 
@@ -92,8 +91,8 @@ export default function NewJobPage() {
                 <Zap size={20} />
               </div>
               <div className={styles.highlightContent}>
-                <h4>500+ Base LLMs</h4>
-                <p>Select directly from HuggingFace or our curated verified models (Llama 3, Mistral, Qwen).</p>
+                <h4>Top Open-Source LLMs</h4>
+                <p>Choose from leading foundation models like Llama 3, Mistral, and Qwen.</p>
               </div>
             </div>
 
@@ -102,8 +101,8 @@ export default function NewJobPage() {
                 <BarChart3 size={20} />
               </div>
               <div className={styles.highlightContent}>
-                <h4>Live Telemetry</h4>
-                <p>Real-time training loss graphs, perplexity metrics, and epoch checkpoints in your browser.</p>
+                <h4>Real-Time Progress</h4>
+                <p>Track training loss, metrics, and checkpoints live in your browser.</p>
               </div>
             </div>
 
@@ -112,8 +111,8 @@ export default function NewJobPage() {
                 <ShieldCheck size={20} />
               </div>
               <div className={styles.highlightContent}>
-                <h4>Private Weights</h4>
-                <p>Your trained model weights are encrypted, isolated to your account, and instantly exportable.</p>
+                <h4>Private & Secure</h4>
+                <p>Your data and trained weights remain encrypted and isolated to your account.</p>
               </div>
             </div>
           </div>
@@ -147,8 +146,7 @@ export default function NewJobPage() {
                 <strong>Ready Today: RAG AI Experts</strong>
               </div>
               <p>
-                Don&apos;t wait for training. You can turn your documents, PDFs, audio, and videos into an interactive,
-                citation-backed AI expert in 30 seconds.
+                Upload your files and get an accurate, citation-backed AI expert in seconds.
               </p>
             </div>
             <div className={styles.calloutActions}>

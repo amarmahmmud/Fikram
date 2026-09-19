@@ -129,7 +129,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 {credits} credits
               </strong>{" "}
               remaining.
-              {jobs.length === 0 ? " Create your first RAG AI Expert to get started." : ""}
             </p>
           </div>
         </div>
@@ -140,7 +139,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
             <div>
               <h3 className={styles.sectionTitle}>Create Your AI</h3>
               <p className={styles.sectionSubtitle} style={{ marginTop: 2 }}>
-                Start free with a RAG AI Expert — or see what others in the community have built.
+                Build an AI grounded in your own content, or explore community creations.
               </p>
             </div>
             <Link href="/browse" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -160,9 +159,9 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                 Upload your content and get an accurate, citation-backed RAG AI Expert in seconds. No training needed.
               </p>
               <ul className={styles.tierFeatures}>
-                <li><Check size={14} className={styles.featureCheck} /> <span>Ready in 10-30 seconds</span></li>
-                <li><Check size={14} className={styles.featureCheck} /> <span>Answers grounded in your text with citations</span></li>
-                <li><Check size={14} className={styles.featureCheck} /> <span>Free to set up (no GPU cost)</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Ready in seconds</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Grounded with citations</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Zero GPU or setup cost</span></li>
               </ul>
               <div className={styles.tierActions}>
                 <Link href="/experts/new" className={`btn btn-primary ${styles.tierBtn}`}>
@@ -187,8 +186,8 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </p>
               <ul className={styles.tierFeatures}>
                 <li><Check size={14} className={styles.featureCheck} /> <span>Learns your unique tone and style</span></li>
-                <li><Check size={14} className={styles.featureCheck} /> <span>Sounds authentically like you in every response</span></li>
-                <li><Check size={14} className={styles.featureCheck} /> <span>Best for creators with an established content library</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Authentic personalized responses</span></li>
+                <li><Check size={14} className={styles.featureCheck} /> <span>Built for high-volume content creators</span></li>
               </ul>
               <div className={styles.tierActions}>
                 <button
@@ -232,7 +231,7 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
           {jobs.length === 0 ? (
             <div className={styles.emptyJobs}>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--text-primary)" }}>No creations yet</p>
-              <p style={{ fontSize: "0.875rem" }}>Create your first RAG AI Expert or explore what others have built.</p>
+              <p style={{ fontSize: "0.875rem" }}>Your creations will appear here.</p>
               <div className={styles.emptyJobsActions}>
                 <Link href="/experts/new" className="btn btn-primary btn-sm">
                   <Sparkles size={14} />
@@ -288,35 +287,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
               </button>
             </div>
           )}
-        </div>
-
-        {/* ── What You Can Build ── */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h3 className={styles.sectionTitle}>What You Can Build</h3>
-            <Link href="/experts/new" className="btn btn-ghost btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-              <span>Create now</span>
-              <ArrowRight size={13} />
-            </Link>
-          </div>
-          <div className={styles.modelsGrid}>
-            {[
-              { name: "Course Advisor",    task: "Education",       size: "RAG", credits: "6" },
-              { name: "Legal Advisor",     task: "Legal & Compliance", size: "RAG", credits: "6" },
-              { name: "Health Coach",      task: "Healthcare",      size: "RAG", credits: "6" },
-              { name: "Finance Analyst",   task: "Finance",         size: "RAG", credits: "6" },
-            ].map((m) => (
-              <div key={m.name} className={`card card-hover ${styles.modelCard}`}>
-                <div className={styles.modelCardHeader}>
-                  <div className={styles.modelIcon}><Sparkles size={18} /></div>
-                  <span className="badge badge-indigo" style={{ fontSize: "0.625rem" }}>{m.size}</span>
-                </div>
-                <div className={styles.modelName}>{m.name}</div>
-                <div className={styles.modelTask}>{m.task}</div>
-                <div className={styles.modelCredits}>~{m.credits} credits to set up</div>
-              </div>
-            ))}
-          </div>
         </div>
 
       </div>

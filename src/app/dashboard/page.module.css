@@ -403,45 +403,12 @@
   flex-wrap: wrap;
 }
 
-/* Models grid */
-.modelsGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-}
-
-.modelCard { padding: 20px; cursor: pointer; }
-
-.modelCardHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.modelIcon {
-  width: 34px;
-  height: 34px;
-  background: rgba(0, 229, 200, 0.08);
-  border: 1px solid rgba(0, 229, 200, 0.2);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent-primary);
-}
-
-.modelName    { font-size: 0.875rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
-.modelTask    { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
-.modelCredits { font-size: 0.75rem; color: #00E5C8; font-weight: 600; font-family: var(--font-mono); }
-
 /* ══════════════════════════════════════════════════════════════
    Responsive — Tablet (≤ 1024px)
    ══════════════════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .statsRow    { grid-template-columns: repeat(2, 1fr); }
   .statsStrip  { grid-template-columns: repeat(2, 1fr); }
-  .modelsGrid  { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -548,18 +515,6 @@
     border-radius: 12px;
   }
 
-  /* ── Models ── */
-  .modelsGrid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-  .modelCard {
-    padding: 14px;
-  }
-  .modelName {
-    font-size: 0.8125rem;
-  }
-
   /* ── Quick start ── */
   .quickStart {
     padding: 20px 16px;
@@ -607,10 +562,6 @@
   }
   .tierCard {
     padding: 16px 14px;
-  }
-  .modelsGrid {
-    grid-template-columns: 1fr;
-    gap: 8px;
   }
   .jobRow {
     flex-direction: column;

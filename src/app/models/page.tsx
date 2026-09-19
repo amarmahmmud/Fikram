@@ -170,7 +170,7 @@ export default function ModelsPage() {
   return (
     <>
       <div className="topbar">
-        <span className="topbar-title">Explore & Model Browser</span>
+        <span className="topbar-title">Model Registry</span>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <Link href="/experts/new" className="btn btn-primary btn-sm" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
             <Sparkles size={14} />
@@ -187,7 +187,7 @@ export default function ModelsPage() {
             className={`${styles.tab} ${mainTab === "community" ? styles.active : ""}`}
             onClick={() => setMainTab("community")}
           >
-            <Star size={16} style={{ marginRight: 4 }} /> Community AIs & Models
+            <Star size={16} style={{ marginRight: 4 }} /> Community
             <span className="badge badge-indigo" style={{ fontSize: "0.65rem", padding: "1px 6px" }}>
               {communityModels.length}
             </span>
@@ -197,14 +197,14 @@ export default function ModelsPage() {
             className={`${styles.tab} ${mainTab === "verified" ? styles.active : ""}`}
             onClick={() => setMainTab("verified")}
           >
-            <Package size={16} style={{ marginRight: 4 }} /> Base Foundation Models
+            <Package size={16} style={{ marginRight: 4 }} /> Base Models
           </button>
 
           <button
             className={`${styles.tab} ${mainTab === "huggingface" ? styles.active : ""}`}
             onClick={() => setMainTab("huggingface")}
           >
-            <Smile size={16} style={{ marginRight: 4 }} /> HuggingFace Hub (500+)
+            <Smile size={16} style={{ marginRight: 4 }} /> HuggingFace
           </button>
         </div>
 
@@ -217,7 +217,7 @@ export default function ModelsPage() {
                 <span>Build your own grounded RAG AI Expert</span>
               </div>
               <span className={styles.calloutDesc}>
-                Turn your documents, PDFs, audio, or video files into an interactive, citation-backed AI in seconds.
+                Upload your content and create an interactive, citation-backed AI in seconds.
               </span>
             </div>
             <Link href="/experts/new" className={`btn btn-primary btn-sm ${styles.calloutBtn}`}>
