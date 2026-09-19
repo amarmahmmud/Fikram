@@ -296,6 +296,10 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .topNav {
+    padding-left: 54px;
+  }
+
   .heroCard {
     padding: 32px 20px;
   }

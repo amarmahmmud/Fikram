@@ -101,6 +101,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
     <>
       {/* Mobile hamburger toggle button (visible on phones when sidebar is closed) */}
       <button 
+        type="button"
         className={`mobile-sidebar-toggle ${isOpen ? "hidden" : ""}`}
         onClick={() => setIsOpen(true)}
         aria-label="Open menu"
