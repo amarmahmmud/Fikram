@@ -150,7 +150,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       if (stored) {
         setSessionPrompt(stored);
       }
-    } catch {}
+    } catch { }
   }, [expertId]);
 
   const effectivePrompt = sessionPrompt !== null ? sessionPrompt : (expert?.system_prompt || "");
@@ -169,11 +169,11 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   }, []);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  
+
   // Attachments & Mic
   const [pendingAttachment, setPendingAttachment] = useState<{ file: File; previewUrl?: string; mimeType: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -283,7 +283,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setMessages(JSON.parse(localMsgs));
         return;
       }
-    } catch {}
+    } catch { }
 
     if (exp) {
       setMessages([getInitialWelcomeMessage(exp)]);
@@ -346,7 +346,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
     try {
       await apiClient.delete(`/api/experts/${expertId}/conversations/${convId}`);
-    } catch {}
+    } catch { }
 
     // Update local state and storage
     setConversations((prev) => prev.filter((c) => c.id !== convId));
@@ -357,7 +357,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         const parsed = JSON.parse(localConvs).filter((c: any) => c.id !== convId);
         localStorage.setItem(`mf_expert_convs_${expertId}`, JSON.stringify(parsed));
       }
-    } catch {}
+    } catch { }
 
     if (activeConvId === convId) {
       handleNewChat();
@@ -402,9 +402,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           const err = await uploadRes.json().catch(() => ({}));
           throw new Error(err.error || "Failed to initiate upload");
         }
-        
+
         const { uploadUrl, downloadUrl } = await uploadRes.json();
-        
+
         // Upload directly to Cloudflare R2
         const putRes = await fetch(uploadUrl, {
           method: "PUT",
@@ -423,9 +423,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             .slice(-10)
             .map((m) => ({ role: m.role, content: m.content })),
           attachment: {
-             url: downloadUrl,
-             mimeType: pendingAttachment.mimeType,
-             filename: pendingAttachment.file.name
+            url: downloadUrl,
+            mimeType: pendingAttachment.mimeType,
+            filename: pendingAttachment.file.name
           },
           systemPrompt: effectivePrompt || undefined,
         });
@@ -519,7 +519,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     // Validate size (20MB for images, 25MB for audio, 50MB for video)
     const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024
       : file.type.startsWith("audio/") ? 25 * 1024 * 1024
-      : 20 * 1024 * 1024;
+        : 20 * 1024 * 1024;
     if (file.size > maxSize) {
       toast.error(`File too large. Maximum size is ${Math.round(maxSize / 1024 / 1024)}MB.`);
       return;
@@ -556,7 +556,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   }
 
   // ── Microphone Recording Logic ──────────────────────────────────────────
-  
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -576,7 +576,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           const audioFile = new File([audioBlob], "voice-message.webm", { type: "audio/webm" });
           setPendingAttachment({ file: audioFile, mimeType: "audio/webm" });
         }
-        
+
         stream.getTracks().forEach(track => track.stop());
         setIsRecording(false);
         setRecordingDuration(0);
@@ -604,7 +604,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const cancelRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       // Temporarily set a flag so onstop knows we cancelled
-      setIsRecording(false); 
+      setIsRecording(false);
       mediaRecorderRef.current.stop();
     }
   };
@@ -708,8 +708,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         </div>
 
         <div className={styles.sidebarFooter}>
-          <span>Model Factory RAG v2</span>
-          <span style={{ color: "var(--accent-primary)" }}>● Online</span>
+          <span>Fikram</span>
+          <span style={{ color: "var(--accent-primary)" }}>● Beta</span>
         </div>
       </aside>
 
@@ -741,7 +741,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             <div className={styles.expertAvatar}>
               {expert.name.charAt(0).toUpperCase()}
             </div>
-            
+
             <div className={styles.headerTitles}>
               <div className={styles.expertName} title={expert.name}>{expert.name}</div>
               <div className={styles.expertTag}>
@@ -775,8 +775,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 isCustomized
                   ? "Personal session rules active (click to edit or reset)"
                   : isOwner
-                  ? "Edit RAG AI Expert rules (Session or Creator Default)"
-                  : "Customize RAG AI Expert rules for your chat session"
+                    ? "Edit RAG AI Expert rules (Session or Creator Default)"
+                    : "Customize RAG AI Expert rules for your chat session"
               }
             >
               <Settings2 size={16} />
@@ -824,9 +824,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`${styles.messageBubble} ${
-                msg.role === "user" ? styles.userBubble : styles.modelBubble
-              }`}
+              className={`${styles.messageBubble} ${msg.role === "user" ? styles.userBubble : styles.modelBubble
+                }`}
             >
               <div className={styles.messageContent}>
                 {/* Inline attachment display */}
@@ -859,15 +858,13 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               {/* Message Action Footer (Copy button for sent chat and AI responses) */}
               {msg.content && msg.content.trim().length > 0 && (
                 <div
-                  className={`${styles.messageFooter} ${
-                    msg.role === "user" ? styles.userFooter : styles.modelFooter
-                  }`}
+                  className={`${styles.messageFooter} ${msg.role === "user" ? styles.userFooter : styles.modelFooter
+                    }`}
                 >
                   <button
                     type="button"
-                    className={`${styles.copyMessageBtn} ${
-                      copiedMessageIndex === i ? styles.copied : ""
-                    }`}
+                    className={`${styles.copyMessageBtn} ${copiedMessageIndex === i ? styles.copied : ""
+                      }`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleCopyMessage(msg.content, i);
@@ -906,9 +903,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                         <>
                           <button
                             type="button"
-                            className={`${styles.ttsBtn} ${
-                              playingIndex === i ? styles.ttsPlaying : ""
-                            } ${loadingIndex === i ? styles.ttsLoading : ""}`}
+                            className={`${styles.ttsBtn} ${playingIndex === i ? styles.ttsPlaying : ""
+                              } ${loadingIndex === i ? styles.ttsLoading : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               togglePlayMessage(msg.content, i);
@@ -917,15 +913,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                               playingIndex === i
                                 ? "Pause speech"
                                 : loadingIndex === i
-                                ? "Synthesizing audio..."
-                                : "Listen to response"
+                                  ? "Synthesizing audio..."
+                                  : "Listen to response"
                             }
                             aria-label={
                               playingIndex === i
                                 ? "Pause speech"
                                 : loadingIndex === i
-                                ? "Synthesizing speech audio"
-                                : "Listen to response"
+                                  ? "Synthesizing speech audio"
+                                  : "Listen to response"
                             }
                           >
                             {loadingIndex === i ? (
@@ -954,9 +950,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                           {/* Speed toggle pill: cycles 1x -> 1.5x -> 2x */}
                           <button
                             type="button"
-                            className={`${styles.ttsSpeedBtn} ${
-                              playingIndex === i ? styles.speedActive : ""
-                            }`}
+                            className={`${styles.ttsSpeedBtn} ${playingIndex === i ? styles.speedActive : ""
+                              }`}
                             onClick={(e) => {
                               e.stopPropagation();
                               cyclePlaybackRate();
@@ -976,70 +971,70 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               {/* Collapsible Verified Citations & Live Web Sources */}
               {((msg.sources && msg.sources.length > 0) ||
                 (msg.webSources && msg.webSources.length > 0)) && (
-                <details className={styles.sourcesAccordion}>
-                  <summary className={styles.sourcesSummary}>
-                    <div className={styles.summaryBadges}>
+                  <details className={styles.sourcesAccordion}>
+                    <summary className={styles.sourcesSummary}>
+                      <div className={styles.summaryBadges}>
+                        {msg.sources && msg.sources.length > 0 && (
+                          <span className={styles.sourceCountBadge}>
+                            <BookOpen size={12} />
+                            <span>{msg.sources.length} Knowledge Chunks</span>
+                          </span>
+                        )}
+                        {msg.webSources && msg.webSources.length > 0 && (
+                          <span className={styles.webCountBadge}>
+                            <Globe size={12} />
+                            <span>{msg.webSources.length} Web References</span>
+                          </span>
+                        )}
+                      </div>
+                      <ChevronDown size={14} className={styles.chevronIcon} />
+                    </summary>
+
+                    <div className={styles.sourcesDrawer}>
+                      {/* Knowledge base chunks */}
                       {msg.sources && msg.sources.length > 0 && (
-                        <span className={styles.sourceCountBadge}>
-                          <BookOpen size={12} />
-                          <span>{msg.sources.length} Knowledge Chunks</span>
-                        </span>
+                        <div className={styles.sourcesGrid}>
+                          {msg.sources.map((s, si) => (
+                            <div key={si} className={styles.sourceCard}>
+                              <div className={styles.sourceFilename} title={s.filename}>
+                                <FileText size={12} />
+                                <span>{s.filename}</span>
+                              </div>
+                              <div className={styles.sourceMetadata}>
+                                <span>Chunk {s.chunkIndex + 1}</span>
+                                <span className={styles.sourceMatchPill}>
+                                  {(s.similarity * 100).toFixed(0)}% match
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
+
+                      {/* Live Web Results */}
                       {msg.webSources && msg.webSources.length > 0 && (
-                        <span className={styles.webCountBadge}>
-                          <Globe size={12} />
-                          <span>{msg.webSources.length} Web References</span>
-                        </span>
+                        <div className={styles.sourcesGrid} style={{ marginTop: 6 }}>
+                          {msg.webSources.map((ws, wsi) => (
+                            <a
+                              key={wsi}
+                              href={ws.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={styles.webSourceCard}
+                              title={ws.snippet}
+                            >
+                              <div className={styles.webSourceTitle}>
+                                <ExternalLink size={12} />
+                                <span>{ws.title}</span>
+                              </div>
+                              <div className={styles.webSourceSnippet}>{ws.snippet}</div>
+                            </a>
+                          ))}
+                        </div>
                       )}
                     </div>
-                    <ChevronDown size={14} className={styles.chevronIcon} />
-                  </summary>
-
-                  <div className={styles.sourcesDrawer}>
-                    {/* Knowledge base chunks */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className={styles.sourcesGrid}>
-                        {msg.sources.map((s, si) => (
-                          <div key={si} className={styles.sourceCard}>
-                            <div className={styles.sourceFilename} title={s.filename}>
-                              <FileText size={12} />
-                              <span>{s.filename}</span>
-                            </div>
-                            <div className={styles.sourceMetadata}>
-                              <span>Chunk {s.chunkIndex + 1}</span>
-                              <span className={styles.sourceMatchPill}>
-                                {(s.similarity * 100).toFixed(0)}% match
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Live Web Results */}
-                    {msg.webSources && msg.webSources.length > 0 && (
-                      <div className={styles.sourcesGrid} style={{ marginTop: 6 }}>
-                        {msg.webSources.map((ws, wsi) => (
-                          <a
-                            key={wsi}
-                            href={ws.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={styles.webSourceCard}
-                            title={ws.snippet}
-                          >
-                            <div className={styles.webSourceTitle}>
-                              <ExternalLink size={12} />
-                              <span>{ws.title}</span>
-                            </div>
-                            <div className={styles.webSourceSnippet}>{ws.snippet}</div>
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              )}
+                  </details>
+                )}
             </div>
           ))}
 
@@ -1097,7 +1092,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               style={{ display: "none" }}
               onChange={handleFileSelect}
             />
-            
+
             {isRecording ? (
               <div className={styles.recordingState}>
                 <div className={styles.recordingIndicator} />
@@ -1196,28 +1191,28 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             setSessionPrompt(newPrompt);
             try {
               localStorage.setItem(`mf_expert_prompt_${expert.id}`, newPrompt);
-            } catch {}
+            } catch { }
           }}
           onResetSession={() => {
             setSessionPrompt(null);
             try {
               localStorage.removeItem(`mf_expert_prompt_${expert.id}`);
-            } catch {}
+            } catch { }
           }}
           onSaveGlobal={
             isOwner
               ? async (newPrompt) => {
-                  const res = await apiClient.patch<{ ok: boolean; expert?: any; error?: string }>(
-                    `/api/experts/${expert.id}`,
-                    { systemPrompt: newPrompt }
-                  );
-                  if (!res.ok) throw new Error(res.error || "Failed to update default rules");
-                  setExpert((prev: any) => (prev ? { ...prev, system_prompt: newPrompt } : prev));
-                  setSessionPrompt(null);
-                  try {
-                    localStorage.removeItem(`mf_expert_prompt_${expert.id}`);
-                  } catch {}
-                }
+                const res = await apiClient.patch<{ ok: boolean; expert?: any; error?: string }>(
+                  `/api/experts/${expert.id}`,
+                  { systemPrompt: newPrompt }
+                );
+                if (!res.ok) throw new Error(res.error || "Failed to update default rules");
+                setExpert((prev: any) => (prev ? { ...prev, system_prompt: newPrompt } : prev));
+                setSessionPrompt(null);
+                try {
+                  localStorage.removeItem(`mf_expert_prompt_${expert.id}`);
+                } catch { }
+              }
               : undefined
           }
         />
