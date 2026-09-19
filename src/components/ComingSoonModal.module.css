@@ -6,15 +6,16 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 999999;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  animation: overlayIn 0.25s ease-out both;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: overlayIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
   padding: 24px;
+  cursor: pointer;
 }
 
 .overlayExiting {
@@ -33,11 +34,12 @@
 
 /* ── Modal Card ── */
 .modal {
+  cursor: default;
   position: relative;
   width: 100%;
-  max-width: 420px;
+  max-width: 440px;
   background: var(--surface-1);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 20px;
   padding: 40px 32px 32px;
   box-shadow:
@@ -306,25 +308,32 @@
 /* ── Close X Button ── */
 .closeBtn {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  border: none;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--text-muted);
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
 }
 
 .closeBtn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.06);
+}
+
+.closeBtn:active {
+  transform: scale(0.94);
 }
 
 /* ── Responsive ── */

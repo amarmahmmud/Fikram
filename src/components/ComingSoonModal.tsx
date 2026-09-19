@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Cpu, Zap, BarChart3, Bell, Check, X } from "lucide-react";
 import styles from "./ComingSoonModal.module.css";
 
@@ -70,12 +71,21 @@ export default function ComingSoonModal({
   feature: ComingSoonFeature;
   onClose: () => void;
 }) {
+  const [mounted, setMounted] = useState(false);
   const [exiting, setExiting] = useState(false);
   const [notified, setNotified] = useState(false);
+  const isClosingRef = useRef(false);
+  const pushedHistoryRef = useRef(false);
 
-  const config = FEATURE_CONFIGS[feature];
+  const config = FEATURE_CONFIGS[feature] ?? FEATURE_CONFIGS["fine-tune"];
 
-  // Check if already subscribed
+  // Mount check for createPortal hydration safety
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
+
+  // Check if already subscribed to notifications
   useEffect(() => {
     try {
       const stored = localStorage.getItem(NOTIFY_STORAGE_KEY);
@@ -88,30 +98,84 @@ export default function ComingSoonModal({
     }
   }, [feature]);
 
-  const handleClose = useCallback(() => {
-    setExiting(true);
-    setTimeout(onClose, 220);
+  // Unified close handler with smooth exit animation
+  const handleClose = useCallback(
+    (e?: React.MouseEvent | KeyboardEvent) => {
+      if (e) {
+        e.stopPropagation();
+        if ("preventDefault" in e) e.preventDefault();
+      }
+      if (isClosingRef.current) return;
+      isClosingRef.current = true;
+      setExiting(true);
+
+      setTimeout(() => {
+        onClose();
+      }, 180);
+    },
+    [onClose]
+  );
+
+  // Browser Back button integration (popstate)
+  useEffect(() => {
+    // Push a state into browser history so pressing "Back" cleanly closes the modal
+    if (!pushedHistoryRef.current) {
+      window.history.pushState({ modalOpen: true }, "");
+      pushedHistoryRef.current = true;
+    }
+
+    const handlePopState = () => {
+      // User clicked browser Back button
+      if (!isClosingRef.current) {
+        isClosingRef.current = true;
+        setExiting(true);
+        setTimeout(() => {
+          onClose();
+        }, 180);
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      // If modal unmounted via close button/overlay and history state is still ours, pop it
+      if (pushedHistoryRef.current && window.history.state?.modalOpen) {
+        window.history.back();
+      }
+    };
   }, [onClose]);
 
-  // Close on Escape
+  // Close on Escape key
   useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") handleClose();
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        handleClose(e);
+      }
     }
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleClose]);
 
-  // Lock body scroll
+  // Lock body scroll with scrollbar compensation to prevent layout shift
   useEffect(() => {
-    const prev = document.body.style.overflow;
+    const originalOverflow = document.body.style.overflow;
+    const originalPaddingRight = document.body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+
+    if (scrollbarWidth > 0) {
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
+    }
     document.body.style.overflow = "hidden";
+
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
     };
   }, []);
 
-  function handleNotify() {
+  function handleNotify(e: React.MouseEvent) {
+    e.stopPropagation();
     try {
       const stored = localStorage.getItem(NOTIFY_STORAGE_KEY);
       const parsed = stored ? JSON.parse(stored) : {};
@@ -123,20 +187,41 @@ export default function ComingSoonModal({
     setNotified(true);
   }
 
-  return (
+  if (!mounted) return null;
+
+  const modalContent = (
     <div
       className={`${styles.overlay} ${exiting ? styles.overlayExiting : ""}`}
-      onClick={handleClose}
+      onClick={(e) => {
+        // Only close when clicking directly on the backdrop, not children
+        if (e.target === e.currentTarget) {
+          handleClose(e);
+        }
+      }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          e.stopPropagation();
+        }
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="coming-soon-title"
     >
-      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
-        {/* Close button */}
+      <div
+        className={styles.modal}
+        onClick={(e) => {
+          e.stopPropagation();
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+        }}
+      >
+        {/* Close button with large accessible hit target */}
         <button
           className={styles.closeBtn}
-          onClick={handleClose}
-          aria-label="Close"
+          onClick={(e) => handleClose(e)}
+          aria-label="Close modal"
+          type="button"
         >
           <X size={16} />
         </button>
@@ -172,6 +257,7 @@ export default function ComingSoonModal({
 
         {/* Actions */}
         <button
+          type="button"
           className={`${styles.notifyBtn} ${notified ? styles.notifyBtnSubscribed : ""}`}
           onClick={notified ? undefined : handleNotify}
         >
@@ -187,10 +273,16 @@ export default function ComingSoonModal({
             </>
           )}
         </button>
-        <button className={styles.dismissBtn} onClick={handleClose}>
+        <button
+          type="button"
+          className={styles.dismissBtn}
+          onClick={(e) => handleClose(e)}
+        >
           Got it
         </button>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
