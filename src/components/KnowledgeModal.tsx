@@ -2,8 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import styles from "./KnowledgeModal.module.css";
-import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film, ShieldCheck, Flame, Scale, Globe } from "lucide-react";
+import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film, ShieldCheck, Flame, Scale, Globe, Coins } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
+import { createClient } from "@/lib/supabase/client";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
 
 interface SourceItem {
   filename: string;
@@ -32,7 +35,31 @@ export function KnowledgeModal({
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [insufficientCreditsError, setInsufficientCreditsError] = useState<{ required: number; balance: number; message?: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const supabase = createClient();
+
+  async function loadUserCredits() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("credits_balance, credits_held")
+        .eq("id", user.id)
+        .single();
+
+      if (profile) {
+        const avail = Math.max(0, (profile.credits_balance ?? 0) - (profile.credits_held ?? 0));
+        setCreditsBalance(avail);
+      }
+    } catch (e) {
+      console.warn("[KnowledgeModal] loadUserCredits error:", e);
+    }
+  }
 
   async function loadSources() {
     try {
@@ -77,7 +104,9 @@ export function KnowledgeModal({
   useEffect(() => {
     if (isOpen) {
       loadSources();
+      loadUserCredits();
       setStatusMessage(null);
+      setInsufficientCreditsError(null);
     }
   }, [isOpen, expertId]);
 
@@ -85,11 +114,24 @@ export function KnowledgeModal({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    if (creditsBalance !== null && creditsBalance < 1) {
+      setInsufficientCreditsError({
+        required: 1,
+        balance: creditsBalance,
+        message: "You have 0 credits. Top up your balance to upload and index documents.",
+      });
+      setShowBuyModal(true);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setUploading(true);
+    setInsufficientCreditsError(null);
     setStatusMessage({ type: "info", text: "Processing & embedding documents (this may take a few seconds)..." });
 
     let successCount = 0;
     let failedCount = 0;
+    let hitInsufficientCredits = false;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -134,6 +176,20 @@ export function KnowledgeModal({
         });
 
         if (!res.ok) {
+          if (res.status === 402) {
+            hitInsufficientCredits = true;
+            const errJson = await res.json().catch(() => ({}));
+            const reqCredits = errJson.credits_required || 1;
+            const bal = errJson.credits_balance ?? (creditsBalance ?? 0);
+            setInsufficientCreditsError({
+              required: reqCredits,
+              balance: bal,
+              message: errJson.message || `Uploading ${file.name} requires ${reqCredits} credits.`,
+            });
+            failedCount++;
+            break; // Stop further uploads when credits are insufficient
+          }
+
           const text = await res.text();
           let errMsg = `Server returned ${res.status}`;
           if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
@@ -158,21 +214,27 @@ export function KnowledgeModal({
           console.error(`Failed to ingest ${file.name}:`, data.error);
         }
       } catch (err) {
-        failedCount++;
-        console.error(`Failed to upload ${file.name}:`, err);
+        if (!hitInsufficientCredits) {
+          failedCount++;
+          console.error(`Failed to upload ${file.name}:`, err);
+        }
       }
     }
 
-    if (failedCount === 0) {
+    if (hitInsufficientCredits) {
+      setStatusMessage(null);
+    } else if (failedCount === 0) {
       setStatusMessage({
         type: "success",
         text: `Successfully ingested and indexed ${successCount} document${successCount > 1 ? "s" : ""}!`,
       });
+      loadUserCredits();
     } else {
       setStatusMessage({
         type: "error",
         text: `${successCount} succeeded, ${failedCount} failed. Please try again.`,
       });
+      loadUserCredits();
     }
 
     setUploading(false);
@@ -199,9 +261,22 @@ export function KnowledgeModal({
               </div>
             </div>
           </div>
-          <button className={styles.closeBtn} onClick={onClose}>
-            <X size={16} />
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {creditsBalance !== null && (
+              <button
+                type="button"
+                className={`${styles.creditPillBtn} ${creditsBalance === 0 ? styles.creditPillWarning : ""}`}
+                onClick={() => setShowBuyModal(true)}
+                title="Click to refill credits"
+              >
+                <Coins size={13} />
+                <span>{creditsBalance.toLocaleString()} credits</span>
+              </button>
+            )}
+            <button className={styles.closeBtn} onClick={onClose} aria-label="Close dialog">
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -305,6 +380,15 @@ export function KnowledgeModal({
           {isOwner && (
             <div>
               <div className={styles.sectionTitle}>Add More Knowledge</div>
+              <div className={styles.costGuide}>
+                <span>1 credit / doc or image • 5 credits / audio • 10 credits / video</span>
+                {creditsBalance !== null && (
+                  <span style={{ color: creditsBalance === 0 ? "#fbbf24" : "var(--accent-primary)", fontWeight: 600 }}>
+                    {creditsBalance.toLocaleString()} credits available
+                  </span>
+                )}
+              </div>
+
               <div
                 className={styles.dropzone}
                 onClick={() => !uploading && fileInputRef.current?.click()}
@@ -326,7 +410,18 @@ export function KnowledgeModal({
                 </div>
               </div>
 
-              {statusMessage && (
+              {insufficientCreditsError && (
+                <div style={{ marginTop: 12 }}>
+                  <InsufficientCreditsBanner
+                    balance={insufficientCreditsError.balance}
+                    required={insufficientCreditsError.required}
+                    actionText="index documents into this knowledge base"
+                    onTopUpClick={() => setShowBuyModal(true)}
+                  />
+                </div>
+              )}
+
+              {statusMessage && !insufficientCreditsError && (
                 <div
                   style={{
                     marginTop: 12,
@@ -373,6 +468,22 @@ export function KnowledgeModal({
           </button>
         </div>
       </div>
+
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        creditsRequired={insufficientCreditsError?.required}
+        currentBalance={creditsBalance ?? 0}
+        actionName="index documents into this knowledge base"
+        onSuccess={(newBal) => {
+          setCreditsBalance(newBal);
+          setInsufficientCreditsError(null);
+          setStatusMessage({
+            type: "success",
+            text: `Credits refilled! Your available balance is now ${newBal.toLocaleString()} credits.`,
+          });
+        }}
+      />
     </div>
   );
 }

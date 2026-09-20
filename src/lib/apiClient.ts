@@ -8,6 +8,31 @@ export class ApiError extends Error {
     this.data = data;
     this.name = "ApiError";
   }
+
+  get isInsufficientCredits(): boolean {
+    return (
+      this.status === 402 ||
+      this.data?.code === "INSUFFICIENT_CREDITS" ||
+      this.data?.status === "insufficient_credits" ||
+      String(this.message || "").toLowerCase().includes("insufficient credit")
+    );
+  }
+
+  get creditsRequired(): number | undefined {
+    return this.data?.credits_required ?? this.data?.required_credits ?? this.data?.required;
+  }
+
+  get creditsBalance(): number | undefined {
+    return this.data?.credits_balance ?? this.data?.available_balance ?? this.data?.balance;
+  }
+
+  get creditsNeeded(): number | undefined {
+    return this.data?.credits_needed ?? (
+      this.creditsRequired !== undefined && this.creditsBalance !== undefined
+        ? Math.max(0, this.creditsRequired - this.creditsBalance)
+        : undefined
+    );
+  }
 }
 
 async function fetchWithHandling<T>(url: string, options?: RequestInit): Promise<T> {

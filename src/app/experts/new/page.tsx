@@ -27,7 +27,10 @@ import {
   Target,
   Sliders,
   SkipForward,
+  Coins,
 } from "lucide-react";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -172,8 +175,18 @@ export default function NewExpertPage() {
   const [selectedTone, setSelectedTone] = useState(TONE_PRESETS[0]);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [showBuyModal, setShowBuyModal] = useState(false);
+  const [insufficientCreditsError, setInsufficientCreditsError] = useState<{ required: number; balance: number; message?: string } | null>(null);
 
-  // Verify user is authenticated on mount
+  const estimatedCredits = files.reduce((acc, f) => {
+    const ext = f.file.name.toLowerCase().split(".").pop() || "";
+    if (["mp4", "webm", "mov"].includes(ext) || f.file.type.startsWith("video/")) return acc + 10;
+    if (["mp3", "wav", "ogg", "aac", "flac", "m4a"].includes(ext) || f.file.type.startsWith("audio/")) return acc + 5;
+    return acc + 1;
+  }, 0);
+
+  // Verify user is authenticated on mount & load credit balance
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -182,6 +195,17 @@ export default function NewExpertPage() {
         router.push("/auth/signin?redirectTo=/experts/new");
       } else {
         setCheckingAuth(false);
+        supabase
+          .from("profiles")
+          .select("credits_balance, credits_held")
+          .eq("id", user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile) {
+              const avail = Math.max(0, (profile.credits_balance ?? 0) - (profile.credits_held ?? 0));
+              setCreditsBalance(avail);
+            }
+          });
       }
     });
   }, [router]);
@@ -485,6 +509,26 @@ export default function NewExpertPage() {
         }
 
         if (!res.ok) {
+          if (res.status === 402) {
+            hasErrors = true;
+            const errJson = await res.json().catch(() => ({}));
+            const reqCredits = errJson.credits_required || 1;
+            const bal = errJson.credits_balance ?? (creditsBalance ?? 0);
+            setInsufficientCreditsError({
+              required: reqCredits,
+              balance: bal,
+              message: errJson.message || `Indexing ${file.name} requires ${reqCredits} credits.`,
+            });
+            setFiles((prev) =>
+              prev.map((f, idx) =>
+                idx === i ? { ...f, status: "error", error: `Insufficient credits (${reqCredits} required, ${bal} available)` } : f
+              )
+            );
+            toast.error(`Insufficient credits to index ${file.name}. Please top up your balance.`);
+            setShowBuyModal(true);
+            break;
+          }
+
           const text = await res.text();
           let errMsg = `Server returned ${res.status}`;
           if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
@@ -899,6 +943,57 @@ export default function NewExpertPage() {
 
             {/* File list */}
             {files.length > 0 && (
+              <>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid var(--border-subtle)",
+                  fontSize: "0.8125rem",
+                  marginBottom: 10,
+                }}>
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {files.length} file{files.length !== 1 ? "s" : ""} selected • Estimated cost: <strong style={{ color: "var(--text-primary)" }}>~{estimatedCredits} credits</strong>
+                  </span>
+                  {creditsBalance !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setShowBuyModal(true)}
+                      style={{
+                        background: "transparent",
+                        border: "none",
+                        color: creditsBalance < estimatedCredits ? "#fbbf24" : "var(--accent-primary)",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                      title="Click to refill credits"
+                    >
+                      <Coins size={13} />
+                      <span>{creditsBalance.toLocaleString()} credits available</span>
+                    </button>
+                  )}
+                </div>
+
+                {insufficientCreditsError && (
+                  <div style={{ marginBottom: 12 }}>
+                    <InsufficientCreditsBanner
+                      balance={insufficientCreditsError.balance}
+                      required={insufficientCreditsError.required}
+                      actionText="index files into this expert"
+                      onTopUpClick={() => setShowBuyModal(true)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+
+            {files.length > 0 && (
               <div className={styles.fileList}>
                 {files.map((f, i) => {
                   const lowerName = f.file.name.toLowerCase();
@@ -1146,6 +1241,17 @@ export default function NewExpertPage() {
                   </div>
                 )}
 
+                {insufficientCreditsError && (
+                  <div style={{ marginTop: 12, marginBottom: 12 }}>
+                    <InsufficientCreditsBanner
+                      balance={insufficientCreditsError.balance}
+                      required={insufficientCreditsError.required}
+                      actionText="index files and create your expert"
+                      onTopUpClick={() => setShowBuyModal(true)}
+                    />
+                  </div>
+                )}
+
                 {/* Actions */}
                 <div className={styles.alignmentActions}>
                   <button
@@ -1274,6 +1380,20 @@ export default function NewExpertPage() {
           </div>
         )}
       </div>
+
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        creditsRequired={insufficientCreditsError?.required ?? (estimatedCredits > (creditsBalance ?? 0) ? estimatedCredits : undefined)}
+        currentBalance={creditsBalance ?? 0}
+        actionName="index documents and build your expert"
+        returnUrl="/experts/new"
+        onSuccess={(newBal) => {
+          setCreditsBalance(newBal);
+          setInsufficientCreditsError(null);
+          toast.success("Credits refilled! You can now proceed to build your expert.");
+        }}
+      />
     </>
   );
 }

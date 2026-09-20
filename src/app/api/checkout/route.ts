@@ -17,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { productId } = await req.json();
+    const { productId, returnUrl } = await req.json();
     if (!productId || typeof productId !== "string") {
       return NextResponse.json(
         { error: "productId is required" },
@@ -36,11 +36,18 @@ export async function POST(req: Request) {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
     ).replace(/\/$/, "");
 
+    // Determine success URL — returns to custom returnUrl if provided, else default /credits
+    let successUrl = `${appUrl}/credits?checkout=success`;
+    if (returnUrl && typeof returnUrl === "string" && returnUrl.startsWith("/")) {
+      const sep = returnUrl.includes("?") ? "&" : "?";
+      successUrl = `${appUrl}${returnUrl}${sep}checkout=success`;
+    }
+
     // Create a Polar Checkout Session
     // Pass supabase_user_id as metadata & externalCustomerId so the webhook maps back accurately
     const checkout = await polar.checkouts.create({
       products: [productId],
-      successUrl: `${appUrl}/credits?checkout=success`,
+      successUrl,
       metadata: {
         supabase_user_id: user.id,
         supabase_email: user.email ?? "",

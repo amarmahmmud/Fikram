@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
-import { Sparkles, Cpu, Check, ArrowRight, Globe } from "lucide-react";
+import { Sparkles, Cpu, Check, ArrowRight, Globe, Coins, Zap } from "lucide-react";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 type Job     = Database["public"]["Tables"]["jobs"]["Row"];
@@ -26,8 +28,10 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(initialJobs.length === 50);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [userCredits, setUserCredits] = useState(profile?.credits_balance ?? 0);
+  const [showBuyModal, setShowBuyModal] = useState(false);
 
-  const credits = profile?.credits_balance ?? 0;
+  const credits = userCredits;
   const name = profile?.full_name ?? profile?.email?.split("@")[0] ?? "there";
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -119,17 +123,48 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
 
       <div className="page-content">
 
+        {/* ── Low Credits Notice ── */}
+        {credits < 10 && (
+          <div style={{ marginBottom: 20 }}>
+            <InsufficientCreditsBanner
+              balance={credits}
+              actionText="index knowledge documents and chat uninterrupted"
+              onTopUpClick={() => setShowBuyModal(true)}
+            />
+          </div>
+        )}
+
         {/* ── Welcome ── */}
         <div className={styles.welcomeRow}>
           <div>
             <h2 className={styles.welcomeTitle}>{greeting}, {name.split(" ")[0]}</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              You have{" "}
-              <strong style={{ color: credits < 20 ? "var(--warning)" : "var(--success)" }}>
-                {credits} credits
-              </strong>{" "}
-              remaining.
-            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 4, flexWrap: "wrap" }}>
+              <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", margin: 0 }}>
+                You have{" "}
+                <strong style={{ color: credits < 10 ? "var(--warning)" : "var(--success)" }}>
+                  {credits.toLocaleString()} credits
+                </strong>{" "}
+                remaining.
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                onClick={() => setShowBuyModal(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "3px 10px",
+                  fontSize: "0.75rem",
+                  color: "var(--accent-primary)",
+                  border: "1px solid rgba(0, 229, 200, 0.25)",
+                  borderRadius: "999px",
+                }}
+              >
+                <Zap size={12} />
+                <span>+ Refill</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -290,6 +325,17 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
         </div>
 
       </div>
+
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        currentBalance={credits}
+        actionName="power your models and knowledge base"
+        returnUrl="/dashboard"
+        onSuccess={(newBal) => {
+          setUserCredits(newBal);
+        }}
+      />
     </>
   );
 }

@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
-import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings, Menu, X } from "lucide-react";
+import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings, Menu, X, Zap } from "lucide-react";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
@@ -30,6 +31,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
   const [plan, setPlan] = useState<string>("free");
   const [initials, setInitials] = useState<string>("--");
   const [isOpen, setIsOpen] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
 
   // Lock body scroll when mobile sidebar is open
   useEffect(() => {
@@ -184,31 +186,64 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
               : Math.max(50, credits);
           const pct = Math.min(100, Math.max(0, Math.round((credits / maxCredits) * 100)));
 
+          const isZero = credits === 0;
+          const isLow = credits < 10;
+
           return (
             <div style={{ padding: "0 12px 12px" }}>
-              <Link href="/credits" onClick={() => setIsOpen(false)} style={{ textDecoration: "none", display: "block" }}>
-                <div className="credit-bar">
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "nowrap" }}>Credits</span>
-                  <div className="credit-bar-track">
-                    <div className="credit-bar-fill" style={{ width: `${pct}%` }} />
-                  </div>
-                  <span
+              <div
+                className={`credit-bar ${isZero ? "credit-bar-empty" : isLow ? "credit-bar-warning" : ""}`}
+                onClick={() => {
+                  setIsOpen(false);
+                  setShowBuyModal(true);
+                }}
+                style={{
+                  cursor: "pointer",
+                  borderColor: isZero ? "rgba(239, 68, 68, 0.4)" : isLow ? "rgba(245, 158, 11, 0.4)" : undefined,
+                  boxShadow: isZero
+                    ? "0 0 12px rgba(239, 68, 68, 0.15)"
+                    : isLow
+                    ? "0 0 12px rgba(245, 158, 11, 0.12)"
+                    : undefined,
+                }}
+                title="Click to view or refill credits"
+              >
+                <span style={{ fontSize: "0.75rem", color: isZero ? "#f87171" : isLow ? "#fbbf24" : "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  Credits
+                </span>
+                <div className="credit-bar-track">
+                  <div
+                    className="credit-bar-fill"
                     style={{
-                      fontSize: "0.8125rem",
-                      fontWeight: 600,
-                      color: "var(--text-primary)",
-                      whiteSpace: "nowrap",
-                      fontFamily: "var(--font-mono)",
-                      fontVariantNumeric: "tabular-nums",
-                      fontFeatureSettings: '"zero" 0',
-                      letterSpacing: "0.02em",
-                      flexShrink: 0,
+                      width: `${pct}%`,
+                      background: isZero
+                        ? "#ef4444"
+                        : isLow
+                        ? "linear-gradient(90deg, #f59e0b, #ef4444)"
+                        : undefined,
+                      boxShadow: isZero || isLow ? "0 0 8px rgba(245, 158, 11, 0.4)" : undefined,
                     }}
-                  >
-                    {credits.toLocaleString()}
-                  </span>
+                  />
                 </div>
-              </Link>
+                <span
+                  style={{
+                    fontSize: "0.8125rem",
+                    fontWeight: 600,
+                    color: isZero ? "#f87171" : isLow ? "#fbbf24" : "var(--text-primary)",
+                    whiteSpace: "nowrap",
+                    fontFamily: "var(--font-mono)",
+                    fontVariantNumeric: "tabular-nums",
+                    fontFeatureSettings: '"zero" 0',
+                    letterSpacing: "0.02em",
+                    flexShrink: 0,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 3,
+                  }}
+                >
+                  {isZero ? "0 • Refill" : credits.toLocaleString()}
+                </span>
+              </div>
             </div>
           );
         })()}
@@ -227,6 +262,15 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
           </Link>
         </div>
       </aside>
+
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        currentBalance={credits}
+        onSuccess={(newBal) => {
+          setCredits(newBal);
+        }}
+      />
     </>
   );
 }

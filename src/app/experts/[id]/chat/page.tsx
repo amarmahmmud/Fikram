@@ -42,10 +42,13 @@ import {
   VolumeX,
   Pause,
   Loader2,
+  Coins,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cleanRepetitionLoop } from "@/lib/text-cleaner";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 
 interface Message {
   id?: string;
@@ -54,6 +57,9 @@ interface Message {
   sources?: { filename: string; chunkIndex: number; similarity: number }[];
   webSources?: { title: string; snippet: string; link: string }[];
   attachment?: { mimeType: string; previewUrl?: string; filename?: string };
+  isInsufficientCredits?: boolean;
+  creditsRequired?: number;
+  creditsBalance?: number;
 }
 
 interface ConversationItem {
@@ -201,6 +207,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
+  const [showBuyModal, setShowBuyModal] = useState(false);
 
   // Auto-expand sidebar on desktop devices
   useEffect(() => {
@@ -389,6 +397,18 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (mounted) setCurrentUser(user);
+
+        if (user && mounted) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("credits_balance, credits_held")
+            .eq("id", user.id)
+            .single();
+          if (profile && mounted) {
+            const avail = Math.max(0, (profile.credits_balance ?? 0) - (profile.credits_held ?? 0));
+            setCreditsBalance(avail);
+          }
+        }
 
         const exp = await loadExpertDetails();
         if (exp && mounted) {
@@ -634,11 +654,31 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           { role: "model", content: `**Error**: ${data.error || "Something went wrong"}` },
         ]);
       }
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        { role: "model", content: "Network error — please try again." },
-      ]);
+    } catch (err: any) {
+      if (
+        err?.isInsufficientCredits ||
+        err?.status === 402 ||
+        String(err?.message || "").toLowerCase().includes("insufficient credit")
+      ) {
+        const req = err?.creditsRequired ?? err?.data?.credits_required ?? 1;
+        const bal = err?.creditsBalance ?? err?.data?.credits_balance ?? (creditsBalance ?? 0);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            isInsufficientCredits: true,
+            creditsRequired: req,
+            creditsBalance: bal,
+          },
+        ]);
+        setCreditsBalance(bal);
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          { role: "model", content: err?.message ? `**Error**: ${err.message}` : "Network error — please try again." },
+        ]);
+      }
     }
 
     setSending(false);
@@ -990,6 +1030,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 <span className={styles.btnLabel}>{copiedShare ? "Copied Link!" : "Share"}</span>
               </button>
             )}
+            {currentUser && creditsBalance !== null && (
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn} ${creditsBalance === 0 ? styles.actionBtnWarning : ""}`}
+                onClick={() => setShowBuyModal(true)}
+                title="Your credits balance. Click to refill."
+              >
+                <Coins size={15} color={creditsBalance === 0 ? "#fbbf24" : "var(--accent-primary)"} />
+                <span className={styles.btnLabel}>{creditsBalance.toLocaleString()} credits</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -1007,31 +1057,63 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               } ${playingIndex === i ? styles.modelBubblePlaying : ""}`}
             >
               <div className={styles.messageContent}>
-                {/* Inline attachment display */}
-                {msg.attachment && (
-                  <div className={styles.messageAttachment}>
-                    {msg.attachment.mimeType.startsWith("image/") && msg.attachment.previewUrl && (
-                      <img
-                        src={msg.attachment.previewUrl}
-                        alt={msg.attachment.filename || "Attached image"}
-                        className={styles.attachmentImage}
-                      />
-                    )}
-                    {msg.attachment.mimeType.startsWith("audio/") && (
-                      <div className={styles.attachmentAudio}>
-                        <FileAudio size={16} />
-                        <span>{msg.attachment.filename || "Audio file"}</span>
+                {msg.isInsufficientCredits ? (
+                  <div className={styles.insufficientCreditsCard}>
+                    <div className={styles.insufficientCreditsHeader}>
+                      <div className={styles.insufficientCreditsIcon}>
+                        <Zap size={18} />
                       </div>
-                    )}
-                    {msg.attachment.mimeType.startsWith("video/") && (
-                      <div className={styles.attachmentVideo}>
-                        <Film size={16} />
-                        <span>{msg.attachment.filename || "Video file"}</span>
+                      <div>
+                        <div className={styles.insufficientCreditsTitle}>Credit Limit Reached</div>
+                        <div className={styles.insufficientCreditsSub}>
+                          This request required {msg.creditsRequired ?? 1} credit{(msg.creditsRequired ?? 1) > 1 ? "s" : ""}, but your current balance is {msg.creditsBalance ?? 0}. Top up your credits to continue chatting.
+                        </div>
                       </div>
-                    )}
+                    </div>
+
+                    <div className={styles.insufficientCreditsActions}>
+                      <button
+                        type="button"
+                        className={styles.insufficientCreditsBtnPrimary}
+                        onClick={() => setShowBuyModal(true)}
+                      >
+                        <Coins size={14} />
+                        <span>Top Up Credits</span>
+                      </button>
+                      <Link href="/credits" className={styles.insufficientCreditsBtnSecondary}>
+                        <span>View Plans &amp; Billing</span>
+                      </Link>
+                    </div>
                   </div>
+                ) : (
+                  <>
+                    {/* Inline attachment display */}
+                    {msg.attachment && (
+                      <div className={styles.messageAttachment}>
+                        {msg.attachment.mimeType.startsWith("image/") && msg.attachment.previewUrl && (
+                          <img
+                            src={msg.attachment.previewUrl}
+                            alt={msg.attachment.filename || "Attached image"}
+                            className={styles.attachmentImage}
+                          />
+                        )}
+                        {msg.attachment.mimeType.startsWith("audio/") && (
+                          <div className={styles.attachmentAudio}>
+                            <FileAudio size={16} />
+                            <span>{msg.attachment.filename || "Audio file"}</span>
+                          </div>
+                        )}
+                        {msg.attachment.mimeType.startsWith("video/") && (
+                          <div className={styles.attachmentVideo}>
+                            <Film size={16} />
+                            <span>{msg.attachment.filename || "Video file"}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <MarkdownContent content={msg.content} />
+                  </>
                 )}
-                <MarkdownContent content={msg.content} />
               </div>
 
               {/* Message Action Footer (Copy button for sent chat and AI responses) */}
@@ -1416,6 +1498,19 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           }
         />
       )}
+
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        creditsRequired={1}
+        currentBalance={creditsBalance ?? 0}
+        actionName={`chat with ${expert.name}`}
+        returnUrl={`/experts/${expertId}/chat`}
+        onSuccess={(newBal) => {
+          setCreditsBalance(newBal);
+          toast.success("Credits refilled! You can now continue chatting.");
+        }}
+      />
     </div>
   );
 }

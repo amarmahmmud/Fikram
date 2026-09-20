@@ -93,8 +93,11 @@ export async function POST(
         return NextResponse.json(
           {
             error: "Insufficient credits",
+            code: "INSUFFICIENT_CREDITS",
+            status: "insufficient_credits",
             credits_required: cost,
             credits_balance: balance,
+            credits_needed: Math.max(0, cost - balance),
             message: `This message costs ${cost} credit${cost > 1 ? "s" : ""}. You have ${balance} remaining.`,
           },
           { status: 402 },
