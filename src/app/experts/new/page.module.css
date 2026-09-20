@@ -478,6 +478,46 @@
   color: var(--text-muted);
 }
 
+.switchTrack {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.webToggleActive .switchTrack {
+  background: var(--accent-primary);
+}
+
+.switchThumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.switchThumbActive {
+  transform: translateX(16px);
+  background: #000;
+}
+
+.successIconWrapper {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(0, 229, 200, 0.1);
+  border: 1px solid rgba(0, 229, 200, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+  box-shadow: 0 0 25px rgba(0, 229, 200, 0.2);
+}
+
 @media (max-width: 580px) {
   .steps {
     gap: 12px;

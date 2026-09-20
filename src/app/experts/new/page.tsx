@@ -228,21 +228,23 @@ export default function NewExpertPage() {
   }
 
   // AI Prompt Suggestion Helper
-  async function handleGeneratePrompt() {
+  async function handleGeneratePrompt(toneOverride?: string) {
     if (!name.trim()) {
       toast.error("Please enter an Expert Name first.");
       return;
     }
+    const toneToUse = toneOverride || selectedTone;
     setGeneratingPrompt(true);
     try {
       const res = await apiClient.post<any>("/api/experts/suggest-prompt", {
         name: name.trim(),
         description: description.trim(),
-        tone: selectedTone,
+        tone: toneToUse,
       });
       if (res.ok && res.systemPrompt) {
         setSystemPrompt(res.systemPrompt);
         setShowAiHelper(false);
+        toast.success("AI Persona instructions applied!");
       } else {
         toast.error(res.error || "Could not generate prompt");
       }
@@ -663,45 +665,58 @@ export default function NewExpertPage() {
         {/* Step 1: Profile */}
         {step === 1 && (
           <div className={styles.card}>
-            <h2 className={styles.cardTitle}>Create Your Expert Profile</h2>
+            <h2 className={styles.cardTitle}>Expert Profile</h2>
             <p className={styles.cardDesc}>
-              Define who your AI expert is. This shapes how it communicates and presents itself to users.
+              Define the identity, grounding behavior, and communication style of your AI expert.
             </p>
 
             <div className={styles.field}>
               <label className={styles.label}>Expert Name *</label>
               <input
                 className={styles.input}
-                placeholder="e.g., Coach Ahmed, Dr. Sara, Marketing Pro"
+                placeholder="e.g., Bitcoin Scholar, Dr. Sara, Code Reviewer"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Short Description</label>
+              <label className={styles.label}>Domain or Specialty</label>
               <input
                 className={styles.input}
-                placeholder="e.g., Fitness coach specializing in strength training"
+                placeholder="e.g., Austrian economics, fitness coaching, fullstack engineering"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
 
-            {/* Reasoning & Grounding Mode */}
+            {/* Knowledge Mode */}
             <div className={styles.field}>
-              <label className={styles.label}>Reasoning &amp; Knowledge Mode</label>
+              <label className={styles.label}>Knowledge Grounding Mode</label>
               <div className={styles.modeGrid}>
+                <div
+                  className={`${styles.modeOption} ${reasoningMode === "hybrid" ? styles.modeOptionActive : ""}`}
+                  onClick={() => setReasoningMode("hybrid")}
+                >
+                  <div className={styles.modeTitle}>
+                    <Scale size={15} />
+                    <span>Balanced Hybrid</span>
+                  </div>
+                  <div className={styles.modeDesc}>
+                    Blends verified files with general AI reasoning.
+                  </div>
+                </div>
+
                 <div
                   className={`${styles.modeOption} ${reasoningMode === "strict" ? styles.modeOptionActive : ""}`}
                   onClick={() => setReasoningMode("strict")}
                 >
                   <div className={styles.modeTitle}>
-                    <ShieldCheck size={16} />
+                    <ShieldCheck size={15} />
                     <span>Strict Grounding</span>
                   </div>
                   <div className={styles.modeDesc}>
-                    Answers strictly from your uploaded files with exact citations.
+                    Exclusively answers from provided files with citations.
                   </div>
                 </div>
 
@@ -710,101 +725,92 @@ export default function NewExpertPage() {
                   onClick={() => setReasoningMode("evaluative")}
                 >
                   <div className={styles.modeTitle}>
-                    <Flame size={16} />
-                    <span>Critical Thinker</span>
+                    <Flame size={15} />
+                    <span>Critical Reviewer</span>
                   </div>
                   <div className={styles.modeDesc}>
-                    Uses your documents as benchmarks to evaluate ideas with critical analysis.
-                  </div>
-                </div>
-
-                <div
-                  className={`${styles.modeOption} ${reasoningMode === "hybrid" ? styles.modeOptionActive : ""}`}
-                  onClick={() => setReasoningMode("hybrid")}
-                >
-                  <div className={styles.modeTitle}>
-                    <Scale size={16} />
-                    <span>Balanced Hybrid</span>
-                  </div>
-                  <div className={styles.modeDesc}>
-                    Combines your files with general knowledge for broader conversational context.
+                    Evaluates concepts against your source standards.
                   </div>
                 </div>
               </div>
 
-              {/* Live Web Search Toggle */}
+              {/* Live Web Search Switch */}
               <div
                 className={`${styles.webToggleCard} ${webSearchEnabled ? styles.webToggleActive : ""}`}
                 onClick={() => setWebSearchEnabled(!webSearchEnabled)}
               >
                 <div className={styles.webToggleInfo}>
                   <div className={styles.webToggleTitle}>
-                    <Globe size={15} style={{ display: "inline-block", verticalAlign: "text-bottom", marginRight: 6 }} />
-                    <span>Live Web Search &amp; Market Intelligence</span>
+                    <Globe size={15} />
+                    <span>Real-Time Web Search</span>
                   </div>
                   <div className={styles.webToggleDesc}>
-                    Allows the AI to search the web in real-time for latest news, competitors, and industry trends.
+                    Permits live web searches alongside your uploaded documents.
                   </div>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={webSearchEnabled}
-                  onChange={(e) => setWebSearchEnabled(e.target.checked)}
-                  style={{ width: 18, height: 18, accentColor: "var(--accent-primary)", cursor: "pointer" }}
-                  onClick={(e) => e.stopPropagation()}
-                />
+                <div className={styles.switchTrack}>
+                  <div className={`${styles.switchThumb} ${webSearchEnabled ? styles.switchThumbActive : ""}`} />
+                </div>
               </div>
             </div>
 
+            {/* Persona & Style Instructions */}
             <div className={styles.field}>
               <div className={styles.labelRow}>
-                <label className={styles.label} style={{ marginBottom: 0 }}>Style Instructions (optional)</label>
+                <label className={styles.label} style={{ marginBottom: 0 }}>Behavior &amp; Persona Instructions</label>
                 <button
                   type="button"
                   className={styles.aiHelperBtn}
-                  onClick={() => setShowAiHelper(!showAiHelper)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                  onClick={() => {
+                    if (!showAiHelper) {
+                      if (!name.trim()) {
+                        toast.error("Enter an Expert Name first to generate with AI.");
+                        return;
+                      }
+                      setShowAiHelper(true);
+                      handleGeneratePrompt();
+                    } else {
+                      setShowAiHelper(false);
+                    }
+                  }}
+                  disabled={generatingPrompt}
                 >
                   <Sparkles size={13} />
-                  <span>{showAiHelper ? "Hide AI Helper" : "Generate with AI"}</span>
+                  <span>{generatingPrompt ? "Generating..." : showAiHelper ? "Hide AI Generator" : "Generate with AI"}</span>
                 </button>
               </div>
 
               {showAiHelper && (
                 <div className={styles.aiGeneratorBox}>
-                  <div className={styles.aiGeneratorHeader}>Pick a tone &amp; generate custom instructions:</div>
+                  <div className={styles.aiGeneratorHeader}>Tone preset:</div>
                   <div className={styles.toneChips}>
                     {TONE_PRESETS.map((t) => (
                       <button
                         type="button"
                         key={t}
                         className={`${styles.toneChip} ${selectedTone === t ? styles.toneChipActive : ""}`}
-                        onClick={() => setSelectedTone(t)}
+                        onClick={() => {
+                          setSelectedTone(t);
+                          handleGeneratePrompt(t);
+                        }}
+                        disabled={generatingPrompt}
                       >
                         {t}
                       </button>
                     ))}
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleGeneratePrompt}
-                    disabled={generatingPrompt || !name.trim()}
-                  >
-                    {generatingPrompt ? "Generating..." : "Apply AI Instructions →"}
-                  </button>
                 </div>
               )}
 
               <textarea
                 className={styles.textarea}
-                placeholder="e.g., Speak in a friendly, encouraging tone. Base answers strictly on the knowledge base. Always cite sources."
+                placeholder="e.g., Speak with clarity and rigor. Cite sections where available and state boundaries when unstated."
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
                 rows={3}
               />
               <p className={styles.hint}>
-                Tell the AI how this expert should talk — tone, formality, language preferences.
+                Define communication demeanor, citation preferences, and response tone.
               </p>
             </div>
 
@@ -812,20 +818,20 @@ export default function NewExpertPage() {
               className="btn btn-primary"
               onClick={handleCreateExpert}
               disabled={!name.trim() || creating}
-              style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "center", padding: "12px 18px", marginTop: 8 }}
             >
-              <span>{creating ? "Creating..." : "Continue"}</span>
-              {!creating && <ArrowRight size={14} />}
+              <span>{creating ? "Creating Expert..." : "Continue to Knowledge Sources"}</span>
+              {!creating && <ArrowRight size={15} />}
             </button>
           </div>
         )}
 
-        {/* Step 2: Upload */}
+        {/* Step 2: Knowledge Sources */}
         {step === 2 && (
           <div className={styles.card}>
-            <h2 className={styles.cardTitle}>Upload Knowledge Content</h2>
+            <h2 className={styles.cardTitle}>Knowledge Sources</h2>
             <p className={styles.cardDesc}>
-              Upload the expert&apos;s content — PDFs, documents, images, audio, video, or web links. The AI will extract and index knowledge from them.
+              Upload the documents, notes, or media that form your expert&apos;s knowledge base.
             </p>
 
             <div
@@ -849,7 +855,7 @@ export default function NewExpertPage() {
               <p className={styles.dropzoneText}>
                 Drop files here or <span className={styles.dropzoneLink}>browse</span>
               </p>
-              <p className={styles.dropzoneHint}>PDF, Documents, Images, Audio, Video supported (up to 50MB)</p>
+              <p className={styles.dropzoneHint}>PDF, TXT, MD, CSV, Audio, Video supported (up to 50MB)</p>
             </div>
 
             {/* URL Ingestion Section */}
@@ -859,7 +865,6 @@ export default function NewExpertPage() {
                   type="button"
                   className={styles.urlToggle}
                   onClick={() => setShowUrlInput(true)}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                 >
                   <Link2 size={14} />
                   <span>Add web links (optional)</span>
@@ -892,7 +897,7 @@ export default function NewExpertPage() {
               )}
             </div>
 
-            {/* File & Source list */}
+            {/* File list */}
             {files.length > 0 && (
               <div className={styles.fileList}>
                 {files.map((f, i) => {
@@ -919,115 +924,108 @@ export default function NewExpertPage() {
                       <span className={styles.fileName}>
                         {f.sourceType === "url" ? `${f.file.name} (${f.sourceUrl})` : f.file.name}
                       </span>
-                    <span className={styles.fileSize}>
-                      {(f.file.size / 1024).toFixed(0)} KB
-                    </span>
-                    <span className={`${styles.fileStatus} ${styles[`fileStatus_${f.status}`]}`}>
-                      {f.status === "pending" && "Ready"}
-                      {f.status === "uploading" && "Processing..."}
-                      {f.status === "done" && (
-                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                          <Check size={12} /> {f.chunksStored} chunks
-                        </span>
-                      )}
-                      {f.status === "error" && (
-                        <span
-                          style={{ display: "inline-flex", alignItems: "center", gap: 4, maxWidth: "100%" }}
-                          title={f.error}
-                        >
-                          <X size={12} style={{ flexShrink: 0 }} />
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {f.error}
+                      <span className={styles.fileSize}>
+                        {(f.file.size / 1024).toFixed(0)} KB
+                      </span>
+                      <span className={`${styles.fileStatus} ${styles[`fileStatus_${f.status}`]}`}>
+                        {f.status === "pending" && "Ready"}
+                        {f.status === "uploading" && "Processing..."}
+                        {f.status === "done" && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <Check size={12} /> {f.chunksStored} chunks
                           </span>
-                        </span>
+                        )}
+                        {f.status === "error" && (
+                          <span title={f.error}>
+                            <X size={12} /> Error
+                          </span>
+                        )}
+                      </span>
+                      {f.status === "pending" && (
+                        <button
+                          type="button"
+                          className={styles.fileRemoveBtn}
+                          onClick={() => removeFile(i)}
+                          title="Remove"
+                          aria-label="Remove"
+                        >
+                          <X size={14} />
+                        </button>
                       )}
-                    </span>
-                    {f.status === "pending" && (
-                      <button
-                        type="button"
-                        className={styles.fileRemoveBtn}
-                        onClick={() => removeFile(i)}
-                        title="Remove"
-                        aria-label="Remove"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
                     </div>
                   );
                 })}
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-              <button
-                className="btn btn-primary"
-                onClick={handleProceedToAlignment}
-                disabled={files.length === 0}
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                <span>Proceed to Goal Alignment</span>
-                <ArrowRight size={14} />
-              </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 20, flexWrap: "wrap" }}>
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={handleSkipAlignment}
-                disabled={files.length === 0 || ingesting}
+                className="btn btn-ghost btn-sm"
+                onClick={() => setStep(1)}
+                disabled={ingesting}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-                title="Skip alignment questions and immediately index knowledge with standard defaults"
               >
-                <SkipForward size={14} />
-                <span>Skip Alignment &amp; Build</span>
+                <ArrowLeft size={14} />
+                <span>Back</span>
               </button>
-              {totalChunks > 0 && (
+
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button
-                  className="btn btn-secondary"
-                  onClick={() => setStep(4)}
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleSkipAlignment}
+                  disabled={files.length === 0 || ingesting}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  title="Skip questions and build with defaults"
+                >
+                  <SkipForward size={14} />
+                  <span>Skip &amp; Build</span>
+                </button>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleProceedToAlignment}
+                  disabled={files.length === 0 || ingesting}
                   style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                 >
-                  <span>Continue to Ready ({totalChunks} chunks)</span>
+                  <span>Proceed to Alignment</span>
                   <ArrowRight size={14} />
                 </button>
-              )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Step 3: Goal & Purpose Alignment */}
+        {/* Step 3: Goal Alignment */}
         {step === 3 && (
           <div className={styles.card} style={{ maxWidth: 720 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
               <div>
-                <div className={styles.alignmentHeaderBadge}>
-                  <span className={styles.alignmentHeaderBadgeDot} />
-                  <span>Pre-Indexing Alignment</span>
-                </div>
-                <h2 className={styles.cardTitle} style={{ marginTop: 4 }}>Goal Alignment</h2>
+                <h2 className={styles.cardTitle} style={{ marginBottom: 4 }}>Goal Alignment</h2>
+                <p className={styles.cardDesc} style={{ marginBottom: 0 }}>
+                  Fine-tune how your expert reasons, cites sources, and structures replies.
+                </p>
               </div>
               {!ingesting && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm"
                   onClick={handleSkipAlignment}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", padding: "4px 8px" }}
-                  title="Skip question customization and build with defaults"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", fontSize: "0.8rem" }}
+                  title="Skip customization and build with defaults"
                 >
                   <SkipForward size={13} />
                   <span>Skip this step</span>
                 </button>
               )}
             </div>
-            <p className={styles.cardDesc}>
-              Set the purpose, target audience, and response boundaries for your AI expert, or skip to build with standard defaults.
-            </p>
 
             {loadingQuestions ? (
               <div className={styles.alignmentLoadingBox}>
                 <div className={styles.alignmentLoadingSpinner} />
-                <div className={styles.alignmentLoadingTitle}>Analyzing uploaded documents...</div>
+                <div className={styles.alignmentLoadingTitle}>Analyzing source documents...</div>
                 <div className={styles.alignmentLoadingDesc}>
-                  Preparing alignment questions based on your content.
+                  Extracting key topics and structuring tailored alignment questions.
                 </div>
                 <button
                   type="button"
@@ -1059,7 +1057,6 @@ export default function NewExpertPage() {
                             )}
                             <span>{q.categoryLabel}</span>
                           </div>
-                          <span className={styles.alignmentStepIndicator}>Step 3 of 4</span>
                         </div>
 
                         <h4 className={styles.alignmentQuestionTitle}>{q.question}</h4>
@@ -1090,7 +1087,7 @@ export default function NewExpertPage() {
                           })}
                         </div>
 
-                        {/* Custom input override */}
+                        {/* Custom rule toggle */}
                         <div>
                           {!showCustomInput[q.id] ? (
                             <button
@@ -1098,12 +1095,12 @@ export default function NewExpertPage() {
                               className={styles.alignmentCustomToggle}
                               onClick={() => setShowCustomInput((prev) => ({ ...prev, [q.id]: true }))}
                             >
-                              Specify custom rule for this criteria
+                              + Custom rule for this criteria
                             </button>
                           ) : (
                             <input
                               className={styles.alignmentCustomInput}
-                              placeholder={`Custom ${q.categoryLabel.toLowerCase()} instruction...`}
+                              placeholder={`Custom instruction for ${q.categoryLabel.toLowerCase()}...`}
                               value={customAnswers[q.id] || ""}
                               onChange={(e) =>
                                 setCustomAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))
@@ -1116,25 +1113,21 @@ export default function NewExpertPage() {
                   })}
                 </div>
 
-                {/* Additional Guardrails & Disclaimers */}
+                {/* Optional Guardrails */}
                 <div className={styles.alignmentDirectivesCard}>
                   <label className={styles.alignmentDirectivesLabel}>
                     <ShieldCheck size={14} />
-                    <span>Additional Guardrails &amp; Disclaimers (Optional)</span>
+                    <span>Custom Guardrails &amp; Disclaimers (Optional)</span>
                   </label>
-                  <textarea
-                    className={styles.textarea}
-                    placeholder="e.g., Do not cite confidential pricing; Always append standard clinical disclaimer for health questions."
+                  <input
+                    className={styles.input}
+                    placeholder="e.g., Never give medical advice; Always cite chapter and section numbers."
                     value={customDirectives}
                     onChange={(e) => setCustomDirectives(e.target.value)}
-                    rows={2}
                   />
-                  <p className={styles.hint}>
-                    Explicit negative constraints, disclaimers, or mandatory citations to enforce on every reply.
-                  </p>
                 </div>
 
-                {/* Ingestion progress if active */}
+                {/* Ingestion active progress */}
                 {ingesting && (
                   <div className={styles.ingestActiveCard}>
                     <div className={styles.ingestStatusHeader}>
@@ -1148,12 +1141,12 @@ export default function NewExpertPage() {
                       />
                     </div>
                     <div className={styles.ingestFileText}>
-                      Processing: {ingestCurrentFile || "Embedding text chunks..."}
+                      Processing: {ingestCurrentFile || "Vectorizing chunks..."}
                     </div>
                   </div>
                 )}
 
-                {/* Action buttons */}
+                {/* Actions */}
                 <div className={styles.alignmentActions}>
                   <button
                     type="button"
@@ -1163,7 +1156,7 @@ export default function NewExpertPage() {
                     style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
                     <ArrowLeft size={14} />
-                    <span>Back to Sources</span>
+                    <span>Back</span>
                   </button>
 
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -1173,10 +1166,9 @@ export default function NewExpertPage() {
                       onClick={handleSkipAlignment}
                       disabled={ingesting}
                       style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-                      title="Bypass alignment and start indexing with balanced defaults"
                     >
                       <SkipForward size={14} />
-                      <span>Skip Alignment</span>
+                      <span>Skip</span>
                     </button>
 
                     <button
@@ -1189,7 +1181,7 @@ export default function NewExpertPage() {
                         });
                         setSelectedAnswers(defaults);
                         setShowCustomInput({});
-                        toast.success("Applied recommended enterprise defaults.");
+                        toast.success("Applied recommended defaults.");
                       }}
                       disabled={ingesting}
                     >
@@ -1215,13 +1207,17 @@ export default function NewExpertPage() {
 
         {/* Step 4: Done */}
         {step === 4 && (
-          <div className={styles.card} style={{ textAlign: "center", maxWidth: 640 }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16, color: "var(--accent-primary)" }}>
-              <CheckCircle2 size={46} />
+          <div className={styles.card} style={{ textAlign: "center", maxWidth: 580, padding: "40px 32px" }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+              <div className={styles.successIconWrapper}>
+                <CheckCircle2 size={40} />
+              </div>
             </div>
-            <h2 className={styles.cardTitle}>Your RAG AI Expert is Ready</h2>
-            <p className={styles.cardDesc}>
-              <strong>{name}</strong> is ready with <strong>{totalChunks} indexed knowledge chunks</strong>.
+            <h2 className={styles.cardTitle} style={{ fontSize: "1.4rem", marginBottom: 8 }}>
+              {name} is Ready
+            </h2>
+            <p className={styles.cardDesc} style={{ maxWidth: 440, margin: "0 auto 24px" }}>
+              Successfully indexed <strong>{totalChunks} knowledge chunks</strong>. Your RAG AI Expert is online and ready to assist.
             </p>
 
             <div className={styles.summaryPills}>
@@ -1229,7 +1225,7 @@ export default function NewExpertPage() {
                 <>
                   <div className={styles.summaryPill}>
                     <span>Alignment:</span>
-                    <span className={styles.summaryPillStrong}>Standard Balanced Defaults</span>
+                    <span className={styles.summaryPillStrong}>Standard Balanced</span>
                   </div>
                   <div className={styles.summaryPill}>
                     <span>Grounding Mode:</span>
@@ -1262,17 +1258,17 @@ export default function NewExpertPage() {
               <Link
                 href={`/experts/${expertId}/chat`}
                 className="btn btn-primary"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 22px" }}
               >
                 <span>Start Chatting</span>
-                <ArrowRight size={14} />
+                <ArrowRight size={15} />
               </Link>
               <Link href="/browse" className="btn btn-secondary" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                 <Globe size={14} />
                 <span>Browse Models</span>
               </Link>
               <Link href="/dashboard" className="btn btn-ghost">
-                Back to Dashboard
+                Dashboard
               </Link>
             </div>
           </div>
