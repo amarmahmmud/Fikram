@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
+import NetworkStatusListener from "@/components/NetworkStatusListener";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <NetworkStatusListener />
         {children}
         <Toaster theme="dark" position="bottom-right" />
       </body>

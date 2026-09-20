@@ -1,3 +1,5 @@
+import { fetchWithRetry, isBrowserOffline, isNetworkFailure, type RetryOptions } from "@/lib/fetch-with-retry";
+
 export class ApiError extends Error {
   public status: number;
   public data: any;
@@ -18,6 +20,21 @@ export class ApiError extends Error {
     );
   }
 
+  get isNetworkError(): boolean {
+    return (
+      this.status === 0 ||
+      this.status === 502 ||
+      this.status === 503 ||
+      this.status === 504 ||
+      this.data?.isNetworkError === true ||
+      isNetworkFailure(this.data?.originalError || this)
+    );
+  }
+
+  get isOffline(): boolean {
+    return Boolean(this.data?.isOffline || isBrowserOffline());
+  }
+
   get creditsRequired(): number | undefined {
     return this.data?.credits_required ?? this.data?.required_credits ?? this.data?.required;
   }
@@ -35,13 +52,32 @@ export class ApiError extends Error {
   }
 }
 
-async function fetchWithHandling<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, options);
+async function fetchWithHandling<T>(
+  url: string,
+  options?: RequestInit,
+  retryOpts?: RetryOptions,
+): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetchWithRetry(url, options, retryOpts);
+  } catch (netErr: any) {
+    const isOff = isBrowserOffline();
+    const friendlyMsg = isOff
+      ? "You are currently offline. Please check your internet connection."
+      : "Network connection failed. Please check your internet connection and try again.";
+
+    throw new ApiError(friendlyMsg, 0, {
+      isNetworkError: true,
+      isOffline: isOff,
+      originalError: netErr,
+    });
+  }
 
   let data;
   const contentType = response.headers.get("Content-Type");
   if (contentType && contentType.includes("application/json")) {
-    data = await response.json();
+    data = await response.json().catch(() => ({}));
   } else {
     data = await response.text();
   }

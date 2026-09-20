@@ -44,6 +44,8 @@ import {
   Loader2,
   Coins,
   Zap,
+  WifiOff,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
@@ -56,10 +58,15 @@ interface Message {
   content: string;
   sources?: { filename: string; chunkIndex: number; similarity: number }[];
   webSources?: { title: string; snippet: string; link: string }[];
-  attachment?: { mimeType: string; previewUrl?: string; filename?: string };
+  attachment?: { mimeType: string; previewUrl?: string; filename?: string; file?: File };
   isInsufficientCredits?: boolean;
   creditsRequired?: number;
   creditsBalance?: number;
+  isNetworkError?: boolean;
+  retryPayload?: {
+    userMsg: string;
+    attachment?: any;
+  };
 }
 
 interface ConversationItem {
@@ -501,12 +508,21 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   }
 
 
-  /** Send message */
-  async function handleSend() {
-    if (!input.trim() || sending) return;
+  /** Send message or retry a failed message */
+  async function sendMessage(retryOptions?: {
+    content: string;
+    attachment?: any;
+    replaceIndex?: number;
+  }) {
+    const isRetry = Boolean(retryOptions && retryOptions.replaceIndex !== undefined);
+    const userMsg = (retryOptions ? retryOptions.content : input).trim();
+    const activeAttachment = retryOptions ? retryOptions.attachment : pendingAttachment;
 
-    const userMsg = input.trim();
-    setInput("");
+    if (!userMsg || sending) return;
+
+    if (!isRetry) {
+      setInput("");
+    }
 
     // Determine if this is the very first user interaction in this chat
     const isFirstUserMessage = messages.filter((m) => m.role === "user").length === 0;
@@ -516,31 +532,36 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       primeAudio();
     }
 
-    // Build user message with optional attachment preview
-    const userMessage: Message = { role: "user", content: userMsg };
-    if (pendingAttachment) {
-      userMessage.attachment = {
-        mimeType: pendingAttachment.mimeType,
-        previewUrl: pendingAttachment.previewUrl,
-        filename: pendingAttachment.file.name,
-      };
+    if (isRetry && retryOptions?.replaceIndex !== undefined) {
+      // Remove the failed model error message before retrying
+      setMessages((prev) => prev.filter((_, idx) => idx !== retryOptions.replaceIndex));
+    } else {
+      // Build user message with optional attachment preview
+      const userMessage: Message = { role: "user", content: userMsg };
+      if (activeAttachment) {
+        userMessage.attachment = {
+          mimeType: activeAttachment.mimeType,
+          previewUrl: activeAttachment.previewUrl,
+          filename: activeAttachment.file ? activeAttachment.file.name : activeAttachment.filename,
+        };
+      }
+      userScrolledUpRef.current = false;
+      setShowScrollBottom(false);
+      setMessages((prev) => [...prev, userMessage]);
     }
-    userScrolledUpRef.current = false;
-    setShowScrollBottom(false);
-    setMessages((prev) => [...prev, userMessage]);
     setSending(true);
 
     try {
       let data: any;
 
-      if (pendingAttachment) {
+      if (activeAttachment?.file) {
         // Direct-to-R2 architecture for media
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            filename: pendingAttachment.file.name,
-            contentType: pendingAttachment.file.type,
+            filename: activeAttachment.file.name,
+            contentType: activeAttachment.file.type,
           }),
         });
 
@@ -554,8 +575,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         // Upload directly to Cloudflare R2
         const putRes = await fetch(uploadUrl, {
           method: "PUT",
-          body: pendingAttachment.file,
-          headers: { "Content-Type": pendingAttachment.file.type },
+          body: activeAttachment.file,
+          headers: { "Content-Type": activeAttachment.file.type },
         });
 
         if (!putRes.ok) throw new Error("Failed to upload file to storage");
@@ -570,12 +591,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             .map((m) => ({ role: m.role, content: m.content })),
           attachment: {
             url: downloadUrl,
-            mimeType: pendingAttachment.mimeType,
-            filename: pendingAttachment.file.name
+            mimeType: activeAttachment.mimeType,
+            filename: activeAttachment.file.name
           },
           systemPrompt: effectivePrompt || undefined,
         });
-        setPendingAttachment(null);
+        if (!isRetry) setPendingAttachment(null);
       } else {
         // JSON path — standard text-only chat
         data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
@@ -673,15 +694,44 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           },
         ]);
         setCreditsBalance(bal);
+      } else if (
+        err?.isNetworkError ||
+        err?.isOffline ||
+        err?.status === 0 ||
+        err?.message?.toLowerCase().includes("network") ||
+        err?.message?.toLowerCase().includes("failed to fetch") ||
+        err?.message?.toLowerCase().includes("offline") ||
+        (typeof navigator !== "undefined" && !navigator.onLine)
+      ) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            isNetworkError: true,
+            retryPayload: {
+              userMsg,
+              attachment: activeAttachment,
+            },
+          },
+        ]);
+        toast.error("Connection problem", {
+          description: "Unable to reach the assistant. You can retry your message anytime.",
+          duration: 4000,
+        });
       } else {
         setMessages((prev) => [
           ...prev,
           { role: "model", content: err?.message ? `**Error**: ${err.message}` : "Network error — please try again." },
         ]);
       }
+    } finally {
+      setSending(false);
     }
+  }
 
-    setSending(false);
+  async function handleSend() {
+    return sendMessage();
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -1083,6 +1133,72 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                       <Link href="/credits" className={styles.insufficientCreditsBtnSecondary}>
                         <span>View Plans &amp; Billing</span>
                       </Link>
+                    </div>
+                  </div>
+                ) : msg.isNetworkError ? (
+                  <div className={styles.networkErrorCard}>
+                    <div className={styles.networkErrorHeader}>
+                      <div className={styles.networkErrorIcon}>
+                        <WifiOff size={18} />
+                      </div>
+                      <div>
+                        <div className={styles.networkErrorTitle}>Connection Interrupted</div>
+                        <div className={styles.networkErrorSub}>
+                          Unable to reach the assistant due to a network connection issue. Your message draft has been preserved.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.networkErrorActions}>
+                      <button
+                        type="button"
+                        className={styles.networkErrorBtnPrimary}
+                        disabled={sending}
+                        onClick={() => {
+                          if (msg.retryPayload) {
+                            sendMessage({
+                              content: msg.retryPayload.userMsg,
+                              attachment: msg.retryPayload.attachment,
+                              replaceIndex: i,
+                            });
+                          }
+                        }}
+                      >
+                        <RotateCcw size={14} className={sending ? styles.spinning : ""} />
+                        <span>Retry Message</span>
+                      </button>
+
+                      {msg.retryPayload?.userMsg && (
+                        <button
+                          type="button"
+                          className={styles.networkErrorBtnSecondary}
+                          onClick={() => {
+                            if (typeof navigator !== "undefined" && navigator.clipboard) {
+                              navigator.clipboard.writeText(msg.retryPayload!.userMsg).then(() => {
+                                toast.success("Saved message text copied to clipboard!");
+                              }).catch(() => {
+                                fallbackCopyText(msg.retryPayload!.userMsg, () => {
+                                  toast.success("Saved message text copied to clipboard!");
+                                });
+                              });
+                            } else {
+                              fallbackCopyText(msg.retryPayload!.userMsg, () => {
+                                toast.success("Saved message text copied to clipboard!");
+                              });
+                            }
+                          }}
+                        >
+                          <Copy size={13} />
+                          <span>Copy Saved Text</span>
+                        </button>
+                      )}
+
+                      {typeof navigator !== "undefined" && !navigator.onLine && (
+                        <span className={styles.networkStatusTag}>
+                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
+                          Offline
+                        </span>
+                      )}
                     </div>
                   </div>
                 ) : (

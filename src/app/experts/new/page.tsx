@@ -28,6 +28,8 @@ import {
   Sliders,
   SkipForward,
   Coins,
+  RotateCcw,
+  WifiOff,
 } from "lucide-react";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
@@ -420,8 +422,13 @@ export default function NewExpertPage() {
 
   async function runFileIngestion() {
     if (!expertId || files.length === 0) return;
-    setIngesting(true);
 
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      toast.error("You are currently offline. Please reconnect before continuing.");
+      return;
+    }
+
+    setIngesting(true);
     let hasErrors = false;
 
     for (let i = 0; i < files.length; i++) {
@@ -569,9 +576,18 @@ export default function NewExpertPage() {
       } catch (err: any) {
         console.error("Upload error for file", files[i].file.name, err);
         hasErrors = true;
+        const isNet =
+          (typeof navigator !== "undefined" && !navigator.onLine) ||
+          err?.isNetworkError ||
+          err?.message?.toLowerCase().includes("failed to fetch") ||
+          err?.message?.toLowerCase().includes("network") ||
+          err?.message?.toLowerCase().includes("storage connection failed");
+        const errMsg = isNet
+          ? "Network connection interrupted"
+          : err.message || "Upload failed";
         setFiles((prev) =>
           prev.map((f, idx) =>
-            idx === i ? { ...f, status: "error", error: err.message || "Upload failed" } : f
+            idx === i ? { ...f, status: "error", error: errMsg } : f
           )
         );
       }
@@ -580,6 +596,9 @@ export default function NewExpertPage() {
     setIngesting(false);
     if (!hasErrors) {
       setStep(4);
+    } else {
+      const errorCount = files.filter((f) => f.status === "error").length;
+      toast.error(`${errorCount || "Some"} file(s) encountered an issue. You can retry indexing them.`);
     }
   }
 
@@ -1249,6 +1268,40 @@ export default function NewExpertPage() {
                       actionText="index files and create your expert"
                       onTopUpClick={() => setShowBuyModal(true)}
                     />
+                  </div>
+                )}
+
+                {files.some((f) => f.status === "error") && !ingesting && !insufficientCreditsError && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      marginBottom: 12,
+                      padding: "12px 14px",
+                      borderRadius: "var(--radius-md)",
+                      background: "rgba(239, 68, 68, 0.12)",
+                      border: "1px solid rgba(239, 68, 68, 0.35)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fca5a5", fontSize: "0.8125rem" }}>
+                      <WifiOff size={16} />
+                      <span>
+                        {files.filter((f) => f.status === "error").length} file(s) failed to index. Check your connection and retry.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={runFileIngestion}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                    >
+                      <RotateCcw size={13} />
+                      <span>Retry Failed Files</span>
+                    </button>
                   </div>
                 )}
 

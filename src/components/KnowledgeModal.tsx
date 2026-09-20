@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import styles from "./KnowledgeModal.module.css";
-import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film, ShieldCheck, Flame, Scale, Globe, Coins } from "lucide-react";
+import { BookOpen, FileText, UploadCloud, X, CheckCircle2, AlertCircle, Image, FileAudio, Film, ShieldCheck, Flame, Scale, Globe, Coins, RotateCcw, WifiOff } from "lucide-react";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
@@ -38,6 +38,7 @@ export function KnowledgeModal({
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [insufficientCreditsError, setInsufficientCreditsError] = useState<{ required: number; balance: number; message?: string } | null>(null);
+  const [failedFiles, setFailedFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const supabase = createClient();
@@ -110,9 +111,17 @@ export function KnowledgeModal({
     }
   }, [isOpen, expertId]);
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  async function processFiles(filesToProcess: File[]) {
+    if (!filesToProcess || filesToProcess.length === 0) return;
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setStatusMessage({
+        type: "error",
+        text: "You are currently offline. Please reconnect to upload documents.",
+      });
+      setFailedFiles(filesToProcess);
+      return;
+    }
 
     if (creditsBalance !== null && creditsBalance < 1) {
       setInsufficientCreditsError({
@@ -132,9 +141,10 @@ export function KnowledgeModal({
     let successCount = 0;
     let failedCount = 0;
     let hitInsufficientCredits = false;
+    const uncompletedFiles: File[] = [];
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
       try {
         // Direct-to-R2 Architecture
         const uploadRes = await fetch("/api/upload", {
@@ -156,7 +166,7 @@ export function KnowledgeModal({
           });
         } catch (netErr: any) {
           console.error("Storage network error:", netErr);
-          throw new Error("Storage connection failed. Please check R2 CORS settings.");
+          throw new Error("Storage connection failed. Please check your network connection.");
         }
 
         if (!putRes.ok) {
@@ -187,6 +197,7 @@ export function KnowledgeModal({
               message: errJson.message || `Uploading ${file.name} requires ${reqCredits} credits.`,
             });
             failedCount++;
+            uncompletedFiles.push(file);
             break; // Stop further uploads when credits are insufficient
           }
 
@@ -211,15 +222,19 @@ export function KnowledgeModal({
           successCount++;
         } else {
           failedCount++;
+          uncompletedFiles.push(file);
           console.error(`Failed to ingest ${file.name}:`, data.error);
         }
       } catch (err) {
         if (!hitInsufficientCredits) {
           failedCount++;
+          uncompletedFiles.push(file);
           console.error(`Failed to upload ${file.name}:`, err);
         }
       }
     }
+
+    setFailedFiles(uncompletedFiles);
 
     if (hitInsufficientCredits) {
       setStatusMessage(null);
@@ -230,9 +245,12 @@ export function KnowledgeModal({
       });
       loadUserCredits();
     } else {
+      const isNetError = typeof navigator !== "undefined" && !navigator.onLine;
       setStatusMessage({
         type: "error",
-        text: `${successCount} succeeded, ${failedCount} failed. Please try again.`,
+        text: isNetError
+          ? `Network connection interrupted. ${failedCount} file${failedCount > 1 ? "s" : ""} could not be uploaded.`
+          : `${successCount} succeeded, ${failedCount} failed. You can retry failed files below.`,
       });
       loadUserCredits();
     }
@@ -241,6 +259,19 @@ export function KnowledgeModal({
     if (fileInputRef.current) fileInputRef.current.value = "";
     await loadSources();
     if (onSourcesUpdated) onSourcesUpdated();
+  }
+
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setFailedFiles([]);
+    await processFiles(Array.from(files));
+  }
+
+  async function handleRetryFailedFiles() {
+    if (failedFiles.length === 0) return;
+    const toRetry = [...failedFiles];
+    await processFiles(toRetry);
   }
 
   if (!isOpen) return null;
@@ -418,6 +449,37 @@ export function KnowledgeModal({
                     actionText="index documents into this knowledge base"
                     onTopUpClick={() => setShowBuyModal(true)}
                   />
+                </div>
+              )}
+
+              {failedFiles.length > 0 && !uploading && !insufficientCreditsError && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: "12px 14px",
+                    borderRadius: "var(--radius-md)",
+                    background: "rgba(239, 68, 68, 0.12)",
+                    border: "1px solid rgba(239, 68, 68, 0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fca5a5", fontSize: "0.8125rem" }}>
+                    <WifiOff size={16} />
+                    <span>{failedFiles.length} file{failedFiles.length > 1 ? "s" : ""} failed to upload due to connection issues.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={handleRetryFailedFiles}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    <RotateCcw size={13} />
+                    <span>Retry {failedFiles.length} File{failedFiles.length > 1 ? "s" : ""}</span>
+                  </button>
                 </div>
               )}
 
