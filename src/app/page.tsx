@@ -367,7 +367,7 @@ export default function LandingPage() {
   const [visibleLogs, setVisibleLogs] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
   const [pricingMode, setPricingMode] = useState<"subscriptions" | "packs">("subscriptions");
-  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const heroCardRef = useRef<HTMLDivElement>(null);
 
@@ -393,6 +393,15 @@ export default function LandingPage() {
     const t = setTimeout(() => setProgressWidth(100), 400);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const pricingSection = document.getElementById("pricing");
+    if (pricingSection) {
+      pricingSection.querySelectorAll("[data-reveal]").forEach((el) => {
+        el.classList.add(styles.revealed);
+      });
+    }
+  }, [pricingMode]);
 
   const observeReveal = useCallback((node: HTMLElement | null) => {
     if (!node) return;
@@ -731,15 +740,13 @@ export default function LandingPage() {
 
           {/* Pricing Grid (Subscriptions) */}
           {pricingMode === "subscriptions" ? (
-            <div className={styles.pricingGrid}>
-              {SUBSCRIPTION_PLANS.map((plan, i) => {
+            <div className={`${styles.pricingGrid} ${styles.revealItem}`} data-reveal>
+              {SUBSCRIPTION_PLANS.map((plan) => {
                 const price = billingCycle === "annual" ? plan.annualPrice : plan.monthlyPrice;
                 return (
                   <div
                     key={plan.id}
-                    className={`${styles.tierCard} ${plan.popular ? styles.tierPopular : ""} ${styles.revealItem}`}
-                    data-reveal
-                    style={{ transitionDelay: `${i * 0.1}s` }}
+                    className={`${styles.tierCard} ${plan.popular ? styles.tierPopular : ""}`}
                   >
                     {plan.popular && (
                       <div className={styles.popularBadge}>
@@ -806,14 +813,12 @@ export default function LandingPage() {
             </div>
           ) : (
             /* Pay-As-You-Go Credit Packs */
-            <div className={styles.packsWrap}>
+            <div className={`${styles.packsWrap} ${styles.revealItem}`} data-reveal>
               <div className={styles.packsGrid}>
-                {CREDIT_PACKS.map((pack, i) => (
+                {CREDIT_PACKS.map((pack) => (
                   <div
                     key={pack.name}
-                    className={`${styles.packCard} ${pack.popular ? styles.packCardPopular : ""} ${styles.revealItem}`}
-                    data-reveal
-                    style={{ transitionDelay: `${i * 0.12}s` }}
+                    className={`${styles.packCard} ${pack.popular ? styles.packCardPopular : ""}`}
                   >
                     {pack.popular && (
                       <div className={styles.popularBadge}>
