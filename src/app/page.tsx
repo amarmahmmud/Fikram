@@ -242,33 +242,6 @@ const CREDIT_BREAKDOWN = [
   { icon: "🎬", amount: "10 Credits", action: "Video File", desc: "Audio transcription + visual diagram indexing" },
 ];
 
-const FAQ_ITEMS = [
-  {
-    q: "How do credits work and how far do 50 free credits go?",
-    a: "Every new account receives 50 free credits immediately upon signup with no credit card required. Chatting costs 1 credit per query, text/PDF ingestion costs 1 credit per page, audio costs 5 credits, and video costs 10 credits. Your 50 free credits are more than enough to create your first RAG AI Expert and have 45+ rich conversations right out of the box."
-  },
-  {
-    q: "Do credits expire?",
-    a: "Subscription credits refresh at the start of each monthly billing period. Pay-as-you-go top-up credits (Starter Pack & Power Pack) never expire — they remain safely in your account balance until used, even across billing cycles."
-  },
-  {
-    q: "Can I upgrade, downgrade, or cancel anytime?",
-    a: "Yes, completely hassle-free. You can upgrade, downgrade, or cancel your subscription at any time with a single click from your Billing settings. If you cancel, you will continue to have access to your plan's credits and features until the end of your prepaid period."
-  },
-  {
-    q: "What types of files can I upload to my AI Expert?",
-    a: "Fikram supports PDFs, Word documents, Markdown files, plain text, PNG/JPG/WebP images, audio recordings (MP3, WAV, M4A), and video clips (MP4). Our ingestion pipeline automatically extracts text, transcribes spoken words, and indexes diagrams so your AI can answer questions accurately."
-  },
-  {
-    q: "Is my proprietary data safe and private?",
-    a: "100% yes. Your knowledge base files and chats are stored in encrypted, isolated vector vaults dedicated to your account. Your data is never used to train public foundational models, and you retain complete ownership of all content."
-  },
-  {
-    q: "What is the difference between RAG AI Experts and custom model fine-tuning?",
-    a: "RAG (Retrieval-Augmented Generation) connects frontier AI models to your specific files in real time, delivering instant answers backed by citations with zero training delay. Custom model fine-tuning (coming soon to Fikram) actually trains neural network weights on your unique domain tone and vocabulary using LoRA on dedicated GPU clusters."
-  },
-];
-
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollPos = useRef(0);
@@ -368,7 +341,6 @@ export default function LandingPage() {
   const [progressWidth, setProgressWidth] = useState(0);
   const [pricingMode, setPricingMode] = useState<"subscriptions" | "packs">("subscriptions");
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("annual");
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const heroCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -431,7 +403,6 @@ export default function LandingPage() {
             <a href="#features" className={styles.navLink}>Features</a>
             <a href="#how-it-works" className={styles.navLink}>How It Works</a>
             <a href="#pricing" className={styles.navLink}>Pricing</a>
-            <a href="#faq" className={styles.navLink}>FAQ</a>
           </div>
           <div className={styles.navActions}>
             <Link href="/auth/signin" className="btn btn-ghost btn-sm">Sign In</Link>
@@ -456,7 +427,6 @@ export default function LandingPage() {
             <a href="#features" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Features</a>
             <a href="#how-it-works" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>How It Works</a>
             <a href="#pricing" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
-            <a href="#faq" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>FAQ</a>
             <div className={styles.mobileNavDivider} />
             <div className={styles.mobileNavActions}>
               <Link href="/auth/signin" className="btn btn-secondary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%", justifyContent: "center" }}>Sign In</Link>
@@ -913,56 +883,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── FAQ Section ── */}
-      <section id="faq" className={styles.faqSection} ref={observeReveal}>
-        <div className="container">
-          <div className={styles.sectionHead} data-reveal>
-            <span className="section-label">FAQ</span>
-            <h2>Frequently Asked Questions</h2>
-            <p>Everything you need to know about Fikram, credits, pricing, and how your AI is built.</p>
-          </div>
-
-          <div className={styles.faqGrid}>
-            {FAQ_ITEMS.map((item, idx) => {
-              const isOpen = openFaq === idx;
-              return (
-                <div
-                  key={item.q}
-                  className={`${styles.faqItem} ${isOpen ? styles.faqItemOpen : ""} ${styles.revealItem}`}
-                  data-reveal
-                  style={{ transitionDelay: `${idx * 0.06}s` }}
-                >
-                  <button
-                    type="button"
-                    className={styles.faqQuestion}
-                    onClick={() => setOpenFaq(isOpen ? null : idx)}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{item.q}</span>
-                    <svg
-                      className={`${styles.faqChevron} ${isOpen ? styles.faqChevronOpen : ""}`}
-                      width="20"
-                      height="20"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  {isOpen && (
-                    <div className={styles.faqAnswer}>
-                      <p>{item.a}</p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* ── Bottom High-Converting CTA ── */}
       <section className={styles.bottomCtaSection} ref={observeReveal}>
         <div className="container">
@@ -1009,7 +929,6 @@ export default function LandingPage() {
                 <a href="#features" className={styles.footerLink}>Features</a>
                 <a href="#how-it-works" className={styles.footerLink}>How It Works</a>
                 <a href="#pricing" className={styles.footerLink}>Pricing</a>
-                <a href="#faq" className={styles.footerLink}>FAQ</a>
               </div>
               <div className={styles.footerCol}>
                 <div className={styles.footerColTitle}>Account</div>
