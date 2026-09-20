@@ -151,7 +151,7 @@ const SUBSCRIPTION_PLANS = [
   {
     id: "pro",
     name: "Pro Expert",
-    badge: "Most Popular",
+    badge: "Starter plan",
     badgeType: "popular",
     desc: "For consultants, coaches, and creators delivering client-ready multimodal AI experts.",
     monthlyPrice: 19,
