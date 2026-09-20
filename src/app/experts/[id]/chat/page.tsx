@@ -31,6 +31,7 @@ import {
   Home,
   ArrowUp,
   ArrowDown,
+  FileText,
   ShieldCheck,
   BadgeCheck,
   Flame,

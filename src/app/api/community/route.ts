@@ -10,6 +10,8 @@ export interface CommunityItem {
   author: {
     name: string;
     avatarUrl?: string;
+    isVerified?: boolean;
+    role?: string;
   };
   baseModel?: string;
   likesCount: number;
