@@ -750,7 +750,7 @@ export default function LandingPage() {
                   >
                     {plan.popular && (
                       <div className={styles.popularBadge}>
-                        ★ Most Popular
+                        ★ Starter plan
                       </div>
                     )}
 
@@ -766,14 +766,6 @@ export default function LandingPage() {
                       <span className={styles.tierCurrency}>$</span>
                       <span className={styles.tierPrice}>{price}</span>
                       <span className={styles.tierPeriod}>/ month</span>
-                    </div>
-
-                    <div className={styles.tierBilledNote}>
-                      {plan.monthlyPrice === 0
-                        ? "Free forever · No credit card required"
-                        : billingCycle === "annual"
-                        ? `Billed annually ($${plan.annualPrice * 12}/yr)`
-                        : "Billed monthly · Cancel anytime"}
                     </div>
 
                     <div className={`${styles.tierAllowancePill} ${plan.popular ? styles.tierAllowancePillPopular : ""}`}>
@@ -902,19 +894,19 @@ export default function LandingPage() {
           {/* Trust Guarantees */}
           <div className={styles.trustBar} data-reveal>
             <div className={styles.trustItem}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
               <span>Bank-Grade Encryption</span>
             </div>
             <div className={styles.trustItem}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>
               <span>No Card Required to Start</span>
             </div>
             <div className={styles.trustItem}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>
               <span>1-Click Cancellation Anytime</span>
             </div>
             <div className={styles.trustItem}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="m9 12 2 2 4-4" /><circle cx="12" cy="12" r="10" /></svg>
               <span>Isolated Private Vector Vault</span>
             </div>
           </div>
