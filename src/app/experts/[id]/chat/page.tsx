@@ -221,6 +221,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
   const [showBuyModal, setShowBuyModal] = useState(false);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const stopGenerating = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+      setSending(false);
+    }
+  }, []);
+
   // Auto-expand sidebar on desktop devices
   useEffect(() => {
     if (typeof window !== "undefined" && window.innerWidth > 768) {
@@ -598,6 +608,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       // Add temporary model placeholder message for streaming tokens
       setMessages((prev) => [...prev, { role: "model", content: "" }]);
 
+      abortControllerRef.current = new AbortController();
+
       const res = await fetch(`/api/experts/${expertId}/chat`, {
         method: "POST",
         headers: {
@@ -605,6 +617,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           Accept: "text/event-stream, application/json",
         },
         body: JSON.stringify(chatPayload),
+        signal: abortControllerRef.current.signal,
       });
 
       if (!res.ok) {
@@ -759,6 +772,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         ]);
       }
     } catch (err: any) {
+      if (err.name === "AbortError") {
+        return;
+      }
       if (
         err?.code === "RESPONSE_TOO_LONG" ||
         err?.data?.code === "RESPONSE_TOO_LONG" ||
@@ -1274,6 +1290,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             </div>
 
             <div className={styles.persistentActions}>
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
+                onClick={handleNewChat}
+                title="Start a new chat"
+              >
+                <Plus size={16} />
+                <span className={styles.btnLabel}>New Chat</span>
+              </button>
               {!isOwner && (
                 <button
                   className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
@@ -1347,6 +1371,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               <div className={styles.mobileMenuSection}>
                 <div className={styles.mobileMenuLabel}>Options</div>
                 <div className={styles.mobileMenuActions}>
+                  <button
+                    className={`btn btn-secondary btn-sm ${styles.mobileMenuItem}`}
+                    onClick={() => {
+                      handleNewChat();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <Plus size={16} />
+                    <span>New Chat</span>
+                  </button>
                   <button
                     className={`btn btn-secondary btn-sm ${styles.mobileMenuItem} ${autoVoiceEnabled ? styles.mobileMenuItemActive : ""}`}
                     onClick={() => {
@@ -1881,16 +1915,28 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                   rows={1}
                   disabled={sending || isTranscribing}
                 />
-                <button
-                  type="button"
-                  className={styles.sendBtn}
-                  onClick={handleSend}
-                  disabled={(!input.trim() && !pendingAttachment) || sending || isTranscribing}
-                  title="Send message (Enter)"
-                  aria-label="Send message"
-                >
-                  <ArrowUp size={18} strokeWidth={2.5} />
-                </button>
+                {sending ? (
+                  <button
+                    type="button"
+                    className={styles.stopBtn}
+                    onClick={stopGenerating}
+                    title="Stop generating"
+                    aria-label="Stop generating"
+                  >
+                    <Square size={16} fill="currentColor" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.sendBtn}
+                    onClick={handleSend}
+                    disabled={(!input.trim() && !pendingAttachment) || isTranscribing}
+                    title="Send message (Enter)"
+                    aria-label="Send message"
+                  >
+                    <ArrowUp size={18} strokeWidth={2.5} />
+                  </button>
+                )}
               </>
             )}
           </div>
