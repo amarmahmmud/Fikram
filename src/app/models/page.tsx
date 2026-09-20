@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import styles from "./page.module.css";
-import { MODELS, ASR_MODEL_CATEGORIES as MODEL_CATEGORIES } from "@/lib/models";
-import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import ComingSoonButton from "@/components/ComingSoonButton";
-import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight, Sparkles, BadgeCheck } from "lucide-react";
+import { Star, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight, Sparkles, BadgeCheck } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -52,11 +50,10 @@ const COMMUNITY_CATEGORIES = [
 ];
 
 export default function ModelsPage() {
-  const [mainTab, setMainTab] = useState<"community" | "verified" | "huggingface">("community");
+  const [mainTab, setMainTab] = useState<"community" | "huggingface">("community");
   const [search, setSearch] = useState("");
 
   useEffect(() => { document.title = "Model Registry — Fikram"; }, []);
-  const [activeCategory, setActiveCategory] = useState<ModelCategory | "all">("all");
   const [communityCategory, setCommunityCategory] = useState("All");
 
   // Community Models state
@@ -135,14 +132,6 @@ export default function ModelsPage() {
       .finally(() => setHfLoading(false));
   }, []);
 
-  // Filter verified models
-  const filteredVerified = MODELS.filter((m) => {
-    const matchSearch = m.name.toLowerCase().includes(search.toLowerCase()) ||
-      m.org.toLowerCase().includes(search.toLowerCase()) ||
-      m.bestFor.some((b) => b.toLowerCase().includes(search.toLowerCase()));
-    const matchCategory = activeCategory === "all" || m.category === activeCategory;
-    return matchSearch && matchCategory;
-  });
 
   // Filter community models
   const filteredCommunity = communityModels.filter((m) => {
@@ -193,12 +182,6 @@ export default function ModelsPage() {
             </span>
           </button>
 
-          <button
-            className={`${styles.tab} ${mainTab === "verified" ? styles.active : ""}`}
-            onClick={() => setMainTab("verified")}
-          >
-            <Package size={16} style={{ marginRight: 4 }} /> Base Models
-          </button>
 
           <button
             className={`${styles.tab} ${mainTab === "huggingface" ? styles.active : ""}`}
@@ -235,7 +218,7 @@ export default function ModelsPage() {
             placeholder={
               mainTab === "community" 
                 ? "Search public RAG AI Experts by name, topic, or keyword..."
-                : "Search foundation models by name, org, or architecture..."
+                : "Search HuggingFace models by name, org, or ID..."
             }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -251,21 +234,6 @@ export default function ModelsPage() {
                   onClick={() => setCommunityCategory(cat)}
                 >
                   {cat}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Categories for Verified Tab */}
-          {mainTab === "verified" && (
-            <div className={styles.taskFilters}>
-              {MODEL_CATEGORIES.map((cat: { value: string; label: string }) => (
-                <button
-                  key={cat.value}
-                  className={`btn btn-sm ${activeCategory === cat.value ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setActiveCategory(cat.value as any)}
-                >
-                  {cat.label}
                 </button>
               ))}
             </div>
@@ -385,59 +353,6 @@ export default function ModelsPage() {
           </div>
         )}
 
-        {/* ── TAB 2: VERIFIED BASE FOUNDATION MODELS ── */}
-        {mainTab === "verified" && (
-          <div>
-            <div style={{ margin: "16px 0 20px" }}>
-              <h3 style={{ fontSize: "1.1rem", display: "flex", alignItems: "center", gap: 8 }}>
-                <Package size={18} /> Verified Base LLMs
-                <span className="badge badge-default" style={{ fontSize: "0.65rem", background: "linear-gradient(135deg, rgba(245,158,11,0.12), rgba(249,115,22,0.08))", borderColor: "rgba(245,158,11,0.2)", color: "#F59E0B" }}>Coming Soon</span>
-              </h3>
-              <p style={{ color: "var(--text-muted)", fontSize: "0.8125rem", margin: "4px 0 0" }}>
-                Curated open-source models ready for LoRA and QLoRA training on Modal GPU clusters.
-              </p>
-            </div>
-
-            <div className={styles.modelsGrid}>
-              {filteredVerified.map((m) => (
-                <div key={m.id} className={`card card-hover ${styles.modelCard}`}>
-                  <div className={styles.modelCardTop}>
-                    <div className={styles.modelOrg}>{m.org}</div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      {m.popular && <span className="badge badge-blue">Popular</span>}
-                      {m.recommended && <span className="badge badge-success">Best Pick</span>}
-                    </div>
-                  </div>
-
-                  <h4 className={styles.modelName}>{m.name}</h4>
-                  <div className={styles.modelTask} style={{ textTransform: "capitalize" }}>{m.category}</div>
-
-                  {/* Best for tags */}
-                  <div className={styles.modelTags}>
-                    {m.bestFor.slice(0, 3).map((bf) => (
-                      <span key={bf} className="badge badge-default" style={{ fontSize: "0.6875rem" }}>
-                        {bf}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className={styles.modelCardBottom}>
-                    <div className={styles.modelCredits}>
-                      <span className={styles.creditsLabel}>Est. Credits</span>
-                      <span className={styles.creditsValue}>{m.credits.min}–{m.credits.max}</span>
-                    </div>
-                    <ComingSoonButton
-                      feature="fine-tune"
-                      className="btn btn-primary btn-sm"
-                    >
-                      Fine-Tune ▷
-                    </ComingSoonButton>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* ── TAB 3: HUGGINGFACE HUB ── */}
         {mainTab === "huggingface" && (
