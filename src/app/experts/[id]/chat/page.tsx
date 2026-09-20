@@ -28,7 +28,7 @@ import {
   Mic,
   Square,
   Settings2,
-  ArrowLeft,
+  Home,
   ArrowUp,
   ArrowDown,
   FileText,
@@ -1229,9 +1229,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               href={currentUser ? "/dashboard" : "/browse"}
               className={styles.backBtn}
               title={currentUser ? "Back to Dashboard" : "Back to Browse"}
-              aria-label="Back"
+              aria-label={currentUser ? "Back to Dashboard" : "Back to Browse"}
             >
-              <ArrowLeft size={16} />
+              <Home size={16} />
             </Link>
 
             <div className={styles.expertAvatar}>
