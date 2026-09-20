@@ -204,10 +204,6 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
                   <span>Create RAG AI Expert</span>
                   <ArrowRight size={14} />
                 </Link>
-                <Link href="/browse" className={`btn btn-secondary ${styles.tierBtnSecondary}`}>
-                  <Globe size={15} />
-                  <span>Browse Models</span>
-                </Link>
               </div>
             </div>
 

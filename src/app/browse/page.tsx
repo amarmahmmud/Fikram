@@ -186,13 +186,7 @@ export default function BrowseModelsPage() {
               Discover community RAG AI Experts or create your own in seconds.
             </p>
           </div>
-          <div className={styles.headerCta}>
-            <Link href="/experts/new" className={`btn btn-primary ${styles.createCtaBtn}`}>
-              <Sparkles size={16} />
-              <span>Create Your Own RAG AI</span>
-              <ArrowRight size={15} />
-            </Link>
-          </div>
+
         </div>
 
       <div className={styles.filterBar}>

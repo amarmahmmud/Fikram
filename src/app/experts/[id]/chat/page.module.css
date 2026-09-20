@@ -457,6 +457,23 @@
   display: inline;
 }
 
+.desktopOnlyActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.persistentActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobileMenuBtn {
+  display: none;
+}
+
+
 /* Messages Area */
 .messagesArea {
   flex: 1 1 0%;
@@ -1434,6 +1451,98 @@
     font-size: 0.65rem;
     flex-wrap: nowrap;
     overflow: hidden;
+  }
+
+  .desktopOnly,
+  .desktopOnlyActions {
+    display: none !important;
+  }
+
+  .mobileMenuBtn {
+    display: inline-flex !important;
+  }
+
+  .mobileMenuBackdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(2px);
+    z-index: 1000;
+  }
+
+  .mobileMenu {
+    position: absolute;
+    top: 60px;
+    right: 12px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    z-index: 1001;
+    min-width: 240px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .mobileMenuSection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .mobileMenuLabel {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .expertTagMobile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .mobileMenuDivider {
+    height: 1px;
+    background: var(--border);
+    margin: 4px 0;
+  }
+
+  .mobileMenuActions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .mobileMenuItem {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    width: 100%;
+    cursor: pointer;
+  }
+
+  .mobileMenuItemActive {
+    background: rgba(0, 229, 200, 0.1) !important;
+    color: var(--accent-primary) !important;
+    border-color: rgba(0, 229, 200, 0.3) !important;
   }
 
   .headerActions {

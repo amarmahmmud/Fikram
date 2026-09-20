@@ -10,6 +10,7 @@ import { EditAssistantModal } from "@/components/chat/EditAssistantModal";
 import { MarkdownContent } from "@/components/chat/MarkdownContent";
 import { apiClient } from "@/lib/apiClient";
 import {
+  MoreHorizontal,
   Globe,
   BookOpen,
   PanelLeft,
@@ -212,8 +213,9 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const effectivePrompt = sessionPrompt !== null ? sessionPrompt : (expert?.system_prompt || "");
   const isCustomized = sessionPrompt !== null && sessionPrompt.trim() !== (expert?.system_prompt || "").trim();
 
-  // Sidebar and Conversation state (collapsed by default on mobile)
+  // Sidebar, Mobile Menu, and Conversation state
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [creditsBalance, setCreditsBalance] = useState<number | null>(null);
@@ -1183,7 +1185,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
             <div className={styles.headerTitles}>
               <div className={styles.expertName} title={expert.name}>{expert.name}</div>
-              <div className={styles.expertTag}>
+              <div className={`${styles.expertTag} ${styles.desktopOnly}`}>
                 {expertMetadata?.reasoningMode === "evaluative" ? (
                   <span className={styles.modeBadgeEvaluative}>
                     <Flame size={12} /> Critical Evaluator
@@ -1207,88 +1209,185 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           </div>
 
           <div className={styles.headerActions}>
-            {/* Auto-Voice Response Toggle (Option A) */}
-            <button
-              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${autoVoiceEnabled ? styles.actionBtnVoiceActive : styles.actionBtnVoiceMuted
-                }`}
-              onClick={handleToggleAutoVoice}
-              title={
-                autoVoiceEnabled
-                  ? "Voice Auto-Play is ON (First reply speaks aloud). Click to turn OFF."
-                  : "Voice Auto-Play is OFF (Text only). Click to turn ON."
-              }
-              aria-label={
-                autoVoiceEnabled
-                  ? "Voice Auto-Play is enabled. Click to disable."
-                  : "Voice Auto-Play is disabled. Click to enable."
-              }
-            >
-              {autoVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              <span className={styles.btnLabel}>
-                {autoVoiceEnabled ? "Voice: ON" : "Voice: OFF"}
-              </span>
-              {autoVoiceEnabled && <span className={styles.voiceDot} />}
-            </button>
-            <button
-              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${isCustomized ? styles.actionBtnCustomized : ""}`}
-              onClick={() => setEditModalOpen(true)}
-              title={
-                isCustomized
-                  ? "Personal session rules active (click to edit or reset)"
-                  : isOwner
-                    ? "Edit RAG AI Expert rules (Session or Creator Default)"
-                    : "Customize RAG AI Expert rules for your chat session"
-              }
-            >
-              <Settings2 size={16} />
-              <span className={styles.btnLabel}>{isCustomized ? "Rules (Custom)" : "Edit Rules"}</span>
-              {isCustomized && <span className={styles.customDot} />}
-            </button>
-            <button
-              className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
-              onClick={() => setSourcesModalOpen(true)}
-              title={`View indexed knowledge sources (${totalChunks} chunks)`}
-            >
-              <BookOpen size={16} />
-              <span className={styles.btnLabel}>Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}</span>
-            </button>
-            {isOwner ? (
+            <div className={styles.desktopOnlyActions}>
+              {/* Auto-Voice Response Toggle */}
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn} ${autoVoiceEnabled ? styles.actionBtnVoiceActive : styles.actionBtnVoiceMuted
+                  }`}
+                onClick={handleToggleAutoVoice}
+                title={
+                  autoVoiceEnabled
+                    ? "Voice Auto-Play is ON (First reply speaks aloud). Click to turn OFF."
+                    : "Voice Auto-Play is OFF (Text only). Click to turn ON."
+                }
+                aria-label={
+                  autoVoiceEnabled
+                    ? "Voice Auto-Play is enabled. Click to disable."
+                    : "Voice Auto-Play is disabled. Click to enable."
+                }
+              >
+                {autoVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                <span className={styles.btnLabel}>
+                  {autoVoiceEnabled ? "Voice: ON" : "Voice: OFF"}
+                </span>
+                {autoVoiceEnabled && <span className={styles.voiceDot} />}
+              </button>
+              <button
+                className={`btn btn-secondary btn-sm ${styles.actionBtn} ${isCustomized ? styles.actionBtnCustomized : ""}`}
+                onClick={() => setEditModalOpen(true)}
+                title={
+                  isCustomized
+                    ? "Personal session rules active (click to edit or reset)"
+                    : isOwner
+                      ? "Edit RAG AI Expert rules (Session or Creator Default)"
+                      : "Customize RAG AI Expert rules for your chat session"
+                }
+              >
+                <Settings2 size={16} />
+                <span className={styles.btnLabel}>{isCustomized ? "Rules (Custom)" : "Edit Rules"}</span>
+                {isCustomized && <span className={styles.customDot} />}
+              </button>
               <button
                 className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
-                onClick={() => setPublishModalOpen(true)}
-                title="Publish & Share settings"
+                onClick={() => setSourcesModalOpen(true)}
+                title={`View indexed knowledge sources (${totalChunks} chunks)`}
               >
-                <Globe size={16} />
-                <span className={styles.btnLabel}>{expert.is_published ? "Published" : "Publish & Share"}</span>
+                <BookOpen size={16} />
+                <span className={styles.btnLabel}>Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}</span>
               </button>
-            ) : (
+              {isOwner && (
+                <button
+                  className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
+                  onClick={() => setPublishModalOpen(true)}
+                  title="Publish & Share settings"
+                >
+                  <Globe size={16} />
+                  <span className={styles.btnLabel}>{expert.is_published ? "Published" : "Publish & Share"}</span>
+                </button>
+              )}
+            </div>
+
+            <div className={styles.persistentActions}>
+              {!isOwner && (
+                <button
+                  className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
+                  onClick={async () => {
+                    if (typeof window !== "undefined" && navigator.clipboard) {
+                      await navigator.clipboard.writeText(window.location.href);
+                      setCopiedShare(true);
+                      setTimeout(() => setCopiedShare(false), 2500);
+                    }
+                  }}
+                  title="Copy share link"
+                >
+                  {copiedShare ? <Check size={15} color="var(--accent-primary)" /> : <Share2 size={15} />}
+                  <span className={styles.btnLabel}>{copiedShare ? "Copied Link!" : "Share"}</span>
+                </button>
+              )}
+              {currentUser && creditsBalance !== null && (
+                <button
+                  className={`btn btn-secondary btn-sm ${styles.actionBtn} ${creditsBalance === 0 ? styles.actionBtnWarning : ""}`}
+                  onClick={() => setShowBuyModal(true)}
+                  title="Your credits balance. Click to refill."
+                >
+                  <Coins size={15} color={creditsBalance === 0 ? "#fbbf24" : "var(--accent-primary)"} />
+                  <span className={styles.btnLabel}>{creditsBalance.toLocaleString()} credits</span>
+                </button>
+              )}
+              
               <button
-                className={`btn btn-secondary btn-sm ${styles.actionBtn}`}
-                onClick={async () => {
-                  if (typeof window !== "undefined" && navigator.clipboard) {
-                    await navigator.clipboard.writeText(window.location.href);
-                    setCopiedShare(true);
-                    setTimeout(() => setCopiedShare(false), 2500);
-                  }
-                }}
-                title="Copy share link"
+                className={`btn btn-secondary btn-sm ${styles.actionBtn} ${styles.mobileMenuBtn}`}
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                title="More options"
+                aria-label="Open more options"
               >
-                {copiedShare ? <Check size={15} color="var(--accent-primary)" /> : <Share2 size={15} />}
-                <span className={styles.btnLabel}>{copiedShare ? "Copied Link!" : "Share"}</span>
+                <MoreHorizontal size={16} />
               </button>
-            )}
-            {currentUser && creditsBalance !== null && (
-              <button
-                className={`btn btn-secondary btn-sm ${styles.actionBtn} ${creditsBalance === 0 ? styles.actionBtnWarning : ""}`}
-                onClick={() => setShowBuyModal(true)}
-                title="Your credits balance. Click to refill."
-              >
-                <Coins size={15} color={creditsBalance === 0 ? "#fbbf24" : "var(--accent-primary)"} />
-                <span className={styles.btnLabel}>{creditsBalance.toLocaleString()} credits</span>
-              </button>
-            )}
+            </div>
           </div>
         </header>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <>
+            <div className={styles.mobileMenuBackdrop} onClick={() => setMobileMenuOpen(false)} aria-hidden="true" />
+            <div className={styles.mobileMenu}>
+              <div className={styles.mobileMenuSection}>
+                <div className={styles.mobileMenuLabel}>Status</div>
+                <div className={styles.expertTagMobile}>
+                  {expertMetadata?.reasoningMode === "evaluative" ? (
+                    <span className={styles.modeBadgeEvaluative}>
+                      <Flame size={12} /> Critical Evaluator
+                    </span>
+                  ) : expertMetadata?.reasoningMode === "strict" ? (
+                    <span className={styles.modeBadgeStrict}>
+                      <ShieldCheck size={12} /> Strict Grounding
+                    </span>
+                  ) : (
+                    <span className={styles.modeBadgeSmart}>
+                      <Scale size={12} /> RAG AI Expert
+                    </span>
+                  )}
+                  {expertMetadata?.webSearchEnabled && (
+                    <span className={styles.webSearchBadge}>
+                      <Globe size={11} /> Live Web
+                    </span>
+                  )}
+                </div>
+              </div>
+              
+              <div className={styles.mobileMenuDivider} />
+
+              <div className={styles.mobileMenuSection}>
+                <div className={styles.mobileMenuLabel}>Options</div>
+                <div className={styles.mobileMenuActions}>
+                  <button
+                    className={`btn btn-secondary btn-sm ${styles.mobileMenuItem} ${autoVoiceEnabled ? styles.mobileMenuItemActive : ""}`}
+                    onClick={() => {
+                      handleToggleAutoVoice();
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    {autoVoiceEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+                    <span>{autoVoiceEnabled ? "Voice: ON" : "Voice: OFF"}</span>
+                  </button>
+                  <button
+                    className={`btn btn-secondary btn-sm ${styles.mobileMenuItem} ${isCustomized ? styles.mobileMenuItemActive : ""}`}
+                    onClick={() => {
+                      setEditModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <Settings2 size={16} />
+                    <span>{isCustomized ? "Rules (Custom)" : "Edit Rules"}</span>
+                  </button>
+                  <button
+                    className={`btn btn-secondary btn-sm ${styles.mobileMenuItem}`}
+                    onClick={() => {
+                      setSourcesModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                  >
+                    <BookOpen size={16} />
+                    <span>Knowledge Base {totalChunks > 0 ? `(${totalChunks})` : ""}</span>
+                  </button>
+                  {isOwner && (
+                    <button
+                      className={`btn btn-secondary btn-sm ${styles.mobileMenuItem}`}
+                      onClick={() => {
+                        setPublishModalOpen(true);
+                        setMobileMenuOpen(false);
+                      }}
+                    >
+                      <Globe size={16} />
+                      <span>{expert.is_published ? "Published" : "Publish & Share"}</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Messages */}
         <div
