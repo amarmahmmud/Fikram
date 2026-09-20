@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode, type CSSProperties, type MouseEvent } from "react";
+import { useState, useCallback, type ReactNode, type CSSProperties, type MouseEvent } from "react";
 import ComingSoonModal, { type ComingSoonFeature } from "./ComingSoonModal";
 
 /**
@@ -26,6 +26,10 @@ export default function ComingSoonButton({
 }) {
   const [showModal, setShowModal] = useState(false);
 
+  const handleClose = useCallback(() => {
+    setShowModal(false);
+  }, []);
+
   function handleClick(e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
@@ -47,7 +51,7 @@ export default function ComingSoonButton({
       {showModal && (
         <ComingSoonModal
           feature={feature}
-          onClose={() => setShowModal(false)}
+          onClose={handleClose}
         />
       )}
     </>

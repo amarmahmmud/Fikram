@@ -75,7 +75,6 @@ export default function ComingSoonModal({
   const [exiting, setExiting] = useState(false);
   const [notified, setNotified] = useState(false);
   const isClosingRef = useRef(false);
-  const pushedHistoryRef = useRef(false);
 
   const config = FEATURE_CONFIGS[feature] ?? FEATURE_CONFIGS["fine-tune"];
 
@@ -115,36 +114,6 @@ export default function ComingSoonModal({
     },
     [onClose]
   );
-
-  // Browser Back button integration (popstate)
-  useEffect(() => {
-    // Push a state into browser history so pressing "Back" cleanly closes the modal
-    if (!pushedHistoryRef.current) {
-      window.history.pushState({ modalOpen: true }, "");
-      pushedHistoryRef.current = true;
-    }
-
-    const handlePopState = () => {
-      // User clicked browser Back button
-      if (!isClosingRef.current) {
-        isClosingRef.current = true;
-        setExiting(true);
-        setTimeout(() => {
-          onClose();
-        }, 180);
-      }
-    };
-
-    window.addEventListener("popstate", handlePopState);
-
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-      // If modal unmounted via close button/overlay and history state is still ours, pop it
-      if (pushedHistoryRef.current && window.history.state?.modalOpen) {
-        window.history.back();
-      }
-    };
-  }, [onClose]);
 
   // Close on Escape key
   useEffect(() => {

@@ -405,10 +405,10 @@ export default function ModelsPage() {
                         View on HF ↗
                       </a>
                       <ComingSoonButton
-                        feature="use-base"
+                        feature="fine-tune"
                         className="btn btn-primary btn-sm"
                       >
-                        Use Base ▷
+                        Fine-Tune ▷
                       </ComingSoonButton>
                     </div>
                   </div>
