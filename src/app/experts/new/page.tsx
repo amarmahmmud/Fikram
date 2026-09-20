@@ -26,6 +26,7 @@ import {
   Film,
   Target,
   Sliders,
+  SkipForward,
 } from "lucide-react";
 
 type Step = 1 | 2 | 3 | 4;
@@ -155,6 +156,7 @@ export default function NewExpertPage() {
   // Goal & Purpose Alignment State
   const [alignmentQuestions, setAlignmentQuestions] = useState<AlignmentQuestion[]>(DEFAULT_ALIGNMENT_QUESTIONS);
   const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [skippedAlignment, setSkippedAlignment] = useState(false);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({
     q_audience: "opt_clients",
     q_boundaries: "opt_bounded",
@@ -592,6 +594,30 @@ export default function NewExpertPage() {
     await runFileIngestion();
   }
 
+  async function handleSkipAlignment() {
+    if (!expertId || files.length === 0 || ingesting) return;
+    setSkippedAlignment(true);
+    setLoadingQuestions(false);
+    setStep(3); // Display progress bar and status while indexing
+    toast.info("Skipping goal alignment. Indexing with standard defaults...");
+
+    try {
+      await fetch(`/api/experts/${expertId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemPrompt: systemPrompt.trim() || undefined,
+          reasoningMode: reasoningMode || "hybrid",
+          webSearchEnabled,
+        }),
+      });
+    } catch (patchErr) {
+      console.warn("Failed to patch expert defaults on skip:", patchErr);
+    }
+
+    await runFileIngestion();
+  }
+
   const totalChunks = files.reduce((a, f) => a + (f.chunksStored || 0), 0);
   const allDone = files.length > 0 && files.every((f) => f.status === "done");
 
@@ -933,7 +959,7 @@ export default function NewExpertPage() {
               </div>
             )}
 
-            <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+            <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
               <button
                 className="btn btn-primary"
                 onClick={handleProceedToAlignment}
@@ -942,6 +968,17 @@ export default function NewExpertPage() {
               >
                 <span>Proceed to Goal Alignment</span>
                 <ArrowRight size={14} />
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleSkipAlignment}
+                disabled={files.length === 0 || ingesting}
+                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                title="Skip alignment questions and immediately index knowledge with standard defaults"
+              >
+                <SkipForward size={14} />
+                <span>Skip Alignment &amp; Build</span>
               </button>
               {totalChunks > 0 && (
                 <button
@@ -960,13 +997,29 @@ export default function NewExpertPage() {
         {/* Step 3: Goal & Purpose Alignment */}
         {step === 3 && (
           <div className={styles.card} style={{ maxWidth: 720 }}>
-            <div className={styles.alignmentHeaderBadge}>
-              <span className={styles.alignmentHeaderBadgeDot} />
-              <span>Pre-Indexing Alignment</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <div className={styles.alignmentHeaderBadge}>
+                  <span className={styles.alignmentHeaderBadgeDot} />
+                  <span>Pre-Indexing Alignment</span>
+                </div>
+                <h2 className={styles.cardTitle} style={{ marginTop: 4 }}>Goal Alignment</h2>
+              </div>
+              {!ingesting && (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleSkipAlignment}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--text-muted)", padding: "4px 8px" }}
+                  title="Skip question customization and build with defaults"
+                >
+                  <SkipForward size={13} />
+                  <span>Skip this step</span>
+                </button>
+              )}
             </div>
-            <h2 className={styles.cardTitle}>Goal Alignment</h2>
             <p className={styles.cardDesc}>
-              Set the purpose, target audience, and response boundaries for your AI expert.
+              Set the purpose, target audience, and response boundaries for your AI expert, or skip to build with standard defaults.
             </p>
 
             {loadingQuestions ? (
@@ -976,6 +1029,15 @@ export default function NewExpertPage() {
                 <div className={styles.alignmentLoadingDesc}>
                   Preparing alignment questions based on your content.
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleSkipAlignment}
+                  style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6 }}
+                >
+                  <SkipForward size={14} />
+                  <span>Skip waiting &amp; build with defaults</span>
+                </button>
               </div>
             ) : (
               <>
@@ -1104,7 +1166,19 @@ export default function NewExpertPage() {
                     <span>Back to Sources</span>
                   </button>
 
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={handleSkipAlignment}
+                      disabled={ingesting}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                      title="Bypass alignment and start indexing with balanced defaults"
+                    >
+                      <SkipForward size={14} />
+                      <span>Skip Alignment</span>
+                    </button>
+
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
@@ -1151,18 +1225,37 @@ export default function NewExpertPage() {
             </p>
 
             <div className={styles.summaryPills}>
-              {alignmentQuestions.map((q) => {
-                const isCustom = showCustomInput[q.id] && customAnswers[q.id]?.trim();
-                const chosenOpt = q.options.find((o) => o.id === selectedAnswers[q.id]);
-                const val = isCustom ? customAnswers[q.id].trim() : chosenOpt?.label || "Configured";
-
-                return (
-                  <div key={q.id} className={styles.summaryPill}>
-                    <span>{q.categoryLabel}:</span>
-                    <span className={styles.summaryPillStrong}>{val}</span>
+              {skippedAlignment || alignmentQuestions.length === 0 ? (
+                <>
+                  <div className={styles.summaryPill}>
+                    <span>Alignment:</span>
+                    <span className={styles.summaryPillStrong}>Standard Balanced Defaults</span>
                   </div>
-                );
-              })}
+                  <div className={styles.summaryPill}>
+                    <span>Grounding Mode:</span>
+                    <span className={styles.summaryPillStrong}>
+                      {reasoningMode === "strict" ? "Strict Grounding" : "Hybrid Synthesis"}
+                    </span>
+                  </div>
+                  <div className={styles.summaryPill}>
+                    <span>Live Web Search:</span>
+                    <span className={styles.summaryPillStrong}>{webSearchEnabled ? "Active" : "Off"}</span>
+                  </div>
+                </>
+              ) : (
+                alignmentQuestions.map((q) => {
+                  const isCustom = showCustomInput[q.id] && customAnswers[q.id]?.trim();
+                  const chosenOpt = q.options.find((o) => o.id === selectedAnswers[q.id]);
+                  const val = isCustom ? customAnswers[q.id].trim() : chosenOpt?.label || "Configured";
+
+                  return (
+                    <div key={q.id} className={styles.summaryPill}>
+                      <span>{q.categoryLabel}:</span>
+                      <span className={styles.summaryPillStrong}>{val}</span>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
             <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 24, flexWrap: "wrap" }}>
