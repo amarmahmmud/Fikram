@@ -1716,7 +1716,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             {isTranscribing ? (
               <div className={styles.transcribingState}>
                 <Loader2 size={16} className={styles.transcribingSpinner} />
-                <span className={styles.transcribingText}>Transcribing your speech with ...</span>
+                <span className={styles.transcribingText}>Transcribing your speech...</span>
               </div>
             ) : isRecording ? (
               <div className={styles.recordingState}>
