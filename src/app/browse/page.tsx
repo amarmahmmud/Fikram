@@ -5,7 +5,7 @@ import Link from "next/link";
 import styles from "./page.module.css";
 import type { CommunityItem } from "../api/community/route";
 import { apiClient } from "@/lib/apiClient";
-import { MessageCircle, Heart, Search, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
+import { MessageCircle, Heart, Search, ArrowRight, Sparkles, ArrowLeft, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["All", "Finance", "General", "Writing", "Healthcare", "Education"];
@@ -246,6 +246,15 @@ export default function BrowseModelsPage() {
                     {item.author.name.charAt(0).toUpperCase()}
                   </div>
                   <span className={styles.authorName}>{item.author.name}</span>
+                  {item.isVerified && (
+                    <span
+                      className={styles.verifiedCommunityBadge}
+                      title="Verified by Fikram Community — Official Platform Model"
+                    >
+                      <BadgeCheck size={12} className={styles.verifiedBadgeIcon} />
+                      <span>Verified</span>
+                    </span>
+                  )}
                 </div>
                 <span className={item.type === "smart_assistant" ? styles.badgeSmart : styles.badgeCustom}>
                   {item.type === "smart_assistant" ? "RAG AI Expert" : "Custom AI"}

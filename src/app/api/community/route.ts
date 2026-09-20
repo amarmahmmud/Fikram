@@ -56,17 +56,45 @@ export async function GET() {
       userLikes?.forEach((like) => userLikedIds.add(like.target_id));
     }
 
-    const profileMap = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+    const profileMap = new Map<
+      string,
+      { full_name: string | null; avatar_url: string | null; role?: string | null; email?: string | null }
+    >();
+
     if (ownerIds.size > 0) {
-      const { data: profiles } = await supabase
+      // Query profiles with role, with safe fallback if migration column is pending
+      let profilesData: any[] | null = null;
+      const resWithRole = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url")
+        .select("id, full_name, avatar_url, role, email")
         .in("id", Array.from(ownerIds));
 
-      profiles?.forEach((p) => {
-        profileMap.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url });
+      if (resWithRole.error) {
+        const resFallback = await supabase
+          .from("profiles")
+          .select("id, full_name, avatar_url, email")
+          .in("id", Array.from(ownerIds));
+        profilesData = resFallback.data;
+      } else {
+        profilesData = resWithRole.data;
+      }
+
+      profilesData?.forEach((p: any) => {
+        profileMap.set(p.id, {
+          full_name: p.full_name,
+          avatar_url: p.avatar_url,
+          role: p.role ?? null,
+          email: p.email ?? null,
+        });
       });
     }
+
+    const isVerifiedAdmin = (profile?: { role?: string | null; email?: string | null }) => {
+      if (!profile) return false;
+      if (profile.role === "admin") return true;
+      if (profile.email && profile.email.toLowerCase().trim() === "amarmahmmud10@gmail.com") return true;
+      return false;
+    };
 
     const dynamicItems: CommunityItem[] = [];
 
@@ -74,6 +102,7 @@ export async function GET() {
       for (const exp of dbExperts) {
         const profile = profileMap.get(exp.user_id);
         const authorName = profile?.full_name || "Community Creator";
+        const isVerified = isVerifiedAdmin(profile);
 
         // Parse category from description if it contains a [Category: ...] tag
         let category = "General";
@@ -100,14 +129,19 @@ export async function GET() {
           title: exp.name,
           description: cleanDescription,
           category,
-          author: { name: authorName, avatarUrl: profile?.avatar_url || undefined },
+          author: {
+            name: authorName,
+            avatarUrl: profile?.avatar_url || undefined,
+            isVerified,
+            role: profile?.role || undefined,
+          },
           baseModel: "RAG AI Expert",
           likesCount: exp.likes_count || 0,
           chatsCount: exp.chats_count || 0,
           publishedAt: exp.created_at,
           chatUrl: `/experts/${exp.id}/chat`,
           tags,
-          isVerified: false,
+          isVerified,
           ownerId: exp.user_id,
           hasLiked: userLikedIds.has(exp.id),
         });
@@ -122,6 +156,7 @@ export async function GET() {
         if (config.published) {
           const profile = profileMap.get(job.user_id);
           const authorName = profile?.full_name || "Community Creator";
+          const isVerified = isVerifiedAdmin(profile);
 
           dynamicItems.push({
             id: job.id,
@@ -129,14 +164,19 @@ export async function GET() {
             title: (config.public_title as string) || job.name,
             description: (config.public_description as string) || `Fine-tuned ${job.base_model} model trained with custom dataset.`,
             category: (config.category as string) || "General",
-            author: { name: authorName, avatarUrl: profile?.avatar_url || undefined },
+            author: {
+              name: authorName,
+              avatarUrl: profile?.avatar_url || undefined,
+              isVerified,
+              role: profile?.role || undefined,
+            },
             baseModel: `${job.base_model} (${job.method.toUpperCase()})`,
             likesCount: job.likes_count || 0,
             chatsCount: job.chats_count || 0,
             publishedAt: (config.published_at as string) || job.created_at,
             chatUrl: `/playground/${job.id}`,
             tags: (config.tags as string[]) || ["Fine-Tuned", job.base_model],
-            isVerified: false,
+            isVerified,
             ownerId: job.user_id,
             hasLiked: userLikedIds.has(job.id),
           });

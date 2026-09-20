@@ -8,7 +8,7 @@ import type { ASRModelCategory as ModelCategory } from "@/lib/models";
 import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import ComingSoonButton from "@/components/ComingSoonButton";
-import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight, Sparkles } from "lucide-react";
+import { Star, Package, Smile, Globe, MessageCircle, Heart, Download, Edit2, Zap, ArrowRight, Sparkles, BadgeCheck } from "lucide-react";
 
 interface HFModel {
   id: string;
@@ -305,6 +305,15 @@ export default function ModelsPage() {
                             {item.author.name.charAt(0).toUpperCase()}
                           </div>
                           <span className={styles.authorName}>{item.author.name}</span>
+                          {item.isVerified && (
+                            <span 
+                              className={styles.verifiedCommunityBadge}
+                              title="Verified by Fikram Community — Official Platform Model"
+                            >
+                              <BadgeCheck size={12} className={styles.verifiedBadgeIcon} />
+                              <span>Verified</span>
+                            </span>
+                          )}
                         </div>
                         <span className={`badge ${item.type === "smart_assistant" ? "badge-indigo" : "badge-blue"}`}>
                           {item.type === "smart_assistant" ? "RAG AI Expert" : "Custom Model"}

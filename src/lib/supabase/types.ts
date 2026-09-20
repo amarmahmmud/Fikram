@@ -10,6 +10,7 @@ export interface Database {
           full_name: string | null;
           avatar_url: string | null;
           plan: "free" | "personal" | "pro" | "enterprise";
+          role?: "user" | "admin";
           credits_balance: number;
           credits_held: number;
           created_at: string;
@@ -20,6 +21,7 @@ export interface Database {
           full_name?: string | null;
           avatar_url?: string | null;
           plan?: "free" | "personal" | "pro" | "enterprise";
+          role?: "user" | "admin";
           credits_balance?: number;
           credits_held?: number;
           created_at?: string;
@@ -30,6 +32,7 @@ export interface Database {
           full_name?: string | null;
           avatar_url?: string | null;
           plan?: "free" | "personal" | "pro" | "enterprise";
+          role?: "user" | "admin";
           credits_balance?: number;
           credits_held?: number;
           created_at?: string;

@@ -31,8 +31,8 @@ import {
   Home,
   ArrowUp,
   ArrowDown,
-  FileText,
   ShieldCheck,
+  BadgeCheck,
   Flame,
   Scale,
   BotOff,
@@ -115,6 +115,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
   const [sourcesModalOpen, setSourcesModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [isVerifiedCreator, setIsVerifiedCreator] = useState(false);
   const [totalChunks, setTotalChunks] = useState(0);
   const [expertMetadata, setExpertMetadata] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -341,6 +342,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setIsOwner(Boolean(res.isOwner));
         setTotalChunks(res.totalChunks || 0);
         setExpertMetadata(res.metadata || null);
+        setIsVerifiedCreator(Boolean(res.isVerifiedCreator || res.expert?.isVerified));
         return res.expert;
       }
     } catch {
@@ -355,6 +357,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
 
     if (data) {
       setExpert(data);
+      if (data.user_id) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("email, role")
+          .eq("id", data.user_id)
+          .maybeSingle();
+        if ((prof as any)?.role === "admin" || (prof as any)?.email?.toLowerCase().trim() === "amarmahmmud10@gmail.com") {
+          setIsVerifiedCreator(true);
+        }
+      }
     }
     return data;
   }, [expertId]);
@@ -1241,6 +1253,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             <div className={styles.headerTitles}>
               <div className={styles.expertName} title={expert.name}>{expert.name}</div>
               <div className={`${styles.expertTag} ${styles.desktopOnly}`}>
+                {isVerifiedCreator && (
+                  <span
+                    className={styles.verifiedCommunityBadge}
+                    title="Verified by Fikram Community — Official Platform Model"
+                  >
+                    <BadgeCheck size={13} className={styles.verifiedBadgeIcon} />
+                    <span>Verified by Fikram Community</span>
+                  </span>
+                )}
                 {expertMetadata?.reasoningMode === "evaluative" ? (
                   <span className={styles.modeBadgeEvaluative}>
                     <Flame size={12} /> Critical Evaluator
@@ -1378,6 +1399,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               <div className={styles.mobileMenuSection}>
                 <div className={styles.mobileMenuLabel}>Status</div>
                 <div className={styles.expertTagMobile}>
+                  {isVerifiedCreator && (
+                    <span
+                      className={styles.verifiedCommunityBadge}
+                      title="Verified by Fikram Community — Official Platform Model"
+                    >
+                      <BadgeCheck size={13} className={styles.verifiedBadgeIcon} />
+                      <span>Verified by Fikram Community</span>
+                    </span>
+                  )}
                   {expertMetadata?.reasoningMode === "evaluative" ? (
                     <span className={styles.modeBadgeEvaluative}>
                       <Flame size={12} /> Critical Evaluator

@@ -56,13 +56,54 @@ export async function GET(
     const isOwner = Boolean(user && expert.user_id === user.id);
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
+    // Check if creator is admin / verified by Fikram community
+    let isVerifiedCreator = false;
+    let creatorProfile: { name: string; avatarUrl?: string | null; role?: string | null } | null = null;
+    if (expert.user_id) {
+      let profileData: any = null;
+      const resWithRole = await supabase
+        .from("profiles")
+        .select("id, full_name, email, avatar_url, role")
+        .eq("id", expert.user_id)
+        .maybeSingle();
+
+      if (resWithRole.error) {
+        const resFallback = await supabase
+          .from("profiles")
+          .select("id, full_name, email, avatar_url")
+          .eq("id", expert.user_id)
+          .maybeSingle();
+        profileData = resFallback.data;
+      } else {
+        profileData = resWithRole.data;
+      }
+
+      if (profileData) {
+        const creatorEmail = profileData.email?.toLowerCase().trim();
+        if (profileData.role === "admin" || creatorEmail === "amarmahmmud10@gmail.com") {
+          isVerifiedCreator = true;
+        }
+        creatorProfile = {
+          name: profileData.full_name || "Community Creator",
+          avatarUrl: profileData.avatar_url,
+          role: profileData.role,
+        };
+      }
+    }
+
     return NextResponse.json({
       ok: true,
-      expert,
+      expert: {
+        ...expert,
+        isVerified: isVerifiedCreator,
+        creator: creatorProfile,
+      },
       metadata,
       totalChunks: chunks?.length || 0,
       sources,
       isOwner,
+      isVerifiedCreator,
+      creator: creatorProfile,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to load expert" }, { status: 500 });

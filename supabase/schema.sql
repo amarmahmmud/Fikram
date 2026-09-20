@@ -24,6 +24,7 @@ create table if not exists public.profiles (
   full_name   text,
   avatar_url  text,
   plan        text default 'free' check (plan in ('free','personal','pro','enterprise')),
+  role        text default 'user' check (role in ('user','admin')),
   credits_balance integer default 50 not null,
   credits_held    integer default 0 not null,
   created_at  timestamptz default now()
@@ -33,6 +34,8 @@ alter table public.profiles enable row level security;
 
 -- Add credits_held column if it doesn't exist (safe for existing deployments)
 alter table public.profiles add column if not exists credits_held integer default 0 not null;
+-- Add role column if it doesn't exist (safe for existing deployments)
+alter table public.profiles add column if not exists role text default 'user' check (role in ('user','admin'));
 
 drop policy if exists "Users can view own profile"  on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
