@@ -542,6 +542,21 @@
   max-width: 100%;
 }
 
+.processingState {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--accent-primary);
+  font-weight: 500;
+  padding: 4px 0;
+  animation: pulseOpacity 1.5s infinite ease-in-out;
+}
+
+@keyframes pulseOpacity {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
 /* ──────────────── Message Actions / Copy Button ──────────────── */
 .messageFooter {
   display: flex;

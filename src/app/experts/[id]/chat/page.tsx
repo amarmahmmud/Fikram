@@ -1065,6 +1065,12 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     );
   }
 
+  const processingText = expertMetadata?.reasoningMode === "evaluative"
+    ? "Evaluating your concept..."
+    : expertMetadata?.reasoningMode === "strict"
+      ? "Searching knowledge base..."
+      : "Processing your request...";
+
   if (!expert) {
     return (
       <div className={styles.loading}>
@@ -1549,7 +1555,14 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                         )}
                       </div>
                     )}
-                    <MarkdownContent content={msg.content} />
+                    {sending && msg.role === "model" && i === messages.length - 1 ? (
+                      <div className={styles.processingState}>
+                        <Loader2 size={16} className={styles.spinIcon} />
+                        <span>{processingText}</span>
+                      </div>
+                    ) : (
+                      <MarkdownContent content={msg.content} />
+                    )}
                   </>
                 )}
               </div>
