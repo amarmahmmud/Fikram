@@ -34,6 +34,7 @@ export type TaskType =
   | "ingest_audio"
   | "ingest_video"
   | "chat_text"
+  | "chat_evaluative"
   | "chat_with_image"
   | "chat_with_audio"
   | "chat_with_video"
@@ -79,18 +80,49 @@ export async function routeRequest(
 ): Promise<ProviderDecision> {
   // ── Paid users always get the fast path ────────────────────────────────
   if (userTier === "paid") {
+    const isGroqText = task === "chat_text";
     return {
-      provider: task === "chat_text" ? "groq" : task === "ingest_pdf" ? "document-ai" : "vertex-ai",
-      reason: "Paid user → direct Vertex AI (SLA-backed, reliable)",
+      provider: isGroqText ? "groq" : task === "ingest_pdf" ? "document-ai" : "vertex-ai",
+      reason: task === "chat_evaluative"
+        ? "Paid user evaluative scorecard → direct Vertex AI (Gemini structured outputs)"
+        : "Paid user → direct Vertex AI (SLA-backed, reliable)",
       fallback: task === "ingest_pdf" ? "vertex-ai" : null,
       secondFallback: null,
       circuitState: "closed",
-      useEnterprise: task !== "chat_text",
+      useEnterprise: !isGroqText,
       budgetChecked: false,
     };
   }
 
   // ── Free user routing (cost-optimized) ─────────────────────────────────
+
+  // Evaluative mode scorecard chat requires Gemini for native responseSchema
+  if (task === "chat_evaluative") {
+    const circuit = await getCircuitState(GEMINI_FREE_PROVIDER);
+    if (circuit.state === "open") {
+      const budgetExceeded = await isVertexBudgetExceeded();
+      if (!budgetExceeded) {
+        return {
+          provider: "vertex-ai",
+          reason: "Circuit OPEN → escalating evaluative scorecard to Vertex AI",
+          fallback: null,
+          secondFallback: null,
+          circuitState: "open",
+          useEnterprise: true,
+          budgetChecked: true,
+        };
+      }
+    }
+    return {
+      provider: "gemini-free",
+      reason: "Evaluative scorecard → Gemini API (native structured outputs)",
+      fallback: "vertex-ai",
+      secondFallback: null,
+      circuitState: circuit.state,
+      useEnterprise: false,
+      budgetChecked: true,
+    };
+  }
 
   // Text-only chat always goes through Groq (free, no fallback needed)
   if (task === "chat_text") {
@@ -330,9 +362,14 @@ export function classifyIngestTask(mimeType: string, filename: string): TaskType
 }
 
 /**
- * Determine the TaskType for a chat message based on media attachments.
+ * Determine the TaskType for a chat message based on media attachments and reasoning mode.
  */
-export function classifyChatTask(hasMedia: boolean, mimeType?: string): TaskType {
+export function classifyChatTask(
+  hasMedia: boolean,
+  mimeType?: string,
+  isEvaluative: boolean = false
+): TaskType {
+  if (isEvaluative) return "chat_evaluative";
   if (!hasMedia || !mimeType) return "chat_text";
   if (mimeType.startsWith("video/")) return "chat_with_video";
   if (mimeType.startsWith("audio/")) return "chat_with_audio";
@@ -346,6 +383,7 @@ export function taskToVertexOp(task: TaskType): VertexOperation | undefined {
   switch (task) {
     case "ingest_image":
     case "chat_with_image":
+    case "chat_evaluative":
       return "describe_image";
     case "ingest_audio":
     case "chat_with_audio":

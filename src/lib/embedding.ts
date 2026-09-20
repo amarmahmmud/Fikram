@@ -24,6 +24,19 @@ import { searchWeb, WebSearchResult } from "@/lib/web-search";
 import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
 import { trackVertexSpend } from "@/lib/vertex-budget";
 import { cleanRepetitionLoop } from "@/lib/text-cleaner";
+import {
+  scorecardResponseSchema,
+  computeTokenBudget,
+  detectResponseLanguage,
+  getGlossaryForLanguage,
+  validateScorecardJson,
+  logTruncationEvent,
+  extractPreviousScorecard,
+  isFollowUpInquiry,
+  formatScorecardToMarkdown,
+  RUBRIC_DIMENSIONS,
+  type ScorecardPayload,
+} from "@/lib/scorecard-config";
 
 // ── Gemini Key Pool Management & Round-Robin Rotation ───────────────────────
 let currentEmbedKeyIndex = 0;
@@ -895,22 +908,6 @@ export async function retrieveChunks(
 
 // ── Generate (retrieve + prompt + answer) ────────────────────────────────────
 
-// Static rubric dimensions — pinned here instead of relying on retrieval,
-// so the scorecard format is consistent regardless of which rubric chunks
-// happen to match best for a given query.
-const RUBRIC_DIMENSIONS = [
-  "Market Size",
-  "Problem Severity",
-  "Timing",
-  "Competition",
-  "Business Model Clarity",
-  "Technical Feasibility",
-  "Defensibility",
-  "Unit Economics",
-  "Team-Market Fit",
-  "Scalability",
-] as const;
-
 export interface GenerateRAGOptions {
   reasoningMode?: "strict" | "evaluative" | "hybrid";
   webSearchEnabled?: boolean;
@@ -922,6 +919,8 @@ export interface GenerateRAGOptions {
 
 export interface RAGResponse {
   reply: string;
+  scorecardData?: ScorecardPayload;
+  rawJson?: string;
   sources: {
     filename: string;
     chunkIndex: number;
@@ -1087,6 +1086,11 @@ export async function generateRAGResponse(
 
   // Build mode-specific instructions
   let modeInstructions = "";
+  const isEvaluative = mode === "evaluative";
+  const responseLang = isEvaluative ? detectResponseLanguage(query, chatHistory) : "en";
+  const previousScorecard = isEvaluative ? extractPreviousScorecard(chatHistory) : null;
+  const isFollowUp = isEvaluative ? isFollowUpInquiry(query, Boolean(hasMedia), previousScorecard) : false;
+  const glossary = isEvaluative ? getGlossaryForLanguage(responseLang) : "";
 
   if (mode === "strict") {
     modeInstructions = `
@@ -1096,67 +1100,67 @@ OPERATING RULES (STRICT DOCUMENT GROUNDING):
 - Do NOT extrapolate, speculate, or make up facts not present in the sources.
 - When possible, mention which source your answer comes from.
 - Be concise, accurate, and completely faithful to the provided text.`;
-  } else if (mode === "evaluative") {
+  } else if (isEvaluative) {
+    let previousScorecardContext = "";
+    if (previousScorecard) {
+      previousScorecardContext = `
+### EXISTING SCORECARD IN THIS CONVERSATION (REFERENCE GROUND TRUTH) ###
+${JSON.stringify(previousScorecard, null, 2)}
+`;
+    }
+
     modeInstructions = `
-OPERATING RULES (CRITICAL THINKER & EVALUATOR MODE):
-- You are evaluating a novel, user-submitted pitch, concept, or question.
+OPERATING RULES (CRITICAL THINKER & STARTUP EVALUATOR MODE):
+- You are evaluating a pitch, concept, business model, or answering follow-up questions about a previous evaluation scorecard.
 - The Sources below provide your internal evaluation frameworks, scoring rubrics, and industry benchmarks.
-- APPLY these frameworks directly to the pitch using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
+- APPLY these frameworks directly using first-principles deductive reasoning, physical laws, market realities, unit economics, and sharp common sense.
 - Never say "the rubric says" or "Source 4 mentions"; internalize the criteria and speak with confidence and authority in your established persona.
 - If an idea is fundamentally broken or flawed, assign aggressive failing scores (0–2/10) on Feasibility, Timing, Defensibility, or Economics. Roast the fatal flaws with precision, wit, and constructive truth.
-- Do not refuse to evaluate an idea just because the exact product name or concept isn't mentioned in your documents. Map it to the closest category, technical difficulty tier, and market dynamics.
 - Never cite sources inline with parentheses.
-  - BAD: "...the metaverse market is $450B (Source 10)."
-  - GOOD: "...the metaverse market is roughly $450B."
 
-### CRITICAL GENERATION PIPELINE (CHAIN OF THOUGHT) ###
-Before generating the Scorecard or Roast, you MUST evaluate the core unit economics and logical flaws inside the "analysis_scratchpad" JSON field.
-1. PRE-COMPUTE: Explicitly lock in your assumptions for Customer Acquisition Cost (CAC), Lifetime Value (LTV), wholesale margins, and regulatory reality.
-2. NARRATIVE LOCK: Decide right now if the economics are viable or fatal. Write a one-sentence verdict.
-3. CONSISTENCY BINDING: The Scorecard and the Roast MUST strictly reflect the assumptions established in the scratchpad.
-- If you deduce in the scratchpad that margins are terrible, the Unit Economics score MUST be low (0-3) and the Scorecard explanation MUST attack the margins.
-- You are strictly forbidden from praising a metric in the Scorecard and roasting that same metric in the Roast section.
+${glossary}
 
-OUTPUT INTEGRITY RULE:
-You MUST generate all required JSON fields in full. Never close the JSON object early.
-- "scorecard": Must contain all 10 dimensions.
-- "total_verdict": MUST be a punchy 3-word summary verdict (e.g., "Dead on Arrival", "Cash-Flow Trap"). NEVER use asterisks or blanks.
-- "roast": Minimum 4 brutal, first-principles paragraphs.
-- "graveyard": 3-4 structural failure patterns.
-- "pivot": Actionable, higher-margin alternative.
-
-MANDATORY JSON OUTPUT FORMAT:
-You must output a strictly valid JSON object matching this exact schema. Do NOT wrap it in markdown blockticks (\`\`\`json).
-You MUST include all 6 top-level keys ("analysis_scratchpad", "scorecard", "total_verdict", "roast", "graveyard", "pivot"). Do not skip any section.
-
-{
-  "analysis_scratchpad": "Your internal chain-of-thought to lock in CAC, LTV, margins, and narrative BEFORE scoring.",
-  "scorecard": [
-    { "dimension": "Market Size", "score": 8, "reasoning": "Why you gave this score" },
-    ... exactly 10 dimensions, in the order specified below ...
-  ],
-  "total_verdict": "A punchy 3-word summary verdict of the idea.",
-  "roast": "The roast paragraphs ONLY. No heading, no failure patterns, no pivot. Minimum 4 paragraphs.",
-  "graveyard": "The failure-pattern bullet points ONLY. No heading, no roast, no pivot. Minimum 3 bullets using markdown list syntax (- item).",
-  "pivot": "The pivot content ONLY. No heading, no roast, no failure patterns."
+### OPERATING MODES & STRICT SCHEMA BEHAVIOR ###
+${
+  isFollowUp
+    ? `
+>>> CURRENT MODE: "Follow-up" <<<
+- The user is asking a follow-up question, agreeing/disagreeing, or requesting elaboration on a scorecard ALREADY GIVEN earlier in this conversation.
+- YOU MUST NOT REGENERATE A NEW SCORECARD OR NEW SCORES. Do not re-evaluate from scratch.
+- Refer to the exact prior scores, verdict, and reasoning already provided in the EXISTING SCORECARD above.
+- In your JSON output:
+  * "scorecard" MUST be an empty array [].
+  * "total_verdict" MUST be an empty string "".
+  * "roast" MUST be an empty string "".
+  * "graveyard" MUST be an empty string "".
+  * "pivot" MUST be an empty string "".
+  * "follow_up_response" MUST contain your complete, insightful, authoritative answer addressing the user's specific question, directly referencing the previous score and rationale.
+  * "analysis_scratchpad" must contain your internal reasoning for this follow-up response.
+`
+    : `
+>>> CURRENT MODE: "New evaluation" <<<
+- Triggered because a new startup pitch, concept, or screenshot is submitted for initial review.
+- Before generating the Scorecard or Roast, you MUST evaluate the core unit economics and logical flaws inside the "analysis_scratchpad" JSON field.
+- In your JSON output:
+  * "analysis_scratchpad": Lock in CAC, LTV, margins, and narrative BEFORE scoring.
+  * "scorecard": Must contain all 10 dimensions in exact order (${RUBRIC_DIMENSIONS.join(", ")}), scored 0-10 each with first-principles reasoning.
+  * "total_verdict": MUST be a punchy 3-word summary verdict (e.g., "Dead on Arrival", "Cash-Flow Trap"). NEVER use asterisks or blanks.
+  * "roast": Minimum 4 brutal, first-principles paragraphs.
+  * "graveyard": 3-4 structural failure patterns using markdown bullet list syntax (- item).
+  * "pivot": Actionable, higher-margin alternative.
+  * "follow_up_response": MUST be an empty string "".
+`
 }
 
-CRITICAL: Each JSON field must contain ONLY its own section's content (no headings, no duplicates across fields).
+${previousScorecardContext}
 
-You must ALWAYS score exactly these 10 dimensions, in this exact order, 0–10 each:
-${RUBRIC_DIMENSIONS.map((d, i) => `${i + 1}. ${d}`).join("\n")}
-Never omit a dimension, never change the dimension names.
-IMPORTANT: "Team-Market Fit" MUST always be scored. If the pitch doesn't mention the team, score based on what the concept demands (e.g., "requires deep neurotech + crypto + creator-economy expertise") and note what's missing.
+OUTPUT INTEGRITY RULE:
+You MUST output a valid JSON object matching the enforced schema. Every key must be present in the JSON output. Never truncate mid-generation.
 
 ABSOLUTE FACTUALITY CONSTRAINT — VIOLATION = FAILURE:
 - You may deduce WHY something will fail using logic, physics, math, economics, and law. This is ENCOURAGED.
-- You must NEVER fabricate, invent, or distort ANY factual claim. This includes ALL of the following:
-  (a) Inventing fake company names or product names that do not exist.
-  (b) Inventing fake historical events, regulatory rulings, crackdowns, fines, or lawsuits that never happened.
-  (c) Using REAL company names but FABRICATING their business model, reason for failure, pivot story, or acquisition details. This is called "historical revisionism" and is the WORST form of hallucination.
-- BEFORE you write any company name in your response, ask yourself: "Can I verify EVERY claim I'm about to make about this company from my Sources or Live Web Intel?" If the answer is NO, do NOT mention that company. Describe the general failure pattern instead.
-- If your sources contain NO company that genuinely and accurately matches this pitch, DO NOT force unrelated companies into the analysis. Instead write: "No direct historical equivalents exist in the current database — this concept is either visionary or entirely unproven territory." This is intellectually honest and preferred over fabrication.
-- It is ALWAYS better to SKIP a section entirely than to fill it with fabricated or distorted facts.`;
+- You must NEVER fabricate, invent, or distort ANY factual claim.
+- BEFORE you write any company name in your response, ask yourself: "Can I verify EVERY claim I'm about to make about this company from my Sources or Live Web Intel?" If the answer is NO, do NOT mention that company. Describe the general failure pattern instead.`;
   } else {
     // Hybrid / Balanced
     modeInstructions = `
@@ -1168,26 +1172,25 @@ OPERATING RULES (BALANCED HYBRID MODE):
 
 FACTUALITY CONSTRAINT:
 - When mentioning real companies, people, or events, every claim must be factually accurate. Never distort a real entity's history to fit your narrative.
-- If unsure about a specific claim, describe the general pattern instead. It is better to say "several companies in this space failed due to..." than to name a company and fabricate its story.`;
+- If unsure about a specific claim, describe the general pattern instead.`;
   }
 
   const webInstruction = webResults.length > 0
     ? `\n- Real-time Web Search Intelligence is included below. Weave in relevant current news, competitors, and market updates to ensure your analysis is up to date.`
     : "";
 
-  // Short, punchy final reminder at recency position (last thing the model reads)
-  const finalGroundingBlock = mode === "evaluative"
+  // Short, punchy final reminder at recency position
+  const finalGroundingBlock = isEvaluative
     ? `
-
 FINAL CHECK (READ THIS LAST BEFORE RESPONDING):
-Before you output your response, scan it for any company name. For each one, verify: Is every claim about this company (its product, its failure reason, its acquirer) explicitly stated in the Sources above or Live Web Intel? If you cannot verify it, DELETE that company from your response and describe the general failure pattern instead. Never force-fit real companies into fake narratives. Skipping a section is always better than fabricating one.`
+Verify your response strictly follows ${isFollowUp ? '"Follow-up"' : '"New evaluation"'} mode. Ensure all 7 schema fields are returned in full valid JSON.`
     : "";
 
   const antiRepetitionRule = `
 ANTI-REPETITION CONSTRAINT (CRITICAL):
 - Never repeat the same word, phrase, sentence, or structure consecutively.
 - Provide a progressive, varied, and naturally structured response.
-- When writing in Amharic, Ge'ez, or any other script, always use rich, natural vocabulary and complete every sentence naturally.`;
+- When writing in Amharic, Ge'ez, Arabic, Russian, Hindi, or any other script, always use rich, natural vocabulary and complete every sentence naturally.`;
 
   const groundedSystemPrompt = `${systemPrompt}
 
@@ -1200,9 +1203,11 @@ ${sourcesText}
 ${webSourcesText}
 ${finalGroundingBlock}`;
 
-  let draft: string;
+  let draft: string = "";
+  let validatedPayload: ScorecardPayload | undefined;
 
-  if (hasMedia) {
+  // Evaluative mode ALWAYS routes to Gemini with native responseSchema and dynamic language token budget
+  if (isEvaluative) {
     const geminiContents: any[] = [];
     const uploadedUris: string[] = [];
 
@@ -1216,21 +1221,140 @@ ${finalGroundingBlock}`;
       }
     }
 
-    // Build the final user turn with text + media parts
+    // Build user parts (media attachments + query text)
+    const userParts: any[] = [];
+    if (options?.mediaAttachments) {
+      for (const attachment of options.mediaAttachments) {
+        if (attachment.url) {
+          try {
+            if (options?.useEnterprise) {
+              console.log(`[RAG] Fetching ${attachment.filename || "file"} for Vertex AI inline processing...`);
+              const res = await fetch(attachment.url);
+              if (!res.ok) throw new Error(`Failed to download attachment: ${res.statusText}`);
+              const buffer = Buffer.from(await res.arrayBuffer());
+              userParts.push({
+                inlineData: { mimeType: attachment.mimeType, data: buffer.toString("base64") },
+              });
+            } else {
+              console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
+              const { fileUri } = await uploadFileFromUrl(attachment.url, attachment.mimeType);
+              uploadedUris.push(fileUri);
+              userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
+            }
+          } catch (err: any) {
+            console.error("[RAG] Failed to process media attachment from URL:", err);
+            throw new Error(`Failed to process media attachment: ${err.message}`);
+          }
+        } else if (attachment.data) {
+          userParts.push({
+            inlineData: { mimeType: attachment.mimeType, data: attachment.data },
+          });
+        }
+      }
+    }
+    userParts.push({ text: query });
+    geminiContents.push({ role: "user", parts: userParts });
+
+    const maxAttempts = 2;
+    let rawResultText = "";
+
+    try {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const tokenBudget = computeTokenBudget(responseLang, isFollowUp, attempt);
+        console.log(
+          `[RAG Evaluator] Attempt ${attempt + 1}/${maxAttempts} | Lang: ${responseLang} | Mode: ${isFollowUp ? "Follow-up" : "New eval"} | Token Budget: ${tokenBudget}`
+        );
+
+        try {
+          const geminiResult = await generateWithModelFallback(geminiContents, {
+            systemInstruction: groundedSystemPrompt,
+            generationConfig: {
+              maxOutputTokens: tokenBudget,
+              temperature: 0.25,
+              topP: 0.9,
+              topK: 40,
+              responseMimeType: "application/json",
+              responseSchema: scorecardResponseSchema,
+            },
+            useEnterprise: options?.useEnterprise,
+          });
+
+          rawResultText = geminiResult.text()?.trim() ?? "";
+          const validation = validateScorecardJson(rawResultText, isFollowUp);
+
+          if (validation.isValid && validation.parsed) {
+            validatedPayload = validation.parsed;
+            if (attempt > 0) {
+              logTruncationEvent({
+                event: "retry_success",
+                language: responseLang,
+                tokenBudget,
+                attempt: attempt + 1,
+                outputLength: rawResultText.length,
+              });
+            }
+            break;
+          } else {
+            logTruncationEvent({
+              event: attempt === 0 ? "truncation" : "retry_exhausted",
+              language: responseLang,
+              tokenBudget,
+              attempt: attempt + 1,
+              error: validation.error,
+              outputLength: rawResultText.length,
+            });
+          }
+        } catch (attemptErr: any) {
+          logTruncationEvent({
+            event: attempt === 0 ? "retry" : "retry_exhausted",
+            language: responseLang,
+            tokenBudget,
+            attempt: attempt + 1,
+            error: attemptErr.message || String(attemptErr),
+          });
+        }
+      }
+    } finally {
+      if (uploadedUris.length > 0) {
+        Promise.all(uploadedUris.map((uri) => deleteGeminiFile(uri))).catch(console.error);
+      }
+    }
+
+    if (!validatedPayload) {
+      console.error(`[RAG Evaluator] JSON validation failed twice for language: ${responseLang}`);
+      const truncationError = new Error("Response was too long, retrying");
+      (truncationError as any).code = "RESPONSE_TOO_LONG";
+      (truncationError as any).language = responseLang;
+      throw truncationError;
+    }
+
+    draft = formatScorecardToMarkdown(validatedPayload);
+  } else if (hasMedia) {
+    // ── Non-evaluative Gemini Multimodal Path ───────────────────────────────
+    const geminiContents: any[] = [];
+    const uploadedUris: string[] = [];
+
+    for (const msg of chatHistory) {
+      if (msg.role === "user" || msg.role === "model") {
+        geminiContents.push({
+          role: msg.role === "user" ? "user" : "model",
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+
     const userParts: any[] = [];
     for (const attachment of options!.mediaAttachments!) {
       if (attachment.url) {
         try {
           if (options?.useEnterprise) {
-            console.log(`[RAG] Fetching ${attachment.filename || "file"} for Vertex AI inline processing...`);
             const res = await fetch(attachment.url);
-            if (!res.ok) throw new Error(`Failed to download attachment from storage: ${res.statusText}`);
+            if (!res.ok) throw new Error(`Failed to download attachment: ${res.statusText}`);
             const buffer = Buffer.from(await res.arrayBuffer());
             userParts.push({
               inlineData: { mimeType: attachment.mimeType, data: buffer.toString("base64") },
             });
           } else {
-            console.log(`[RAG] Uploading ${attachment.filename || "file"} from R2 to Gemini...`);
             const { fileUri } = await uploadFileFromUrl(attachment.url, attachment.mimeType);
             uploadedUris.push(fileUri);
             userParts.push({ fileData: { fileUri, mimeType: attachment.mimeType } });
@@ -1248,30 +1372,26 @@ ${finalGroundingBlock}`;
     userParts.push({ text: query });
     geminiContents.push({ role: "user", parts: userParts });
 
-    console.log(`[RAG] Using Gemini multimodal with ${options!.mediaAttachments!.length} attachment(s)`);
-
     try {
       const geminiResult = await generateWithModelFallback(geminiContents, {
         systemInstruction: groundedSystemPrompt,
         generationConfig: {
           maxOutputTokens: 4096,
-          temperature: mode === "evaluative" ? 0.25 : 0.6,
+          temperature: 0.6,
           topP: 0.9,
           topK: 40,
-          ...(mode === "evaluative" ? { responseMimeType: "application/json" } : {}),
         },
         useEnterprise: options?.useEnterprise,
       });
 
       draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";
     } finally {
-      // Clean up uploaded files
       if (uploadedUris.length > 0) {
-        Promise.all(uploadedUris.map(uri => deleteGeminiFile(uri))).catch(console.error);
+        Promise.all(uploadedUris.map((uri) => deleteGeminiFile(uri))).catch(console.error);
       }
     }
   } else {
-    // ── Groq Text-Only Path (default, free, fast) ─────────────────────────
+    // ── Non-evaluative Groq Text-Only Path (fast & free) ───────────────────
     const groqHistory: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: groundedSystemPrompt },
     ];
@@ -1291,120 +1411,50 @@ ${finalGroundingBlock}`;
       const completion = await getGroqClient().chat.completions.create({
         messages: groqHistory,
         model: "openai/gpt-oss-120b",
-        temperature: mode === "evaluative" ? 0.25 : 0.6,
+        temperature: 0.6,
         max_completion_tokens: 4096,
         top_p: 0.9,
       });
 
       draft = completion.choices[0]?.message?.content?.trim() ?? "I couldn't generate a response.";
     } catch (groqErr: any) {
-      console.warn("[RAG] Groq generation error, checking recovery:", groqErr?.message);
-
-      // 1. If Groq threw json_validate_failed, retrieve the failed generation
-      let recoveredText: string | undefined = groqErr?.error?.failed_generation;
-      if (!recoveredText && typeof groqErr?.message === "string") {
-        try {
-          const parsed = JSON.parse(groqErr.message.replace(/^[0-9]+\s*/, ""));
-          recoveredText = parsed?.error?.failed_generation;
-        } catch {}
-      }
-
-      if (recoveredText) {
-        draft = recoveredText.trim();
-      } else {
-        // 2. Fallback to Gemini text generation
-        console.log("[RAG] Falling back to Gemini for text generation...");
-        try {
-          const geminiFallback = await generateWithModelFallback(
-            [
-              {
-                role: "user",
-                parts: [{ text: `${groundedSystemPrompt}\n\nUser Message:\n${query}` }],
-              },
-            ],
+      console.warn("[RAG] Groq generation error, falling back to Gemini:", groqErr?.message);
+      try {
+        const geminiFallback = await generateWithModelFallback(
+          [
             {
-              generationConfig: {
+              role: "user",
+              parts: [{ text: `${groundedSystemPrompt}\n\nUser Message:\n${query}` }],
+            },
+          ],
+          {
+            generationConfig: {
               maxOutputTokens: 4096,
-              temperature: mode === "evaluative" ? 0.25 : 0.6,
+              temperature: 0.6,
               topP: 0.9,
               topK: 40,
             },
-            }
-          );
-          draft = geminiFallback.text()?.trim() ?? "I couldn't generate a response.";
-        } catch (geminiErr: any) {
-          console.error("[RAG] Both Groq and Gemini fallback failed:", geminiErr);
-          throw groqErr;
-        }
+          }
+        );
+        draft = geminiFallback.text()?.trim() ?? "I couldn't generate a response.";
+      } catch (geminiErr: any) {
+        console.error("[RAG] Both Groq and Gemini fallback failed:", geminiErr);
+        throw groqErr;
       }
-    }
-  }
-
-  // Re-assemble JSON into markdown if in evaluative mode
-  if (mode === "evaluative") {
-    try {
-      let jsonStr = draft.trim();
-      const codeBlockMatch = draft.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-      if (codeBlockMatch) {
-        jsonStr = codeBlockMatch[1].trim();
-      } else {
-        const firstBrace = draft.indexOf("{");
-        const lastBrace = draft.lastIndexOf("}");
-        if (firstBrace !== -1 && lastBrace > firstBrace) {
-          jsonStr = draft.slice(firstBrace, lastBrace + 1).trim();
-        }
-      }
-
-      const parsed = JSON.parse(jsonStr);
-
-      if (parsed.scorecard || parsed.total_verdict || parsed.roast) {
-        let totalScore = 0;
-        let scorecardMd = "## 🚀 QUICK‑LOOK SCORECARD\n| Dimension | Score (0‑10) | Why you’re getting that number |\n|-----------|--------------|--------------------------------|\n";
-
-        const scorecardData = Array.isArray(parsed.scorecard) ? parsed.scorecard : [];
-
-        // Enforce all 10 dimensions are present, even if LLM missed one
-        for (const dim of RUBRIC_DIMENSIONS) {
-          const row = scorecardData.find((r: any) => r.dimension === dim) || {
-            score: 3,
-            reasoning: "No specific details provided; scored conservatively based on concept requirements.",
-          };
-          const score = typeof row.score === "number" ? row.score : parseInt(String(row.score), 10) || 0;
-          totalScore += score;
-          scorecardMd += `| ${dim} | ${score} | ${String(row.reasoning || "").replace(/\n/g, " ")} |\n`;
-        }
-
-        const totalVerdict = parsed.total_verdict ? String(parsed.total_verdict).replace(/\n/g, " ") : "";
-        scorecardMd += `| **Total** | **${totalScore} / 100** | **${totalVerdict}** |\n---\n`;
-
-        // Strip any headings the LLM may have snuck into content fields
-        const stripHeadings = (text: string) => text.replace(/^##\s*[🔥📉🛠️].*\n?/gm, "").trim();
-        const roastContent = stripHeadings(parsed.roast || "");
-        const graveyardContent = stripHeadings(parsed.graveyard || "");
-        const pivotContent = stripHeadings(parsed.pivot || "");
-
-        draft = `${scorecardMd}\n## 🔥 ROAST\n${roastContent}\n\n---\n\n## 📉 WHY SIMILAR STARTUPS HAVE DIED\n${graveyardContent}\n\n---\n\n## 🛠️ CONSTRUCTIVE PIVOT\n${pivotContent}`.trim();
-
-        // Clean up any duplicate horizontal rules
-        draft = draft.replace(/(?:\n\s*---\s*){2,}/g, "\n\n---");
-      }
-    } catch {
-      // Natural conversational text remains intact as clean markdown/text
     }
   }
 
   // ── Repetition loop guard ────────────────────────────────────────────────
-  // Detect and cleanly truncate any degenerate token loops before verification
   draft = cleanRepetitionLoop(draft);
 
-  // Fix 1: Verifier pass — check every company name against actual retrieved chunks
-  // This catches the "sticky name" hallucination where the model uses real company
-  // names but fabricates their business models/failure reasons to fit the pitch.
+  // Verifier pass — check every company name against actual retrieved chunks
   const verifiedReply = await verifyEntityClaims(draft, chunks, webResults);
   const reply = cleanRepetitionLoop(verifiedReply);
 
   return {
     reply,
+    scorecardData: validatedPayload,
+    rawJson: validatedPayload ? JSON.stringify(validatedPayload) : undefined,
     sources: chunks.map((c) => ({
       filename: c.source_filename,
       chunkIndex: c.chunk_index,

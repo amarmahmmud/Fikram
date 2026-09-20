@@ -63,6 +63,7 @@ interface Message {
   creditsRequired?: number;
   creditsBalance?: number;
   isNetworkError?: boolean;
+  isResponseTooLong?: boolean;
   retryPayload?: {
     userMsg: string;
     attachment?: any;
@@ -669,6 +670,23 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           const allMsgs = [...messages, { role: "user", content: userMsg }, newModelMsg];
           localStorage.setItem(`mf_expert_msgs_${anonConvId}`, JSON.stringify(allMsgs));
         }
+      } else if (data?.code === "RESPONSE_TOO_LONG") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            isResponseTooLong: true,
+            retryPayload: {
+              userMsg,
+              attachment: activeAttachment,
+            },
+          },
+        ]);
+        toast.warning("Response was too long", {
+          description: "The analysis exceeded the output limit. Click Retry to run with an extended budget.",
+          duration: 4500,
+        });
       } else {
         setMessages((prev) => [
           ...prev,
@@ -677,6 +695,27 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       }
     } catch (err: any) {
       if (
+        err?.code === "RESPONSE_TOO_LONG" ||
+        err?.data?.code === "RESPONSE_TOO_LONG" ||
+        String(err?.message || "").includes("Response was too long")
+      ) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "model",
+            content: "",
+            isResponseTooLong: true,
+            retryPayload: {
+              userMsg,
+              attachment: activeAttachment,
+            },
+          },
+        ]);
+        toast.warning("Response was too long", {
+          description: "The analysis exceeded the output limit. Click Retry to run with an extended budget.",
+          duration: 4500,
+        });
+      } else if (
         err?.isInsufficientCredits ||
         err?.status === 402 ||
         String(err?.message || "").toLowerCase().includes("insufficient credit")
@@ -1199,6 +1238,40 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                           Offline
                         </span>
                       )}
+                    </div>
+                  </div>
+                ) : msg.isResponseTooLong ? (
+                  <div className={styles.networkErrorCard}>
+                    <div className={styles.networkErrorHeader}>
+                      <div className={styles.networkErrorIcon}>
+                        <RotateCcw size={18} />
+                      </div>
+                      <div>
+                        <div className={styles.networkErrorTitle}>Response was too long, retrying</div>
+                        <div className={styles.networkErrorSub}>
+                          The analysis in this language reached the output token budget. Click Retry below to regenerate with an extended budget.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={styles.networkErrorActions}>
+                      <button
+                        type="button"
+                        className={styles.networkErrorBtnPrimary}
+                        disabled={sending}
+                        onClick={() => {
+                          if (msg.retryPayload) {
+                            sendMessage({
+                              content: msg.retryPayload.userMsg,
+                              attachment: msg.retryPayload.attachment,
+                              replaceIndex: i,
+                            });
+                          }
+                        }}
+                      >
+                        <RotateCcw size={14} className={sending ? styles.spinning : ""} />
+                        <span>Retry Analysis</span>
+                      </button>
                     </div>
                   </div>
                 ) : (

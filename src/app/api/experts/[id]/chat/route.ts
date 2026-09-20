@@ -198,10 +198,17 @@ export async function POST(
     // Parse expert configuration metadata (mode, web search, etc.)
     const metadata = parseExpertMetadata(expert.description || "", expert.name);
 
-    // AI Gateway: determine routing based on user tier, media, and circuit breaker
+    const effectiveReasoningMode =
+      typeof reasoningMode === "string" && ["strict", "evaluative", "hybrid"].includes(reasoningMode)
+        ? (reasoningMode as any)
+        : metadata.reasoningMode;
+
+    const isEvaluative = effectiveReasoningMode === "evaluative";
+
+    // AI Gateway: determine routing based on user tier, media, reasoning mode, and circuit breaker
     const { tier } = user ? await getUserTier(user.id) : { tier: "free" as const };
     const primaryMimeType = mediaAttachments.length > 0 ? mediaAttachments[0].mimeType : undefined;
-    const chatTask = classifyChatTask(mediaAttachments.length > 0, primaryMimeType);
+    const chatTask = classifyChatTask(mediaAttachments.length > 0, primaryMimeType, isEvaluative);
     const decision = await routeRequest(chatTask, tier);
 
     console.log(
@@ -213,11 +220,6 @@ export async function POST(
       typeof systemPrompt === "string" && systemPrompt.trim().length > 0
         ? systemPrompt.trim().slice(0, 8000)
         : (expert.system_prompt || `You are ${expert.name}, a knowledgeable expert.`);
-
-    const effectiveReasoningMode =
-      typeof reasoningMode === "string" && ["strict", "evaluative", "hybrid"].includes(reasoningMode)
-        ? (reasoningMode as any)
-        : metadata.reasoningMode;
 
     const effectiveWebSearch =
       typeof webSearchEnabled === "boolean"
@@ -257,12 +259,25 @@ export async function POST(
     return NextResponse.json({
       ok: true,
       reply: result.reply,
+      scorecard: result.scorecardData,
+      rawScorecardJson: result.rawJson,
       sources: result.sources,
       webSources: result.webSources,
       conversationId: activeConvId || null,
     });
   } catch (err: any) {
     console.error("[Expert Chat] Error:", err);
+    if (err?.code === "RESPONSE_TOO_LONG") {
+      return NextResponse.json(
+        {
+          error: "Response was too long, retrying",
+          code: "RESPONSE_TOO_LONG",
+          language: err.language,
+          isRetryable: true,
+        },
+        { status: 422 }
+      );
+    }
     return NextResponse.json(
       { error: err.message || "Failed to generate response" },
       { status: 500 }
