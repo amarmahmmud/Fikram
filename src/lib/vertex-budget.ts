@@ -49,6 +49,7 @@ function getMonthKey(): string {
  * Get the current month's estimated Vertex AI spend for free-tier users.
  */
 export async function getMonthlyVertexSpend(): Promise<number> {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return 0;
   try {
     const raw = await redis.get<string>(getMonthKey());
     return raw ? parseFloat(raw) : 0;
@@ -83,6 +84,7 @@ export async function trackVertexSpend(
   operation: VertexOperation,
   units: number = 1,
 ): Promise<void> {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return;
   try {
     const costPerUnit = VERTEX_COST_ESTIMATES[operation];
     const totalCost = costPerUnit * units;

@@ -65,8 +65,8 @@ async function callDocumentAI(
       content: pdfBase64,
       mimeType: "application/pdf",
     },
-    // Include page layout and text anchors to attribute text to exact page numbers
-    fieldMask: "text,pages.pageNumber,pages.layout.textAnchor",
+    // Include top-level text and pages (Document AI rejects nested subfield masks)
+    fieldMask: "text,pages",
   };
 
   if (pages) {
@@ -134,6 +134,29 @@ async function callDocumentAI(
  * Automatically batches large PDFs (>30 pages) into parallel requests.
  */
 export async function extractPdfText(pdfBuffer: Buffer): Promise<string> {
+  // ── 1. Fast local extraction via unpdf (pure JS, fast, zero cloud costs) ──────
+  try {
+    const { extractText } = await import("unpdf");
+    const res = await extractText(new Uint8Array(pdfBuffer), { mergePages: false });
+    if (Array.isArray(res.text) && res.text.length > 0) {
+      const pageTexts: string[] = [];
+      for (let i = 0; i < res.text.length; i++) {
+        const pText = (res.text[i] || "").trim();
+        if (pText.length > 0) {
+          pageTexts.push(`--- [Page ${i + 1}] ---\n${pText}`);
+        }
+      }
+      const combined = pageTexts.join("\n\n");
+      if (combined.trim().length >= 40) {
+        console.log(`[PDF Extraction] unpdf successfully extracted ${combined.length} chars from ${res.totalPages} pages`);
+        return combined;
+      }
+    }
+  } catch (unpdfErr) {
+    console.warn("[PDF Extraction] unpdf local extraction skipped or failed, falling back to Document AI OCR:", unpdfErr);
+  }
+
+  // ── 2. Fallback: Google Document AI OCR (for scanned PDFs or complex layouts) ─
   ensureCredentials();
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT;

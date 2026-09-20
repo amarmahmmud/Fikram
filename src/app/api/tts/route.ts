@@ -39,7 +39,7 @@ function getTTSClient(): TextToSpeechClient {
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     const credPath = path.isAbsolute(process.env.GOOGLE_APPLICATION_CREDENTIALS)
       ? process.env.GOOGLE_APPLICATION_CREDENTIALS
-      : path.resolve(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
+      : path.resolve(/*turbopackIgnore: true*/ process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS);
     if (fs.existsSync(credPath)) {
       keyFilename = credPath;
     }

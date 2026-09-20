@@ -359,29 +359,17 @@ export default function NewExpertPage() {
     setLoadingQuestions(true);
 
     try {
-      // Gather light content snippets from text/code files client-side
-      const snippets: string[] = [];
-      for (const item of files.slice(0, 3)) {
-        const ext = item.file.name.toLowerCase().split(".").pop() || "";
-        if (["txt", "md", "csv", "json"].includes(ext) || item.file.type.startsWith("text/")) {
-          try {
-            const sample = await item.file.slice(0, 800).text();
-            if (sample.trim()) snippets.push(sample.slice(0, 400));
-          } catch {
-            // ignore
-          }
-        }
-      }
+      // Send FormData with files so the server can extract domain-specific context from PDFs and docs
+      const formData = new FormData();
+      formData.append("expertName", name.trim());
+      formData.append("description", description.trim());
+      files.forEach((f) => formData.append("filenames", f.file.name));
+      // Append the first 2 files (PDF, document, or text) for server-side snippet extraction
+      files.slice(0, 2).forEach((f) => formData.append("files", f.file));
 
       const res = await fetch("/api/experts/alignment-questions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expertName: name.trim(),
-          description: description.trim(),
-          filenames: files.map((f) => f.file.name),
-          snippets,
-        }),
+        body: formData,
       });
 
       const data = await res.json();

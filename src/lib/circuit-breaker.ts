@@ -66,6 +66,9 @@ export async function getCircuitState(
   provider: string,
   config: CircuitBreakerConfig = DEFAULT_CONFIG,
 ): Promise<CircuitStatus> {
+  if (!process.env.UPSTASH_REDIS_REST_URL) {
+    return { state: "closed", failureCount: 0, lastFailureAt: null, openedAt: null };
+  }
   try {
     const k = keys(provider);
     const now = Date.now();
@@ -109,6 +112,7 @@ export async function recordSuccess(
   provider: string,
   config: CircuitBreakerConfig = DEFAULT_CONFIG,
 ): Promise<void> {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return;
   try {
     const k = keys(provider);
     const currentState = await redis.get<string>(k.state);
@@ -146,6 +150,7 @@ export async function recordFailure(
   provider: string,
   config: CircuitBreakerConfig = DEFAULT_CONFIG,
 ): Promise<void> {
+  if (!process.env.UPSTASH_REDIS_REST_URL) return;
   try {
     const k = keys(provider);
     const now = Date.now();
