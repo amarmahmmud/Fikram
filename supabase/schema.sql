@@ -582,3 +582,64 @@ begin
 end;
 $$;
 
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 14. User Preferences
+-- ─────────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.user_preferences (
+  user_id       uuid references auth.users(id) on delete cascade primary key,
+  voice_enabled boolean not null default true,
+  updated_at    timestamptz default now() not null
+);
+
+alter table public.user_preferences enable row level security;
+
+drop policy if exists "Users can view own preferences"   on public.user_preferences;
+drop policy if exists "Users can insert own preferences" on public.user_preferences;
+drop policy if exists "Users can update own preferences" on public.user_preferences;
+
+create policy "Users can view own preferences"
+  on public.user_preferences for select
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own preferences"
+  on public.user_preferences for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own preferences"
+  on public.user_preferences for update
+  using (auth.uid() = user_id);
+
+create or replace function public.handle_user_preferences_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_user_preferences_updated_at on public.user_preferences;
+create trigger set_user_preferences_updated_at
+  before update on public.user_preferences
+  for each row execute procedure public.handle_user_preferences_updated_at();
+
+-- Auto-create preferences row on new user signup (independent trigger — does NOT touch handle_new_user())
+create or replace function public.handle_new_user_preferences()
+returns trigger language plpgsql security definer set search_path = public
+as $$
+begin
+  insert into public.user_preferences (user_id, voice_enabled)
+  values (new.id, true)
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created_preferences on auth.users;
+create trigger on_auth_user_created_preferences
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user_preferences();
+
+
+

@@ -134,42 +134,62 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     primeAudio,
   } = useTextToSpeech();
 
-  // Auto-voice response state (Option A: first reply in each conversation auto-plays; persisted in localStorage)
-  const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(true);
+  // Auto-voice response state (Option A: first reply in each conversation auto-plays; persisted in Supabase per user + localStorage)
+  const [autoVoiceEnabled, setAutoVoiceEnabled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("mf_auto_voice_enabled");
+        if (stored !== null) return stored === "true";
+      } catch { }
+    }
+    return true;
+  });
 
-  // Initialize autoVoiceEnabled from localStorage
-  useEffect(() => {
+  // Update voice preference with optimistic UI update, persistence via API, and rollback on error
+  const updateVoicePreference = useCallback(async (enabled: boolean) => {
+    // 1. Optimistic update
+    setAutoVoiceEnabled(enabled);
     try {
-      const stored = localStorage.getItem("mf_auto_voice_enabled");
-      if (stored !== null) {
-        setAutoVoiceEnabled(stored === "true");
-      }
+      localStorage.setItem("mf_auto_voice_enabled", String(enabled));
     } catch { }
-  }, []);
+
+    if (!enabled) {
+      stopCurrentPlayback();
+      toast.info("Voice Auto-Play turned OFF", {
+        description: "Assistant will not speak automatically. Click Listen to play anytime.",
+        duration: 3500,
+      });
+    } else {
+      toast.success("Voice Auto-Play turned ON", {
+        description: "Assistant will speak the first reply in each conversation.",
+        duration: 3500,
+      });
+    }
+
+    // 2. Persist to Supabase via API
+    try {
+      const activeUser = currentUser || (await supabase.auth.getUser()).data?.user;
+      if (activeUser) {
+        await apiClient.patch("/api/user/preferences", { voice_enabled: enabled });
+      }
+    } catch (err) {
+      console.error("Failed to persist voice preference:", err);
+      // 3. Rollback UI on failure
+      setAutoVoiceEnabled(!enabled);
+      try {
+        localStorage.setItem("mf_auto_voice_enabled", String(!enabled));
+      } catch { }
+      toast.error("Failed to save voice preference", {
+        description: "Could not update your preference. Reverting change.",
+        duration: 4000,
+      });
+    }
+  }, [currentUser, stopCurrentPlayback, supabase]);
 
   // Toggle auto-voice on/off with persistence & user feedback
   const handleToggleAutoVoice = useCallback(() => {
-    setAutoVoiceEnabled((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem("mf_auto_voice_enabled", String(next));
-      } catch { }
-
-      if (!next) {
-        stopCurrentPlayback();
-        toast.info("Voice Auto-Play turned OFF", {
-          description: "Assistant will not speak automatically. Click Listen to play anytime.",
-          duration: 3500,
-        });
-      } else {
-        toast.success("Voice Auto-Play turned ON", {
-          description: "Assistant will speak the first reply in each conversation.",
-          duration: 3500,
-        });
-      }
-      return next;
-    });
-  }, [stopCurrentPlayback]);
+    updateVoicePreference(!autoVoiceEnabled);
+  }, [autoVoiceEnabled, updateVoicePreference]);
 
   useEffect(() => {
     return () => {
@@ -424,6 +444,24 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         if (mounted) setCurrentUser(user);
 
         if (user && mounted) {
+          // Fetch user preferences from Supabase (defaults to true if no row exists yet)
+          try {
+            const { data: prefData } = await supabase
+              .from("user_preferences")
+              .select("voice_enabled")
+              .eq("user_id", user.id)
+              .maybeSingle();
+
+            if (prefData && typeof prefData.voice_enabled === "boolean" && mounted) {
+              setAutoVoiceEnabled(prefData.voice_enabled);
+              try {
+                localStorage.setItem("mf_auto_voice_enabled", String(prefData.voice_enabled));
+              } catch { }
+            }
+          } catch (prefErr) {
+            console.error("Failed to load user preferences:", prefErr);
+          }
+
           const { data: profile } = await supabase
             .from("profiles")
             .select("credits_balance, credits_held")
@@ -712,12 +750,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             action: {
               label: "Turn Off",
               onClick: () => {
-                setAutoVoiceEnabled(false);
-                try {
-                  localStorage.setItem("mf_auto_voice_enabled", "false");
-                } catch { }
-                stopCurrentPlayback();
-                toast.info("Voice Auto-Play disabled.");
+                updateVoicePreference(false);
               },
             },
             duration: 7000,
