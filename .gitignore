@@ -49,3 +49,7 @@ __pycache__/
 # GCP Service Account keys
 gcp-key*.json
 *service-account*.json
+
+# Supabase CLI temp files
+supabase/.temp/
+.temp/
