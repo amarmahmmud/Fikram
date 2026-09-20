@@ -4,6 +4,9 @@
   gap: 24px;
   margin-bottom: 32px;
   padding: 0 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .step {
@@ -12,6 +15,9 @@
   gap: 8px;
   opacity: 0.4;
   transition: opacity 0.3s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .stepActive {
@@ -105,6 +111,9 @@
   margin-bottom: 6px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .labelRow {
@@ -128,6 +137,11 @@
   align-items: center;
   gap: 5px;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .aiHelperBtn:hover {
   background: rgba(0, 229, 200, 0.12);
@@ -148,6 +162,9 @@
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 8px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .toneChips {
@@ -155,6 +172,9 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .toneChip {
@@ -166,6 +186,11 @@
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .toneChip:hover {
   border-color: rgba(0, 229, 200, 0.3);
@@ -407,6 +432,11 @@
   border: 1px solid var(--border);
   cursor: pointer;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .modeOption:hover {
@@ -447,6 +477,11 @@
   margin-top: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .webToggleCard:hover {
@@ -647,6 +682,11 @@
   transition: all 0.2s ease;
   position: relative;
   min-height: 96px;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .alignmentOptionCard:hover {
@@ -718,6 +758,10 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   transition: color 0.2s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
 }
 
 .alignmentCustomToggle:hover {
