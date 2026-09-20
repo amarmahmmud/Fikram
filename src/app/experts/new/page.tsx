@@ -780,46 +780,48 @@ export default function NewExpertPage() {
 
             {/* Knowledge Mode */}
             <div className={styles.field}>
-              <label className={styles.label}>Knowledge Grounding Mode</label>
-              <div className={styles.modeGrid}>
-                <div
-                  className={`${styles.modeOption} ${reasoningMode === "hybrid" ? styles.modeOptionActive : ""}`}
+              <div className={styles.labelRow}>
+                <label className={styles.label}>Knowledge Grounding Mode</label>
+                <span className={styles.labelBadge}>
+                  {reasoningMode === "hybrid" && "Balanced"}
+                  {reasoningMode === "strict" && "Strict Docs"}
+                  {reasoningMode === "evaluative" && "Critical"}
+                </span>
+              </div>
+
+              {/* Modern Segmented Controller */}
+              <div className={styles.segmentedControl}>
+                <button
+                  type="button"
+                  className={`${styles.segmentedBtn} ${reasoningMode === "hybrid" ? styles.segmentedBtnActive : ""}`}
                   onClick={() => setReasoningMode("hybrid")}
                 >
-                  <div className={styles.modeTitle}>
-                    <Scale size={15} />
-                    <span>Balanced Hybrid</span>
-                  </div>
-                  <div className={styles.modeDesc}>
-                    Blends verified files with general AI reasoning.
-                  </div>
-                </div>
-
-                <div
-                  className={`${styles.modeOption} ${reasoningMode === "strict" ? styles.modeOptionActive : ""}`}
+                  <Scale size={14} />
+                  <span>Balanced</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.segmentedBtn} ${reasoningMode === "strict" ? styles.segmentedBtnActive : ""}`}
                   onClick={() => setReasoningMode("strict")}
                 >
-                  <div className={styles.modeTitle}>
-                    <ShieldCheck size={15} />
-                    <span>Strict Grounding</span>
-                  </div>
-                  <div className={styles.modeDesc}>
-                    Exclusively answers from provided files with citations.
-                  </div>
-                </div>
-
-                <div
-                  className={`${styles.modeOption} ${reasoningMode === "evaluative" ? styles.modeOptionActive : ""}`}
+                  <ShieldCheck size={14} />
+                  <span>Strict Docs</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.segmentedBtn} ${reasoningMode === "evaluative" ? styles.segmentedBtnActive : ""}`}
                   onClick={() => setReasoningMode("evaluative")}
                 >
-                  <div className={styles.modeTitle}>
-                    <Flame size={15} />
-                    <span>Critical Reviewer</span>
-                  </div>
-                  <div className={styles.modeDesc}>
-                    Evaluates concepts against your source standards.
-                  </div>
-                </div>
+                  <Flame size={14} />
+                  <span>Critical</span>
+                </button>
+              </div>
+
+              {/* Dynamic context explanation */}
+              <div className={styles.modeDynamicHelper}>
+                {reasoningMode === "hybrid" && "⚡ Balanced: Blends verified files with general AI reasoning."}
+                {reasoningMode === "strict" && "🛡️ Strict: Exclusively answers from uploaded files with citations."}
+                {reasoningMode === "evaluative" && "🔥 Critical: Evaluates concepts against your source standards."}
               </div>
 
               {/* Live Web Search Switch */}
@@ -829,11 +831,11 @@ export default function NewExpertPage() {
               >
                 <div className={styles.webToggleInfo}>
                   <div className={styles.webToggleTitle}>
-                    <Globe size={15} />
+                    <Globe size={14} />
                     <span>Real-Time Web Search</span>
                   </div>
                   <div className={styles.webToggleDesc}>
-                    Permits live web searches alongside your uploaded documents.
+                    Live web queries alongside uploaded documents
                   </div>
                 </div>
                 <div className={styles.switchTrack}>
@@ -863,14 +865,17 @@ export default function NewExpertPage() {
                   }}
                   disabled={generatingPrompt}
                 >
-                  <Sparkles size={13} />
-                  <span>{generatingPrompt ? "Generating..." : showAiHelper ? "Hide AI Generator" : "Generate with AI"}</span>
+                  <Sparkles size={13} className={generatingPrompt ? styles.sparkleSpin : ""} />
+                  <span>{generatingPrompt ? "Generating..." : showAiHelper ? "Hide Tones" : "Generate with AI"}</span>
                 </button>
               </div>
 
               {showAiHelper && (
-                <div className={styles.aiGeneratorBox}>
-                  <div className={styles.aiGeneratorHeader}>Tone preset:</div>
+                <div className={styles.aiGeneratorTray}>
+                  <div className={styles.aiGeneratorHeader}>
+                    <span>Preset tone:</span>
+                    {generatingPrompt && <span className={styles.aiGeneratingBadge}>Applying...</span>}
+                  </div>
                   <div className={styles.toneChips}>
                     {TONE_PRESETS.map((t) => (
                       <button
