@@ -702,7 +702,7 @@ export default function LandingPage() {
                   Annual Billing
                 </span>
                 <span className={styles.discountBadge}>
-                  Save 20% + 2 Mo Free
+                  Save 20%
                 </span>
               </div>
             )}
