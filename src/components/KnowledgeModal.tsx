@@ -7,6 +7,7 @@ import { apiClient } from "@/lib/apiClient";
 import { createClient } from "@/lib/supabase/client";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
+import { uploadFileToStorage } from "@/lib/upload-client";
 
 interface SourceItem {
   filename: string;
@@ -114,15 +115,6 @@ export function KnowledgeModal({
   async function processFiles(filesToProcess: File[]) {
     if (!filesToProcess || filesToProcess.length === 0) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setStatusMessage({
-        type: "error",
-        text: "You are currently offline. Please reconnect to upload documents.",
-      });
-      setFailedFiles(filesToProcess);
-      return;
-    }
-
     if (creditsBalance !== null && creditsBalance < 1) {
       setInsufficientCreditsError({
         required: 1,
@@ -146,33 +138,8 @@ export function KnowledgeModal({
     for (let i = 0; i < filesToProcess.length; i++) {
       const file = filesToProcess[i];
       try {
-        // Direct-to-R2 Architecture
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ filename: file.name, contentType: file.type }),
-        });
-        
-        if (!uploadRes.ok) throw new Error("Failed to get upload URL");
-        const { uploadUrl, downloadUrl } = await uploadRes.json();
-        
-        // Upload to R2 directly
-        let putRes: Response;
-        try {
-          putRes = await fetch(uploadUrl, {
-            method: "PUT",
-            body: file,
-            headers: file.type ? { "Content-Type": file.type } : undefined,
-          });
-        } catch (netErr: any) {
-          console.error("Storage network error:", netErr);
-          throw new Error("Storage connection failed. Please check your network connection.");
-        }
-
-        if (!putRes.ok) {
-          console.error("Storage upload failed with status:", putRes.status);
-          throw new Error(`Storage upload failed (${putRes.status})`);
-        }
+        // Resilient upload: tries direct R2 and seamlessly falls back to server-side upload
+        const { downloadUrl } = await uploadFileToStorage(file);
 
         // Send ingest request to backend
         const res = await fetch(`/api/experts/${expertId}/ingest`, {
@@ -245,12 +212,9 @@ export function KnowledgeModal({
       });
       loadUserCredits();
     } else {
-      const isNetError = typeof navigator !== "undefined" && !navigator.onLine;
       setStatusMessage({
         type: "error",
-        text: isNetError
-          ? `Network connection interrupted. ${failedCount} file${failedCount > 1 ? "s" : ""} could not be uploaded.`
-          : `${successCount} succeeded, ${failedCount} failed. You can retry failed files below.`,
+        text: `${successCount} succeeded, ${failedCount} failed. You can retry failed files below.`,
       });
       loadUserCredits();
     }

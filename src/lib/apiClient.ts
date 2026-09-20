@@ -1,4 +1,4 @@
-import { fetchWithRetry, isBrowserOffline, isNetworkFailure, type RetryOptions } from "@/lib/fetch-with-retry";
+import { fetchWithRetry, isNetworkFailure, type RetryOptions } from "@/lib/fetch-with-retry";
 
 export class ApiError extends Error {
   public status: number;
@@ -32,7 +32,7 @@ export class ApiError extends Error {
   }
 
   get isOffline(): boolean {
-    return Boolean(this.data?.isOffline || isBrowserOffline());
+    return Boolean(this.data?.isOffline);
   }
 
   get creditsRequired(): number | undefined {
@@ -62,16 +62,14 @@ async function fetchWithHandling<T>(
   try {
     response = await fetchWithRetry(url, options, retryOpts);
   } catch (netErr: any) {
-    const isOff = isBrowserOffline();
-    const friendlyMsg = isOff
-      ? "You are currently offline. Please check your internet connection."
-      : "Network connection failed. Please check your internet connection and try again.";
-
-    throw new ApiError(friendlyMsg, 0, {
-      isNetworkError: true,
-      isOffline: isOff,
-      originalError: netErr,
-    });
+    throw new ApiError(
+      netErr?.message || "Network request failed. Please check your connection and try again.",
+      0,
+      {
+        isNetworkError: true,
+        originalError: netErr,
+      }
+    );
   }
 
   let data;

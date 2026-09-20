@@ -12,41 +12,37 @@ export interface RetryOptions {
 
 const DEFAULT_RETRY_OPTIONS: Required<Omit<RetryOptions, "onRetry">> = {
   maxRetries: 2,
-  initialDelayMs: 1000,
-  backoffMultiplier: 2,
+  initialDelayMs: 600,
+  backoffMultiplier: 1.5,
   retryableStatuses: [408, 429, 502, 503, 504],
 };
 
 /**
- * Check if the browser currently reports as offline.
- */
-export function isBrowserOffline(): boolean {
-  return typeof navigator !== "undefined" && !navigator.onLine;
-}
-
-/**
- * Detect if an error is a network connectivity failure.
+ * Detect if an error is a true network connectivity failure.
+ * Does not misclassify JavaScript runtime TypeErrors as network drops.
  */
 export function isNetworkFailure(error: any): boolean {
-  if (isBrowserOffline()) return true;
   if (!error) return false;
 
   const msg = String(error.message || error).toLowerCase();
+  const isFetchTypeError =
+    error.name === "TypeError" &&
+    (msg.includes("fetch") || msg.includes("network") || msg.includes("load failed") || msg.includes("aborted"));
+
   return (
+    isFetchTypeError ||
     msg.includes("failed to fetch") ||
     msg.includes("network error") ||
     msg.includes("networkrequestfailed") ||
-    msg.includes("load failed") ||
     msg.includes("connection reset") ||
-    msg.includes("econnrefused") ||
-    msg.includes("aborterror") ||
-    error.name === "TypeError"
+    msg.includes("econnrefused")
   );
 }
 
 /**
  * Perform a fetch request with automatic exponential backoff retry
- * for transient network errors and gateway timeouts.
+ * for transient network dropouts and gateway timeouts.
+ * Always attempts the actual request first — never falsely blocks on localhost.
  */
 export async function fetchWithRetry(
   url: string,
@@ -60,11 +56,6 @@ export async function fetchWithRetry(
 
   while (true) {
     try {
-      // Don't retry if known to be offline right at the start
-      if (isBrowserOffline() && attempt > 0) {
-        throw new TypeError("You appear to be offline.");
-      }
-
       const response = await fetch(url, options);
 
       // Check if status qualifies for transient retry (e.g. 502/503/504)
@@ -82,7 +73,7 @@ export async function fetchWithRetry(
     } catch (err: any) {
       const isNetErr = isNetworkFailure(err);
 
-      if (isNetErr && attempt < config.maxRetries && !isBrowserOffline()) {
+      if (isNetErr && attempt < config.maxRetries) {
         attempt++;
         if (config.onRetry) {
           config.onRetry(attempt, err);

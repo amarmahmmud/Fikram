@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@/lib/rate-limiter";
 
 export const maxDuration = 60;
 
@@ -9,8 +10,17 @@ export async function POST(req: Request) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // Rate limiting: prevent abuse of the upload endpoint
+    const rateLimitKey = user ? `upload_user:${user.id}` : `upload_ip:${getClientIP(req)}`;
+    const rateLimitConfig = user ? AUTH_CHAT_LIMIT : ANON_CHAT_LIMIT;
+    const { allowed, resetMs } = await checkRateLimit(rateLimitKey, rateLimitConfig);
+
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(resetMs / 1000)) } }
+      );
     }
 
     const formData = await req.formData();
@@ -40,7 +50,9 @@ export async function POST(req: Request) {
       cleanName = `doc_${Date.now()}`;
     }
     const safeName = `${cleanName}${ext}`;
-    const fileKey = `datasets/${user.id}/${Date.now()}-${safeName}`;
+    const fileKey = user
+      ? `datasets/${user.id}/${Date.now()}-${safeName}`
+      : `temp/anonymous/${Date.now()}-${safeName}`;
 
     const buffer = Buffer.from(await file.arrayBuffer());
 

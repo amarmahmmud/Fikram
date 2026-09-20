@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { cleanRepetitionLoop } from "@/lib/text-cleaner";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
+import { uploadFileToStorage, fileToDataUrl } from "@/lib/upload-client";
 
 interface Message {
   id?: string;
@@ -556,33 +557,26 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       let data: any;
 
       if (activeAttachment?.file) {
-        // Direct-to-R2 architecture for media
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            filename: activeAttachment.file.name,
-            contentType: activeAttachment.file.type,
-          }),
-        });
+        let attachmentPayload: { url?: string; data?: string; mimeType: string; filename: string };
 
-        if (!uploadRes.ok) {
-          const err = await uploadRes.json().catch(() => ({}));
-          throw new Error(err.error || "Failed to initiate upload");
+        try {
+          const { downloadUrl } = await uploadFileToStorage(activeAttachment.file);
+          attachmentPayload = {
+            url: downloadUrl,
+            mimeType: activeAttachment.mimeType,
+            filename: activeAttachment.file.name,
+          };
+        } catch (storageErr) {
+          console.warn("[Chat] Storage upload failed, using inline base64 fallback:", storageErr);
+          const dataUrl = await fileToDataUrl(activeAttachment.file);
+          attachmentPayload = {
+            data: dataUrl,
+            mimeType: activeAttachment.mimeType,
+            filename: activeAttachment.file.name,
+          };
         }
 
-        const { uploadUrl, downloadUrl } = await uploadRes.json();
-
-        // Upload directly to Cloudflare R2
-        const putRes = await fetch(uploadUrl, {
-          method: "PUT",
-          body: activeAttachment.file,
-          headers: { "Content-Type": activeAttachment.file.type },
-        });
-
-        if (!putRes.ok) throw new Error("Failed to upload file to storage");
-
-        // Send chat request with the R2 URL
+        // Send chat request with R2 URL or data URL
         data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
           message: userMsg,
           conversationId: activeConvId,
@@ -590,11 +584,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             .filter((m) => m.role === "user" || m.role === "model")
             .slice(-10)
             .map((m) => ({ role: m.role, content: m.content })),
-          attachment: {
-            url: downloadUrl,
-            mimeType: activeAttachment.mimeType,
-            filename: activeAttachment.file.name
-          },
+          attachment: attachmentPayload,
           systemPrompt: effectivePrompt || undefined,
         });
         if (!isRetry) setPendingAttachment(null);
@@ -735,12 +725,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
         setCreditsBalance(bal);
       } else if (
         err?.isNetworkError ||
-        err?.isOffline ||
         err?.status === 0 ||
-        err?.message?.toLowerCase().includes("network") ||
-        err?.message?.toLowerCase().includes("failed to fetch") ||
-        err?.message?.toLowerCase().includes("offline") ||
-        (typeof navigator !== "undefined" && !navigator.onLine)
+        err?.message?.toLowerCase().includes("failed to fetch")
       ) {
         setMessages((prev) => [
           ...prev,
@@ -761,7 +747,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       } else {
         setMessages((prev) => [
           ...prev,
-          { role: "model", content: err?.message ? `**Error**: ${err.message}` : "Network error — please try again." },
+          { role: "model", content: `**Error**: ${err?.message || "An unexpected error occurred. Please try again."}` },
         ]);
       }
     } finally {
@@ -1230,13 +1216,6 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                           <Copy size={13} />
                           <span>Copy Saved Text</span>
                         </button>
-                      )}
-
-                      {typeof navigator !== "undefined" && !navigator.onLine && (
-                        <span className={styles.networkStatusTag}>
-                          <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#ef4444", display: "inline-block" }} />
-                          Offline
-                        </span>
                       )}
                     </div>
                   </div>

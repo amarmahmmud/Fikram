@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 import { InsufficientCreditsBanner } from "@/components/InsufficientCreditsBanner";
+import { uploadFileToStorage } from "@/lib/upload-client";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -423,11 +424,6 @@ export default function NewExpertPage() {
   async function runFileIngestion() {
     if (!expertId || files.length === 0) return;
 
-    if (typeof navigator !== "undefined" && !navigator.onLine) {
-      toast.error("You are currently offline. Please reconnect before continuing.");
-      return;
-    }
-
     setIngesting(true);
     let hasErrors = false;
 
@@ -458,46 +454,8 @@ export default function NewExpertPage() {
           else if (ext === "json") mimeType = "application/json";
         }
 
-        // Direct-to-R2 Architecture with Server Fallback
-        let finalDownloadUrl: string | undefined;
-
-        try {
-          const uploadRes = await fetch("/api/upload", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ filename: file.name, contentType: mimeType || file.type }),
-          });
-
-          if (uploadRes.ok) {
-            const { uploadUrl, downloadUrl } = await uploadRes.json();
-            const putRes = await fetch(uploadUrl, {
-              method: "PUT",
-              body: file,
-              headers: mimeType ? { "Content-Type": mimeType } : undefined,
-            });
-            if (putRes.ok) {
-              finalDownloadUrl = downloadUrl;
-            }
-          }
-        } catch (directErr) {
-          console.warn("[Upload] Direct browser R2 upload failed, trying server fallback:", directErr);
-        }
-
-        // Seamless fallback to server-side upload if direct browser upload was blocked
-        if (!finalDownloadUrl) {
-          const formData = new FormData();
-          formData.append("file", file);
-          const fallbackRes = await fetch("/api/upload/file", {
-            method: "POST",
-            body: formData,
-          });
-          if (!fallbackRes.ok) {
-            const errData = await fallbackRes.json().catch(() => ({}));
-            throw new Error(errData.error || "Storage upload failed");
-          }
-          const fbData = await fallbackRes.json();
-          finalDownloadUrl = fbData.downloadUrl;
-        }
+        // Resilient upload: tries direct R2 and seamlessly falls back to server-side upload
+        const { downloadUrl: finalDownloadUrl } = await uploadFileToStorage(file);
 
         // Send ingest request to backend
         const res = await fetch(`/api/experts/${expertId}/ingest`, {
@@ -577,11 +535,8 @@ export default function NewExpertPage() {
         console.error("Upload error for file", files[i].file.name, err);
         hasErrors = true;
         const isNet =
-          (typeof navigator !== "undefined" && !navigator.onLine) ||
           err?.isNetworkError ||
-          err?.message?.toLowerCase().includes("failed to fetch") ||
-          err?.message?.toLowerCase().includes("network") ||
-          err?.message?.toLowerCase().includes("storage connection failed");
+          err?.message?.toLowerCase().includes("failed to fetch");
         const errMsg = isNet
           ? "Network connection interrupted"
           : err.message || "Upload failed";

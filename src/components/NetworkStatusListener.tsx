@@ -4,18 +4,41 @@ import { useEffect, useState, useRef } from "react";
 import styles from "./NetworkStatusListener.module.css";
 import { toast } from "sonner";
 
+async function verifyConnectivity(): Promise<boolean> {
+  if (typeof window === "undefined") return true;
+  try {
+    const res = await fetch("/api/community?limit=1", {
+      method: "HEAD",
+      cache: "no-store",
+    });
+    return res.ok || res.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 export default function NetworkStatusListener() {
   const [isOffline, setIsOffline] = useState(false);
   const [showRestored, setShowRestored] = useState(false);
   const restoredTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Initial check
+    // If navigator says offline on load, verify with a real ping first to avoid false positives
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      setIsOffline(true);
+      verifyConnectivity().then((online) => {
+        if (!online) {
+          setIsOffline(true);
+        }
+      });
     }
 
-    const handleOffline = () => {
+    const handleOffline = async () => {
+      // Confirm with real heartbeat to eliminate false positives on Windows/virtual adapters
+      const isStillReachable = await verifyConnectivity();
+      if (isStillReachable) {
+        return; // False alarm, user can reach the server fine
+      }
+
       setIsOffline(true);
       setShowRestored(false);
       if (restoredTimeoutRef.current) {
