@@ -270,12 +270,16 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     setShowScrollBottom(isScrolledUp);
   }, []);
 
-  // Attachments & Mic
+  // Attachments & Mic (Speech-to-Text)
   const [pendingAttachment, setPendingAttachment] = useState<{ file: File; previewUrl?: string; mimeType: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const isRecordingRef = useRef(false);
+  const isCancelledRef = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -890,57 +894,157 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     }
   }
 
-  // ── Microphone Recording Logic ──────────────────────────────────────────
+  // ── Microphone Recording & Speech-to-Text Logic ──────────────────────────
 
   const startRecording = async () => {
+    if (isRecording || isTranscribing || sending) return;
+    isCancelledRef.current = false;
+
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      toast.error("Microphone not supported", {
+        description: "Your browser does not support audio recording. Please use Chrome, Edge, or Safari.",
+        duration: 4000,
+      });
+      return;
+    }
+
     try {
+      console.log("[STT] Requesting microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      console.log("[STT] Microphone access granted.");
+
+      // Pick supported audio format
+      let mimeType = "audio/webm";
+      if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+          mimeType = "audio/ogg";
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
       mediaRecorderRef.current = mediaRecorder;
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
+        if (e.data && e.data.size > 0) {
           audioChunksRef.current.push(e.data);
         }
       };
 
-      mediaRecorder.onstop = () => {
-        if (isRecording) { // If not cancelled
-          const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-          const audioFile = new File([audioBlob], "voice-message.webm", { type: "audio/webm" });
-          setPendingAttachment({ file: audioFile, mimeType: "audio/webm" });
+      mediaRecorder.onstop = async () => {
+        console.log("[STT] MediaRecorder stopped. Releasing audio stream tracks...");
+        stream.getTracks().forEach((track) => track.stop());
+
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        if (timerRef.current) clearInterval(timerRef.current);
+        setRecordingDuration(0);
+
+        if (isCancelledRef.current) {
+          console.log("[STT] Recording cancelled by user.");
+          return;
         }
 
-        stream.getTracks().forEach(track => track.stop());
-        setIsRecording(false);
-        setRecordingDuration(0);
-        if (timerRef.current) clearInterval(timerRef.current);
+        const totalBytes = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.size, 0);
+        console.log(`[STT] Audio captured: ${audioChunksRef.current.length} chunks (${totalBytes} bytes).`);
+
+        if (totalBytes < 500) {
+          toast.info("Recording was too short. Speak and press stop when done.", { duration: 3000 });
+          return;
+        }
+
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: mediaRecorder.mimeType || mimeType || "audio/webm",
+        });
+
+        setIsTranscribing(true);
+        console.log("[STT] Sending audio to /api/stt for transcription...");
+
+        try {
+          const formData = new FormData();
+          formData.append("file", audioBlob, "voice-input.webm");
+
+          const res = await fetch("/api/stt", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json();
+          console.log("[STT] Transcription response:", data);
+
+          if (!res.ok || !data.ok) {
+            const errorMsg = data?.error || "Voice transcription failed. Please try again.";
+            toast.error(errorMsg, { duration: 4000 });
+          } else if (data.noSpeech || !data.text?.trim()) {
+            toast.info("Couldn't hear that. Please speak closer to the mic and try again.", {
+              duration: 3500,
+            });
+          } else {
+            const transcribedText = data.text.trim();
+            console.log(`[STT] Inserting transcribed text: "${transcribedText}"`);
+            setInput((prev) => {
+              const base = prev.trim();
+              return base ? `${base} ${transcribedText}` : transcribedText;
+            });
+            toast.success("Voice transcribed!", { duration: 1800 });
+            setTimeout(() => {
+              textareaRef.current?.focus();
+            }, 100);
+          }
+        } catch (fetchErr: any) {
+          console.error("[STT] Network error during transcription:", fetchErr);
+          toast.error("Unable to reach speech service. Please check your connection.", {
+            duration: 4000,
+          });
+        } finally {
+          setIsTranscribing(false);
+        }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setIsRecording(true);
+      isRecordingRef.current = true;
       setRecordingDuration(0);
       timerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
+        setRecordingDuration((prev) => prev + 1);
       }, 1000);
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-      toast.error("Could not access the microphone. Please check your browser permissions.");
+      console.log("[STT] Recording started.");
+    } catch (err: any) {
+      console.error("[STT] Microphone access error:", err);
+      if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+        toast.error("Microphone access denied", {
+          description: "Please allow microphone access in your browser to use voice input.",
+          duration: 5000,
+        });
+      } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
+        toast.error("No microphone detected", {
+          description: "Please connect a working microphone and try again.",
+          duration: 4000,
+        });
+      } else {
+        toast.error("Microphone error: " + (err.message || "Failed to access microphone"));
+      }
+      setIsRecording(false);
+      isRecordingRef.current = false;
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && isRecordingRef.current) {
+      isCancelledRef.current = false;
       mediaRecorderRef.current.stop();
     }
   };
 
   const cancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      // Temporarily set a flag so onstop knows we cancelled
-      setIsRecording(false);
+    if (mediaRecorderRef.current && isRecordingRef.current) {
+      isCancelledRef.current = true;
       mediaRecorderRef.current.stop();
+      toast.info("Recording cancelled", { duration: 1500 });
     }
   };
 
@@ -1611,18 +1715,25 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
               onChange={handleFileSelect}
             />
 
-            {isRecording ? (
+            {isTranscribing ? (
+              <div className={styles.transcribingState}>
+                <Loader2 size={16} className={styles.transcribingSpinner} />
+                <span className={styles.transcribingText}>Transcribing your speech with Gemini...</span>
+              </div>
+            ) : isRecording ? (
               <div className={styles.recordingState}>
                 <div className={styles.recordingIndicator} />
                 <span className={styles.recordingTime}>{formatDuration(recordingDuration)}</span>
                 <button
+                  type="button"
                   className={styles.stopRecordBtn}
                   onClick={stopRecording}
-                  title="Stop recording"
+                  title="Stop and transcribe"
                 >
                   <Square size={14} fill="currentColor" />
                 </button>
                 <button
+                  type="button"
                   className={styles.cancelRecordBtn}
                   onClick={cancelRecording}
                   title="Cancel recording"
@@ -1633,34 +1744,38 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             ) : (
               <>
                 <button
+                  type="button"
                   className={styles.attachBtn}
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={sending}
+                  disabled={sending || isTranscribing}
                   title="Attach image, audio, or video"
                 >
                   <Paperclip size={18} />
                 </button>
                 <button
+                  type="button"
                   className={styles.micBtn}
                   onClick={startRecording}
-                  disabled={sending}
-                  title="Record voice message"
+                  disabled={sending || isTranscribing}
+                  title="Voice input (Speech-to-text)"
                 >
                   <Mic size={18} />
                 </button>
                 <textarea
+                  ref={textareaRef}
                   className={styles.chatInput}
                   placeholder="Ask a question or pitch an idea..."
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   rows={1}
-                  disabled={sending}
+                  disabled={sending || isTranscribing}
                 />
                 <button
+                  type="button"
                   className={styles.sendBtn}
                   onClick={handleSend}
-                  disabled={(!input.trim() && !pendingAttachment) || sending}
+                  disabled={(!input.trim() && !pendingAttachment) || sending || isTranscribing}
                   title="Send message (Enter)"
                   aria-label="Send message"
                 >
