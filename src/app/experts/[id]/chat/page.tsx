@@ -143,7 +143,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       if (stored !== null) {
         setAutoVoiceEnabled(stored === "true");
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Toggle auto-voice on/off with persistence & user feedback
@@ -152,7 +152,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
       const next = !prev;
       try {
         localStorage.setItem("mf_auto_voice_enabled", String(next));
-      } catch {}
+      } catch { }
 
       if (!next) {
         stopCurrentPlayback();
@@ -700,7 +700,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
                 setAutoVoiceEnabled(false);
                 try {
                   localStorage.setItem("mf_auto_voice_enabled", "false");
-                } catch {}
+                } catch { }
                 stopCurrentPlayback();
                 toast.info("Voice Auto-Play disabled.");
               },
@@ -1209,9 +1209,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           <div className={styles.headerActions}>
             {/* Auto-Voice Response Toggle (Option A) */}
             <button
-              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${
-                autoVoiceEnabled ? styles.actionBtnVoiceActive : styles.actionBtnVoiceMuted
-              }`}
+              className={`btn btn-secondary btn-sm ${styles.actionBtn} ${autoVoiceEnabled ? styles.actionBtnVoiceActive : styles.actionBtnVoiceMuted
+                }`}
               onClick={handleToggleAutoVoice}
               title={
                 autoVoiceEnabled
@@ -1300,9 +1299,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`${styles.messageBubble} ${
-                msg.role === "user" ? styles.userBubble : styles.modelBubble
-              } ${playingIndex === i ? styles.modelBubblePlaying : ""}`}
+              className={`${styles.messageBubble} ${msg.role === "user" ? styles.userBubble : styles.modelBubble
+                } ${playingIndex === i ? styles.modelBubblePlaying : ""}`}
             >
               <div className={styles.messageContent}>
                 {msg.isInsufficientCredits ? (
@@ -1718,7 +1716,7 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             {isTranscribing ? (
               <div className={styles.transcribingState}>
                 <Loader2 size={16} className={styles.transcribingSpinner} />
-                <span className={styles.transcribingText}>Transcribing your speech with Gemini...</span>
+                <span className={styles.transcribingText}>Transcribing your speech with ...</span>
               </div>
             ) : isRecording ? (
               <div className={styles.recordingState}>
