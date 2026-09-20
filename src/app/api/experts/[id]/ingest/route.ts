@@ -1,21 +1,14 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { ingestDocument } from "@/lib/embedding";
-import { describeMediaWithGemini, isMediaMimeType, getMediaCategory } from "@/lib/embedding";
+import { isMediaMimeType, getMediaCategory } from "@/lib/embedding";
 import { checkRateLimit, getClientIP, EMBEDDING_LIMIT } from "@/lib/rate-limiter";
-import { extractPdfTextFromUrl, extractPdfText } from "@/lib/document-ai";
-import { getIngestCreditCost, checkCreditBalance, deductCredits, getUserTier } from "@/lib/credits";
-import {
-  routeRequest,
-  executeWithFallback,
-  classifyIngestTask,
-  taskToVertexOp,
-  type Provider,
-} from "@/lib/ai-gateway";
+import { getIngestCreditCost, checkCreditBalance, deductCredits } from "@/lib/credits";
 
-// Allow up to 60s for large PDF parsing + embedding (Vercel Hobby max)
-export const maxDuration = 60;
-// Maximum file sizes per type (in bytes) - Capped at ~4.5MB for Vercel Serverless payload limits
+// This endpoint is now fast — it only validates, deducts credits, and creates a job record.
+// The heavy processing (extraction, embedding) happens in /ingest/process via multi-phase calls.
+export const maxDuration = 15;
+
+// Maximum file sizes per type (in bytes) - informational limits
 const MAX_FILE_SIZES: Record<string, number> = {
   text: 4 * 1024 * 1024,     // 4MB for text/PDF
   image: 4 * 1024 * 1024,    // 4MB for images
@@ -85,15 +78,15 @@ export async function POST(
       return NextResponse.json({ error: "Expert not found" }, { status: 404 });
     }
 
-    // ── Parse request body (JSON) ──────────────
+    // ── Parse request body ──────────────
     const body = await req.json();
-    const { url, data, mimeType, filename } = body;
+    const { url, mimeType, filename } = body;
 
     if (!filename) {
       return NextResponse.json({ error: "Filename is required" }, { status: 400 });
     }
-    if (!url && !data) {
-      return NextResponse.json({ error: "File URL or content data is required" }, { status: 400 });
+    if (!url) {
+      return NextResponse.json({ error: "File URL is required" }, { status: 400 });
     }
 
     const effectiveMime = inferMimeType(filename, mimeType);
@@ -129,158 +122,41 @@ export async function POST(
       return NextResponse.json({ error: `Failed to process credits: ${deducted.error}` }, { status: 500 });
     }
 
-    // ── AI Gateway: Determine routing ─────────────────────────────────────
-    const { tier } = await getUserTier(user.id);
-    const task = classifyIngestTask(effectiveMime, filename);
-    const decision = await routeRequest(task, tier);
-    const vertexOp = taskToVertexOp(task);
+    // ── Create ingest job record ──────────────────────────────────────────
+    const { data: jobData, error: jobError } = await supabase
+      .from("ingest_jobs")
+      .insert({
+        expert_id: expertId,
+        user_id: user.id,
+        filename,
+        mime_type: effectiveMime,
+        file_url: url,
+        status: "processing",
+        phase: "pending",
+      })
+      .select("id")
+      .single();
 
-    console.log(
-      `[Ingest] Route decision: ${decision.provider} → ${decision.fallback || "none"} → ${decision.secondFallback || "none"} | Reason: ${decision.reason}`,
-    );
-
-    let text = "";
-    let usedProvider: Provider = decision.provider;
-
-    if (isPdf) {
-      // ── PDF: Document AI → Gemini free → Vertex AI cascade ─────────
-      console.log(`[Ingest] Processing PDF "${filename}" via AI Gateway`);
-
-      const result = await executeWithFallback<string>({
-        decision,
-        primaryFn: async () => {
-          // Document AI path
-          if (url) {
-            return await extractPdfTextFromUrl(url);
-          } else if (data) {
-            return await extractPdfText(Buffer.from(data, "base64"));
-          }
-          throw new Error("No URL or data for PDF");
-        },
-        fallbackFn: decision.fallback ? async () => {
-          // Gemini free or Vertex AI fallback — use Gemini to describe the PDF
-          console.log(`[Ingest] PDF fallback: using ${decision.fallback} for "${filename}"`);
-          return await describeMediaWithGemini({
-            url,
-            data,
-            mimeType: "application/pdf",
-            filename,
-            useEnterprise: decision.fallback === "vertex-ai",
-          });
-        } : undefined,
-        secondFallbackFn: decision.secondFallback ? async () => {
-          // Vertex AI as last resort
-          console.log(`[Ingest] PDF second fallback: using Vertex AI for "${filename}"`);
-          return await describeMediaWithGemini({
-            url,
-            data,
-            mimeType: "application/pdf",
-            filename,
-            useEnterprise: true,
-          });
-        } : undefined,
-        vertexOp,
-        vertexUnits: 1,
-      });
-
-      text = result.result;
-      usedProvider = result.usedProvider;
-
-      if (!text.trim()) {
-        return NextResponse.json({
-          error: "Could not extract text from this PDF. The file may be empty or corrupted.",
-        }, { status: 422 });
-      }
-
-      console.log(`[Ingest] Extracted ${text.length} chars from "${filename}" via ${usedProvider}`);
-    } else if (isMedia) {
-      // ── Media (image/audio/video): Gemini free → Vertex AI cascade ──
-      console.log(`[Ingest] Processing ${mediaCategory} file "${filename}" via AI Gateway`);
-
-      const result = await executeWithFallback<string>({
-        decision,
-        primaryFn: async () => {
-          return await describeMediaWithGemini({
-            url,
-            data,
-            mimeType: effectiveMime,
-            filename,
-            useEnterprise: decision.useEnterprise,
-          });
-        },
-        fallbackFn: decision.fallback ? async () => {
-          console.log(`[Ingest] Media fallback: using ${decision.fallback} for "${filename}"`);
-          return await describeMediaWithGemini({
-            url,
-            data,
-            mimeType: effectiveMime,
-            filename,
-            useEnterprise: decision.fallback === "vertex-ai",
-          });
-        } : undefined,
-        vertexOp,
-        vertexUnits: 1,
-      });
-
-      text = result.result;
-      usedProvider = result.usedProvider;
-
-      if (!text.trim()) {
-        return NextResponse.json({
-          error: `Could not extract content from this ${mediaCategory} file. Please try a different file.`,
-        }, { status: 422 });
-      }
-
-      text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
-      console.log(`[Ingest] Extracted ${text.length} chars from ${mediaCategory} "${filename}" via ${usedProvider}`);
-    } else {
-      // ── Plain text, markdown, CSV, etc. ────────────────────────────────
-      if (url) {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to fetch text from storage");
-        text = await res.text();
-      } else if (data) {
-        text = Buffer.from(data, "base64").toString("utf-8");
-      }
+    if (jobError || !jobData) {
+      console.error("[Ingest] Failed to create job record:", jobError);
+      return NextResponse.json({ error: "Failed to create processing job" }, { status: 500 });
     }
 
-    if (!text.trim()) {
-      return NextResponse.json({ error: "File contains no extractable text" }, { status: 422 });
-    }
+    console.log(`[Ingest] Created job ${jobData.id} for "${filename}" (expert: ${expertId}, type: ${mediaCategory})`);
 
-    console.log(`[Ingest] Processing "${filename}" for expert ${expertId} (${text.length} chars, type: ${mediaCategory}, provider: ${usedProvider})`);
-
-    // Chunk, embed, and store with rich metadata
-    const result = await ingestDocument(expertId, text, filename, {
-      docType: mediaCategory,
-      mediaUrl: url || undefined,
-    });
-
+    // ── Return immediately — frontend drives processing via /process ─────
     return NextResponse.json({
       ok: true,
+      jobId: jobData.id,
+      status: "processing",
+      phase: "pending",
       filename,
-      textLength: text.length,
-      chunksStored: result.chunksStored,
       mediaType: mediaCategory,
-      provider: usedProvider,
     });
   } catch (err: any) {
     console.error("[Ingest] Error:", err);
-    let userMessage = err.message || "Failed to process document";
-
-    // Translate technical RAG/AI errors into friendly user guidance for non-technical users
-    if (userMessage.includes("Failed to embed text") || userMessage.includes("429") || userMessage.includes("Quota") || userMessage.includes("busy")) {
-      userMessage = "AI indexing service is busy. Please try again in a moment or upload a shorter document.";
-    } else if (userMessage.includes("PAGE_LIMIT_EXCEEDED") || userMessage.includes("page limit")) {
-      userMessage = "This document exceeds the single-file page limit. Please split it into smaller documents.";
-    } else if (userMessage.includes("No extractable text") || userMessage.includes("Could not extract text")) {
-      userMessage = "Could not extract readable text from this file. Please verify it contains text and is not encrypted.";
-    } else if (userMessage.includes("timed out") || userMessage.includes("timeout") || userMessage.includes("504")) {
-      userMessage = "Document processing timed out. Please try a smaller file or split it into sections.";
-    }
-
     return NextResponse.json(
-      { error: userMessage },
+      { error: err.message || "Failed to initiate document processing" },
       { status: 500 }
     );
   }

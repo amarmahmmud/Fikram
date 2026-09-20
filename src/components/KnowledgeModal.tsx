@@ -184,13 +184,56 @@ export function KnowledgeModal({
         }
 
         const data = await res.json();
+        if (!data.ok || !data.jobId) {
+          throw new Error(data.error || "Failed to create processing job");
+        }
 
-        if (data.ok) {
-          successCount++;
-        } else {
-          failedCount++;
-          uncompletedFiles.push(file);
-          console.error(`Failed to ingest ${file.name}:`, data.error);
+        const jobId = data.jobId;
+
+        // Drive processing phases sequentially (safe for Vercel Hobby 15s limit)
+        setStatusMessage({
+          type: "info",
+          text: `Extracting content from "${file.name}"...`,
+        });
+
+        let processingDone = false;
+        while (!processingDone) {
+          const phaseRes = await fetch(`/api/experts/${expertId}/ingest/process`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId }),
+          });
+
+          if (!phaseRes.ok) {
+            const errData = await phaseRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Processing failed (${phaseRes.status})`);
+          }
+
+          const phaseData = await phaseRes.json();
+
+          if (phaseData.status === "completed") {
+            processingDone = true;
+            successCount++;
+          } else if (phaseData.status === "failed") {
+            throw new Error(phaseData.error || "Processing failed");
+          } else {
+            // In progress — update user with real-time phase & chunk count
+            const phase = phaseData.phase || "";
+            const isEmbedding = phase === "extracted" || phase.startsWith("embedding:");
+            if (isEmbedding) {
+              const current = phaseData.chunksStored || 0;
+              const total = phaseData.totalChunks || "?";
+              setStatusMessage({
+                type: "info",
+                text: `Indexing "${file.name}" (${current}/${total} chunks)...`,
+              });
+            } else {
+              setStatusMessage({
+                type: "info",
+                text: `Extracting content from "${file.name}"...`,
+              });
+            }
+          }
         }
       } catch (err) {
         if (!hitInsufficientCredits) {

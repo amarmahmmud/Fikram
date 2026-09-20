@@ -396,6 +396,63 @@ export interface Database {
         };
         Relationships: [];
       };
+      ingest_jobs: {
+        Row: {
+          id: string;
+          expert_id: string;
+          user_id: string;
+          filename: string;
+          mime_type: string | null;
+          file_url: string | null;
+          status: "processing" | "completed" | "failed";
+          phase: string;
+          error: string | null;
+          chunks_stored: number;
+          total_chunks: number;
+          retry_count: number;
+          provider: string | null;
+          extracted_text: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          expert_id: string;
+          user_id: string;
+          filename: string;
+          mime_type?: string | null;
+          file_url?: string | null;
+          status?: "processing" | "completed" | "failed";
+          phase?: string;
+          error?: string | null;
+          chunks_stored?: number;
+          total_chunks?: number;
+          retry_count?: number;
+          provider?: string | null;
+          extracted_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          expert_id?: string;
+          user_id?: string;
+          filename?: string;
+          mime_type?: string | null;
+          file_url?: string | null;
+          status?: "processing" | "completed" | "failed";
+          phase?: string;
+          error?: string | null;
+          chunks_stored?: number;
+          total_chunks?: number;
+          retry_count?: number;
+          provider?: string | null;
+          extracted_text?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

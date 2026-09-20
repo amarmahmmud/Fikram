@@ -870,3 +870,30 @@
   color: var(--text-primary);
   font-weight: 600;
 }
+
+/* ── Per-file processing status indicators ─────────────────────────────── */
+
+.statusPulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  animation: statusPulseAnim 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes statusPulseAnim {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.fileStatus_extracting,
+.fileStatus_embedding {
+  color: var(--accent-primary) !important;
+  font-weight: 500;
+}
+
+.fileStatus_uploading {
+  color: var(--text-secondary) !important;
+}

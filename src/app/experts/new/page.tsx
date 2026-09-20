@@ -131,9 +131,12 @@ interface UploadedFile {
   file: File;
   sourceType: "file" | "url";
   sourceUrl?: string;
-  status: "pending" | "uploading" | "done" | "error";
+  status: "pending" | "uploading" | "extracting" | "embedding" | "done" | "error";
   chunksStored?: number;
+  totalChunks?: number;
   error?: string;
+  jobId?: string;
+  retryCount?: number;
 }
 
 const TONE_PRESETS = [
@@ -421,6 +424,12 @@ export default function NewExpertPage() {
     }
   }
 
+  /**
+   * Drive multi-phase file ingestion pipeline.
+   * Each file goes through: upload → create job → extract text → embed batches.
+   * Every API call completes in <12s (well under Vercel Hobby's 15s limit).
+   * Only processes files that haven't already completed.
+   */
   async function runFileIngestion() {
     if (!expertId || files.length === 0) return;
 
@@ -430,119 +439,180 @@ export default function NewExpertPage() {
     for (let i = 0; i < files.length; i++) {
       if (files[i].status === "done") continue;
 
-      setIngestCurrentFile(files[i].file.name);
+      const file = files[i].file;
+      setIngestCurrentFile(file.name);
       setIngestProgressIndex(i + 1);
 
-      setFiles((prev) =>
-        prev.map((f, idx) => (idx === i ? { ...f, status: "uploading" } : f))
-      );
-
       try {
-        const file = files[i].file;
-        
-        // Infer MIME type if browser passed empty string or generic
-        const ext = file.name.toLowerCase().split(".").pop() || "";
-        let mimeType = file.type;
-        if (!mimeType || mimeType === "application/octet-stream") {
-          if (ext === "pdf") mimeType = "application/pdf";
-          else if (["png", "jpg", "jpeg", "webp", "gif", "heic"].includes(ext)) mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
-          else if (["mp3", "wav", "ogg", "aac", "flac"].includes(ext)) mimeType = `audio/${ext}`;
-          else if (ext === "m4a") mimeType = "audio/x-m4a";
-          else if (["mp4", "webm"].includes(ext)) mimeType = `video/${ext}`;
-          else if (ext === "mov") mimeType = "video/quicktime";
-          else if (["txt", "md", "csv"].includes(ext)) mimeType = "text/plain";
-          else if (ext === "json") mimeType = "application/json";
-        }
+        let jobId = files[i].jobId;
 
-        // Resilient upload: tries direct R2 and seamlessly falls back to server-side upload
-        const { downloadUrl: finalDownloadUrl } = await uploadFileToStorage(file);
+        // ── Step 1: Upload file to storage (if not already done) ─────────
+        if (!jobId) {
+          setFiles((prev) =>
+            prev.map((f, idx) => (idx === i ? { ...f, status: "uploading" } : f))
+          );
 
-        // Send ingest request to backend
-        const res = await fetch(`/api/experts/${expertId}/ingest`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            url: finalDownloadUrl,
-            mimeType: mimeType || file.type,
-            filename: file.name,
-          }),
-        });
-        if (res.status === 401) {
-          toast.error("Your session has expired. Please sign in again.");
-          router.push("/auth/signin?redirectTo=/experts/new");
-          return;
-        }
-
-        if (!res.ok) {
-          if (res.status === 402) {
-            hasErrors = true;
-            const errJson = await res.json().catch(() => ({}));
-            const reqCredits = errJson.credits_required || 1;
-            const bal = errJson.credits_balance ?? (creditsBalance ?? 0);
-            setInsufficientCreditsError({
-              required: reqCredits,
-              balance: bal,
-              message: errJson.message || `Indexing ${file.name} requires ${reqCredits} credits.`,
-            });
-            setFiles((prev) =>
-              prev.map((f, idx) =>
-                idx === i ? { ...f, status: "error", error: `Insufficient credits (${reqCredits} required, ${bal} available)` } : f
-              )
-            );
-            toast.error(`Insufficient credits to index ${file.name}. Please top up your balance.`);
-            setShowBuyModal(true);
-            break;
+          const ext = file.name.toLowerCase().split(".").pop() || "";
+          let mimeType = file.type;
+          if (!mimeType || mimeType === "application/octet-stream") {
+            if (ext === "pdf") mimeType = "application/pdf";
+            else if (["png", "jpg", "jpeg", "webp", "gif", "heic"].includes(ext)) mimeType = `image/${ext === "jpg" ? "jpeg" : ext}`;
+            else if (["mp3", "wav", "ogg", "aac", "flac"].includes(ext)) mimeType = `audio/${ext}`;
+            else if (ext === "m4a") mimeType = "audio/x-m4a";
+            else if (["mp4", "webm"].includes(ext)) mimeType = `video/${ext}`;
+            else if (ext === "mov") mimeType = "video/quicktime";
+            else if (["txt", "md", "csv"].includes(ext)) mimeType = "text/plain";
+            else if (ext === "json") mimeType = "application/json";
           }
 
-          const text = await res.text();
-          let errMsg = `Server returned ${res.status}`;
-          if (text.trim().startsWith("<") || text.includes("<!DOCTYPE") || text.includes("<html")) {
-            if (res.status === 504) {
-              errMsg = "Processing timed out (504). File is too large for current plan.";
-            } else if (res.status === 500) {
-              errMsg = "Server processing error (500). Please try a smaller file or retry.";
-            } else {
-              errMsg = `Server error (${res.status}). Please try again.`;
+          const { downloadUrl: finalDownloadUrl } = await uploadFileToStorage(file);
+
+          // ── Step 2: Create ingest job (fast, returns immediately) ──────
+          const res = await fetch(`/api/experts/${expertId}/ingest`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: finalDownloadUrl,
+              mimeType: mimeType || file.type,
+              filename: file.name,
+            }),
+          });
+
+          if (res.status === 401) {
+            toast.error("Your session has expired. Please sign in again.");
+            router.push("/auth/signin?redirectTo=/experts/new");
+            return;
+          }
+
+          if (!res.ok) {
+            if (res.status === 402) {
+              hasErrors = true;
+              const errJson = await res.json().catch(() => ({}));
+              const reqCredits = errJson.credits_required || 1;
+              const bal = errJson.credits_balance ?? (creditsBalance ?? 0);
+              setInsufficientCreditsError({
+                required: reqCredits,
+                balance: bal,
+                message: errJson.message || `Indexing ${file.name} requires ${reqCredits} credits.`,
+              });
+              setFiles((prev) =>
+                prev.map((f, idx) =>
+                  idx === i ? { ...f, status: "error", error: `Insufficient credits (${reqCredits} required, ${bal} available)` } : f
+                )
+              );
+              toast.error(`Insufficient credits to index ${file.name}. Please top up your balance.`);
+              setShowBuyModal(true);
+              break;
             }
-          } else {
+
+            const text = await res.text();
+            let errMsg = `Server returned ${res.status}`;
             try {
               const parsed = JSON.parse(text);
               errMsg = parsed.error || parsed.message || errMsg;
             } catch {
               errMsg = text && text.length < 150 ? text : errMsg;
             }
+            throw new Error(errMsg);
           }
-          throw new Error(errMsg);
-        }
-        
-        const data = await res.json();
 
-        if (data.ok) {
+          const data = await res.json();
+          if (!data.ok || !data.jobId) {
+            throw new Error(data.error || "Failed to create processing job");
+          }
+
+          jobId = data.jobId;
           setFiles((prev) =>
             prev.map((f, idx) =>
-              idx === i ? { ...f, status: "done", chunksStored: data.chunksStored } : f
+              idx === i ? { ...f, jobId, status: "extracting" } : f
             )
           );
-        } else {
-          hasErrors = true;
-          setFiles((prev) =>
-            prev.map((f, idx) =>
-              idx === i ? { ...f, status: "error", error: data.error } : f
-            )
-          );
+        }
+
+        // ── Step 3: Drive processing phases ──────────────────────────────
+        // Call /ingest/process repeatedly — each call advances one phase
+        // and completes in <12s (safe for Vercel Hobby 15s limit).
+        let processingDone = false;
+        let currentStatus = files[i].status === "done" ? "done" : "extracting";
+
+        while (!processingDone) {
+          const phaseRes = await fetch(`/api/experts/${expertId}/ingest/process`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jobId }),
+          });
+
+          if (!phaseRes.ok) {
+            const errData = await phaseRes.json().catch(() => ({}));
+            throw new Error(errData.error || `Processing failed (${phaseRes.status})`);
+          }
+
+          const phaseData = await phaseRes.json();
+
+          if (phaseData.status === "completed") {
+            processingDone = true;
+            setFiles((prev) =>
+              prev.map((f, idx) =>
+                idx === i ? {
+                  ...f,
+                  status: "done",
+                  chunksStored: phaseData.chunksStored,
+                  totalChunks: phaseData.totalChunks,
+                } : f
+              )
+            );
+          } else if (phaseData.status === "failed") {
+            throw new Error(phaseData.error || "Processing failed");
+          } else {
+            // Still processing — update UI with progress
+            const newPhase = phaseData.phase || "";
+            const isEmbedding = newPhase === "extracted" || newPhase.startsWith("embedding:");
+            const newStatus = isEmbedding ? "embedding" : "extracting";
+
+            if (newStatus !== currentStatus) {
+              currentStatus = newStatus;
+            }
+
+            setFiles((prev) =>
+              prev.map((f, idx) =>
+                idx === i ? {
+                  ...f,
+                  status: newStatus as any,
+                  chunksStored: phaseData.chunksStored || f.chunksStored,
+                  totalChunks: phaseData.totalChunks || f.totalChunks,
+                } : f
+              )
+            );
+
+            setIngestCurrentFile(
+              isEmbedding
+                ? `Indexing ${file.name} (${phaseData.chunksStored || 0}/${phaseData.totalChunks || "?"} chunks)`
+                : `Extracting text from ${file.name}...`
+            );
+          }
         }
       } catch (err: any) {
-        console.error("Upload error for file", files[i].file.name, err);
+        console.error("Ingest error for file", file.name, err);
         hasErrors = true;
-        const isNet =
-          err?.isNetworkError ||
+        const prevRetry = files[i].retryCount || 0;
+        const isTimeout = err?.message?.toLowerCase().includes("timed out") ||
+          err?.message?.toLowerCase().includes("timeout") ||
+          err?.message?.includes("504");
+        const isNet = err?.isNetworkError ||
           err?.message?.toLowerCase().includes("failed to fetch");
-        const errMsg = isNet
+
+        let errMsg = isNet
           ? "Network connection interrupted"
           : err.message || "Upload failed";
+
+        // After 2+ timeout failures, give a clear actionable message
+        if (isTimeout && prevRetry >= 1) {
+          errMsg = "This file is too large to process. Try splitting it into smaller sections (under 25 pages).";
+        }
+
         setFiles((prev) =>
           prev.map((f, idx) =>
-            idx === i ? { ...f, status: "error", error: errMsg } : f
+            idx === i ? { ...f, status: "error", error: errMsg, retryCount: prevRetry + 1 } : f
           )
         );
       }
@@ -998,7 +1068,17 @@ export default function NewExpertPage() {
                       </span>
                       <span className={`${styles.fileStatus} ${styles[`fileStatus_${f.status}`]}`}>
                         {f.status === "pending" && "Ready"}
-                        {f.status === "uploading" && "Processing..."}
+                        {f.status === "uploading" && "Uploading..."}
+                        {f.status === "extracting" && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span className={styles.statusPulse} /> Extracting text…
+                          </span>
+                        )}
+                        {f.status === "embedding" && (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                            <span className={styles.statusPulse} /> Indexing{f.totalChunks ? ` (${f.chunksStored || 0}/${f.totalChunks})` : "…"}
+                          </span>
+                        )}
                         {f.status === "done" && (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
                             <Check size={12} /> {f.chunksStored} chunks
@@ -1242,11 +1322,18 @@ export default function NewExpertPage() {
                       flexWrap: "wrap",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#fca5a5", fontSize: "0.8125rem" }}>
-                      <WifiOff size={16} />
-                      <span>
-                        {files.filter((f) => f.status === "error").length} file(s) failed to index. Check your connection and retry.
-                      </span>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8, color: "#fca5a5", fontSize: "0.8125rem" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <WifiOff size={16} />
+                        <span>
+                          {files.filter((f) => f.status === "error").length} file(s) failed to index.
+                        </span>
+                      </div>
+                      {files.some((f) => f.status === "error" && (f.retryCount || 0) >= 2) && (
+                        <span style={{ fontSize: "0.75rem", color: "#fbbf24", lineHeight: 1.3 }}>
+                          Some files may be too large to process. Try splitting them into smaller sections (under 25 pages).
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
