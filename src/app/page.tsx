@@ -119,6 +119,156 @@ const LOG_LINES = [
   { text: "✓ RAG AI Expert ready to share", type: "success" },
 ];
 
+const SUBSCRIPTION_PLANS = [
+  {
+    id: "free",
+    name: "Free Starter",
+    badge: "Free Forever",
+    badgeType: "default",
+    desc: "Test and create your first grounded RAG AI Expert with zero risk or commitment.",
+    monthlyPrice: 0,
+    annualPrice: 0,
+    credits: "50 Free Credits",
+    creditsSub: "Granted immediately on signup",
+    features: [
+      "50 credits signup bonus (no expiry)",
+      "1 RAG AI Expert workspace",
+      "Upload PDF, TXT, and Markdown (10MB)",
+      "Citation-backed grounded answers",
+      "Instant 30-second setup",
+      "Community support",
+    ],
+    disabledFeatures: [
+      "Multimodal (Audio & Video) upload",
+      "Embeddable website chat widget",
+      "Priority GPU inference queue",
+      "Full citation export & source logs",
+    ],
+    ctaText: "Start Free Today",
+    ctaHref: "/auth/signup",
+    popular: false,
+  },
+  {
+    id: "pro",
+    name: "Pro Expert",
+    badge: "Most Popular",
+    badgeType: "popular",
+    desc: "For consultants, coaches, and creators delivering client-ready multimodal AI experts.",
+    monthlyPrice: 19,
+    annualPrice: 15,
+    credits: "2,000 Credits / mo",
+    creditsSub: "Refreshes automatically each month",
+    features: [
+      "2,000 monthly credits (~1,800+ queries)",
+      "Unlimited RAG AI Experts",
+      "Full Multimodal: PDF, Images, Audio, Video",
+      "Upload large files up to 50MB each",
+      "Embeddable chat widget for your website",
+      "Priority Vertex AI & Groq ultra-low latency queue",
+      "Full citation export & source audit logs",
+      "Priority email support",
+    ],
+    disabledFeatures: [],
+    ctaText: "Get Pro Access",
+    ctaHref: "/auth/signup?plan=pro",
+    popular: true,
+  },
+  {
+    id: "business",
+    name: "Business & Teams",
+    badge: "Scale & Teams",
+    badgeType: "business",
+    desc: "For agencies, practices, and organizations scaling AI across teams and customers.",
+    monthlyPrice: 79,
+    annualPrice: 63,
+    credits: "10,000 Credits / mo",
+    creditsSub: "Refreshes automatically each month",
+    features: [
+      "10,000 monthly credits (~9,500+ queries)",
+      "Everything in Pro included",
+      "Multi-seat team workspace & role permissions",
+      "Custom domain & white-label chat widget",
+      "High-concurrency API endpoints & webhooks",
+      "Dedicated GPU fine-tuning priority queue",
+      "99.9% uptime SLA guarantee",
+      "Dedicated onboarding & private Slack support",
+    ],
+    disabledFeatures: [],
+    ctaText: "Scale with Business",
+    ctaHref: "/auth/signup?plan=business",
+    popular: false,
+  },
+];
+
+const CREDIT_PACKS = [
+  {
+    name: "Starter Pack",
+    credits: 500,
+    price: 10,
+    rate: "$0.02 per credit · Never expires",
+    desc: "Ideal for occasional heavy document or audio indexing and extended testing without a subscription.",
+    popular: false,
+    features: [
+      "500 non-expiring credits",
+      "Use across any of your active experts",
+      "Supports all document & media formats",
+      "Instant activation in your account balance",
+    ],
+    ctaText: "Get Starter Pack",
+    ctaHref: "/auth/signup?pack=starter",
+  },
+  {
+    name: "Power Pack",
+    credits: 2500,
+    price: 40,
+    rate: "$0.016 per credit (Save 20%) · Never expires",
+    desc: "Best value for researchers, creators, and power teams processing extensive knowledge bases.",
+    popular: true,
+    features: [
+      "2,500 non-expiring credits",
+      "20% bulk savings vs starter rate",
+      "Ideal for high-volume audio & video indexing",
+      "Instant activation in your account balance",
+    ],
+    ctaText: "Get Power Pack",
+    ctaHref: "/auth/signup?pack=power",
+  },
+];
+
+const CREDIT_BREAKDOWN = [
+  { icon: "💬", amount: "1 Credit", action: "Chat Query", desc: "1 AI response grounded with verified citations" },
+  { icon: "📄", amount: "1 Credit", action: "Document Page", desc: "1 page of PDF, text or course notes indexed" },
+  { icon: "🎙️", amount: "5 Credits", action: "Audio File", desc: "Neural transcription and knowledge embedding" },
+  { icon: "🎬", amount: "10 Credits", action: "Video File", desc: "Audio transcription + visual diagram indexing" },
+];
+
+const FAQ_ITEMS = [
+  {
+    q: "How do credits work and how far do 50 free credits go?",
+    a: "Every new account receives 50 free credits immediately upon signup with no credit card required. Chatting costs 1 credit per query, text/PDF ingestion costs 1 credit per page, audio costs 5 credits, and video costs 10 credits. Your 50 free credits are more than enough to create your first RAG AI Expert and have 45+ rich conversations right out of the box."
+  },
+  {
+    q: "Do credits expire?",
+    a: "Subscription credits refresh at the start of each monthly billing period. Pay-as-you-go top-up credits (Starter Pack & Power Pack) never expire — they remain safely in your account balance until used, even across billing cycles."
+  },
+  {
+    q: "Can I upgrade, downgrade, or cancel anytime?",
+    a: "Yes, completely hassle-free. You can upgrade, downgrade, or cancel your subscription at any time with a single click from your Billing settings. If you cancel, you will continue to have access to your plan's credits and features until the end of your prepaid period."
+  },
+  {
+    q: "What types of files can I upload to my AI Expert?",
+    a: "Fikram supports PDFs, Word documents, Markdown files, plain text, PNG/JPG/WebP images, audio recordings (MP3, WAV, M4A), and video clips (MP4). Our ingestion pipeline automatically extracts text, transcribes spoken words, and indexes diagrams so your AI can answer questions accurately."
+  },
+  {
+    q: "Is my proprietary data safe and private?",
+    a: "100% yes. Your knowledge base files and chats are stored in encrypted, isolated vector vaults dedicated to your account. Your data is never used to train public foundational models, and you retain complete ownership of all content."
+  },
+  {
+    q: "What is the difference between RAG AI Experts and custom model fine-tuning?",
+    a: "RAG (Retrieval-Augmented Generation) connects frontier AI models to your specific files in real time, delivering instant answers backed by citations with zero training delay. Custom model fine-tuning (coming soon to Fikram) actually trains neural network weights on your unique domain tone and vocabulary using LoRA on dedicated GPU clusters."
+  },
+];
+
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollPos = useRef(0);
@@ -216,6 +366,9 @@ export default function LandingPage() {
   const [useCaseIdx, setUseCaseIdx] = useState(0);
   const [visibleLogs, setVisibleLogs] = useState(0);
   const [progressWidth, setProgressWidth] = useState(0);
+  const [pricingMode, setPricingMode] = useState<"subscriptions" | "packs">("subscriptions");
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
   const heroCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -269,6 +422,7 @@ export default function LandingPage() {
             <a href="#features" className={styles.navLink}>Features</a>
             <a href="#how-it-works" className={styles.navLink}>How It Works</a>
             <a href="#pricing" className={styles.navLink}>Pricing</a>
+            <a href="#faq" className={styles.navLink}>FAQ</a>
           </div>
           <div className={styles.navActions}>
             <Link href="/auth/signin" className="btn btn-ghost btn-sm">Sign In</Link>
@@ -293,6 +447,7 @@ export default function LandingPage() {
             <a href="#features" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Features</a>
             <a href="#how-it-works" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>How It Works</a>
             <a href="#pricing" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>Pricing</a>
+            <a href="#faq" className={styles.mobileNavLink} onClick={() => setMobileNavOpen(false)}>FAQ</a>
             <div className={styles.mobileNavDivider} />
             <div className={styles.mobileNavActions}>
               <Link href="/auth/signin" className="btn btn-secondary btn-sm" onClick={() => setMobileNavOpen(false)} style={{ width: "100%", justifyContent: "center" }}>Sign In</Link>
@@ -506,41 +661,335 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── Pricing / CTA ── */}
-      <section id="pricing" className="section">
-        <div className="container-sm">
-          <div className={styles.pricingCard}>
-            <div className={styles.pricingGlow} />
+      {/* ── Pricing ── */}
+      <section id="pricing" className={styles.pricingSection} ref={observeReveal}>
+        <div className="container">
+          <div className={styles.sectionHead} data-reveal>
             <span className="section-label">Pricing</span>
-            <h2 style={{ marginTop: 18 }}>Start free.<br />Scale when you&apos;re ready.</h2>
-            <p style={{ marginTop: 18, fontSize: "1.0625rem" }}>
-              Get 50 free credits when you sign up — enough to create your first RAG AI Expert
-              and chat 45+ times. No credit card. No commitment.
+            <h2>Start Free. Scale Without Limits.</h2>
+            <p>
+              Get 50 free credits instantly on signup. Choose a flexible subscription
+              for recurring allowances, or grab pay-as-you-go packs that never expire.
             </p>
+          </div>
 
-            <div className={styles.pricingFeatures}>
-              {[
-                "50 free credits on signup",
-                "Upload PDFs, images, audio & video",
-                "Citation-backed AI answers",
-                "Multimodal chat support",
-                "Private knowledge base",
-                "No credit card required",
-              ].map((f) => (
-                <div key={f} className={styles.pricingFeature}>
-                  <span className={styles.pricingCheck}>✓</span>
-                  {f}
+          <div className={styles.pricingControls} data-reveal>
+            {/* Mode Switcher */}
+            <div className={styles.pricingTabs}>
+              <button
+                type="button"
+                className={`${styles.pricingTab} ${pricingMode === "subscriptions" ? styles.pricingTabActive : ""}`}
+                onClick={() => setPricingMode("subscriptions")}
+              >
+                Subscription Plans
+              </button>
+              <button
+                type="button"
+                className={`${styles.pricingTab} ${pricingMode === "packs" ? styles.pricingTabActive : ""}`}
+                onClick={() => setPricingMode("packs")}
+              >
+                Pay-As-You-Go Packs
+              </button>
+            </div>
+
+            {/* Billing Toggle (when in subscriptions mode) */}
+            {pricingMode === "subscriptions" && (
+              <div className={styles.billingToggleWrap}>
+                <span
+                  className={`${styles.billingToggleOption} ${billingCycle === "monthly" ? styles.billingToggleOptionActive : ""}`}
+                  onClick={() => setBillingCycle("monthly")}
+                >
+                  Monthly Billing
+                </span>
+                <div
+                  className={`${styles.billingToggleTrack} ${billingCycle === "annual" ? styles.billingToggleTrackActive : ""}`}
+                  onClick={() => setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly")}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Toggle annual billing"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setBillingCycle(billingCycle === "monthly" ? "annual" : "monthly");
+                    }
+                  }}
+                >
+                  <div className={`${styles.billingToggleThumb} ${billingCycle === "annual" ? styles.billingToggleThumbActive : ""}`} />
+                </div>
+                <span
+                  className={`${styles.billingToggleOption} ${billingCycle === "annual" ? styles.billingToggleOptionActive : ""}`}
+                  onClick={() => setBillingCycle("annual")}
+                >
+                  Annual Billing
+                </span>
+                <span className={styles.discountBadge}>
+                  Save 20% + 2 Mo Free
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Pricing Grid (Subscriptions) */}
+          {pricingMode === "subscriptions" ? (
+            <div className={styles.pricingGrid}>
+              {SUBSCRIPTION_PLANS.map((plan, i) => {
+                const price = billingCycle === "annual" ? plan.annualPrice : plan.monthlyPrice;
+                return (
+                  <div
+                    key={plan.id}
+                    className={`${styles.tierCard} ${plan.popular ? styles.tierPopular : ""} ${styles.revealItem}`}
+                    data-reveal
+                    style={{ transitionDelay: `${i * 0.1}s` }}
+                  >
+                    {plan.popular && (
+                      <div className={styles.popularBadge}>
+                        ★ Most Popular
+                      </div>
+                    )}
+
+                    <div className={styles.tierTop}>
+                      <span className={`${styles.tierBadge} ${plan.badgeType === "popular" ? styles.tierBadgePopular : plan.badgeType === "business" ? styles.tierBadgeBusiness : ""}`}>
+                        {plan.badge}
+                      </span>
+                      <h3 className={styles.tierName}>{plan.name}</h3>
+                      <p className={styles.tierDesc}>{plan.desc}</p>
+                    </div>
+
+                    <div className={styles.tierPriceWrap}>
+                      <span className={styles.tierCurrency}>$</span>
+                      <span className={styles.tierPrice}>{price}</span>
+                      <span className={styles.tierPeriod}>/ month</span>
+                    </div>
+
+                    <div className={styles.tierBilledNote}>
+                      {plan.monthlyPrice === 0
+                        ? "Free forever · No credit card required"
+                        : billingCycle === "annual"
+                        ? `Billed annually ($${plan.annualPrice * 12}/yr)`
+                        : "Billed monthly · Cancel anytime"}
+                    </div>
+
+                    <div className={`${styles.tierAllowancePill} ${plan.popular ? styles.tierAllowancePillPopular : ""}`}>
+                      <span className={styles.tierAllowanceIcon}>⚡</span>
+                      <div>
+                        <div className={`${styles.tierAllowanceCredits} ${plan.popular ? styles.tierAllowanceCreditsPopular : ""}`}>
+                          {plan.credits}
+                        </div>
+                        <div className={styles.tierAllowanceSub}>{plan.creditsSub}</div>
+                      </div>
+                    </div>
+
+                    <ul className={styles.tierFeatures}>
+                      {plan.features.map((feat) => (
+                        <li key={feat} className={styles.tierFeature}>
+                          <span className={styles.tierFeatureCheck}>✓</span>
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                      {plan.disabledFeatures.map((feat) => (
+                        <li key={feat} className={`${styles.tierFeature} ${styles.tierFeatureDisabled}`}>
+                          <span className={styles.tierFeatureCheckDim}>—</span>
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Link
+                      href={plan.ctaHref}
+                      className={`btn ${plan.popular ? "btn-primary" : "btn-secondary"} btn-lg ${styles.tierBtn}`}
+                    >
+                      {plan.ctaText}
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Pay-As-You-Go Credit Packs */
+            <div className={styles.packsWrap}>
+              <div className={styles.packsGrid}>
+                {CREDIT_PACKS.map((pack, i) => (
+                  <div
+                    key={pack.name}
+                    className={`${styles.packCard} ${pack.popular ? styles.packCardPopular : ""} ${styles.revealItem}`}
+                    data-reveal
+                    style={{ transitionDelay: `${i * 0.12}s` }}
+                  >
+                    {pack.popular && (
+                      <div className={styles.popularBadge}>
+                        ★ Best Value · Save 20%
+                      </div>
+                    )}
+                    <span className={styles.tierBadge}>One-Time Top-Up</span>
+                    <div className={styles.packCredits}>{pack.credits.toLocaleString()} Credits</div>
+                    <p className={styles.tierDesc}>{pack.desc}</p>
+
+                    <div className={styles.packPrice}>${pack.price}</div>
+                    <div className={styles.packRate}>{pack.rate}</div>
+
+                    <ul className={styles.tierFeatures}>
+                      {pack.features.map((feat) => (
+                        <li key={feat} className={styles.tierFeature}>
+                          <span className={styles.tierFeatureCheck}>✓</span>
+                          <span>{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    <Link href={pack.ctaHref} className={`btn ${pack.popular ? "btn-primary" : "btn-secondary"} btn-lg ${styles.tierBtn}`}>
+                      {pack.ctaText}
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Credit Explainer Breakdown */}
+          <div className={styles.creditExplainerCard} data-reveal>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
+              <div>
+                <h3 className={styles.creditExplainerTitle}>How Credits Work in Fikram</h3>
+                <p className={styles.creditExplainerSub}>
+                  Transparent, predictable usage with zero hidden costs. 1 credit covers standard inference or indexing.
+                </p>
+              </div>
+              <span className="badge badge-gradient">Clear Pricing</span>
+            </div>
+
+            <div className={styles.creditExplainerGrid}>
+              {CREDIT_BREAKDOWN.map((item) => (
+                <div key={item.action} className={styles.creditItemCard}>
+                  <div className={styles.creditItemIcon}>{item.icon}</div>
+                  <div className={styles.creditItemCost}>{item.amount}</div>
+                  <div className={styles.creditItemAction}>{item.action}</div>
+                  <div className={styles.creditItemDesc}>{item.desc}</div>
                 </div>
               ))}
             </div>
 
-            <Link href="/auth/signup" className="btn btn-primary btn-lg" style={{ marginTop: 40 }}>
-              Create Free Account
-            </Link>
+            <div className={styles.creditExplainerFooter}>
+              <div className={styles.creditSignupCallout}>
+                <span className={styles.creditSignupBadge}>Signup Perk</span>
+                <span>
+                  <strong>50 Free Credits on Signup:</strong> Enough to upload your first documents and chat 45+ times with full citations.
+                </span>
+              </div>
+              <Link href="/auth/signup" className="btn btn-secondary btn-sm">
+                Claim 50 Credits →
+              </Link>
+            </div>
+          </div>
 
-            <p style={{ marginTop: 18, fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              Pro plans with more credits & custom model training coming soon. Early users get priority access.
-            </p>
+          {/* Enterprise Custom Fine-Tuning Callout */}
+          <div className={styles.enterpriseBanner} data-reveal>
+            <div className={styles.enterpriseLeft}>
+              <h3 className={styles.enterpriseTitle}>Enterprise & Custom Model Fine-Tuning</h3>
+              <p className={styles.enterpriseSub}>
+                Need dedicated LoRA fine-tuning on proprietary corpora, private VPC hosting, or HIPAA-compliant data segregation? Our engineering team works directly with enterprise clients.
+              </p>
+            </div>
+            <Link href="/auth/signup?intent=enterprise" className="btn btn-secondary btn-lg" style={{ flexShrink: 0 }}>
+              Talk with Founders
+            </Link>
+          </div>
+
+          {/* Trust Guarantees */}
+          <div className={styles.trustBar} data-reveal>
+            <div className={styles.trustItem}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span>Bank-Grade Encryption</span>
+            </div>
+            <div className={styles.trustItem}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+              <span>No Card Required to Start</span>
+            </div>
+            <div className={styles.trustItem}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+              <span>1-Click Cancellation Anytime</span>
+            </div>
+            <div className={styles.trustItem}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00E5C8" strokeWidth="2"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+              <span>Isolated Private Vector Vault</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ Section ── */}
+      <section id="faq" className={styles.faqSection} ref={observeReveal}>
+        <div className="container">
+          <div className={styles.sectionHead} data-reveal>
+            <span className="section-label">FAQ</span>
+            <h2>Frequently Asked Questions</h2>
+            <p>Everything you need to know about Fikram, credits, pricing, and how your AI is built.</p>
+          </div>
+
+          <div className={styles.faqGrid}>
+            {FAQ_ITEMS.map((item, idx) => {
+              const isOpen = openFaq === idx;
+              return (
+                <div
+                  key={item.q}
+                  className={`${styles.faqItem} ${isOpen ? styles.faqItemOpen : ""} ${styles.revealItem}`}
+                  data-reveal
+                  style={{ transitionDelay: `${idx * 0.06}s` }}
+                >
+                  <button
+                    type="button"
+                    className={styles.faqQuestion}
+                    onClick={() => setOpenFaq(isOpen ? null : idx)}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{item.q}</span>
+                    <svg
+                      className={`${styles.faqChevron} ${isOpen ? styles.faqChevronOpen : ""}`}
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  {isOpen && (
+                    <div className={styles.faqAnswer}>
+                      <p>{item.a}</p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── Bottom High-Converting CTA ── */}
+      <section className={styles.bottomCtaSection} ref={observeReveal}>
+        <div className="container">
+          <div className={styles.bottomCtaCard} data-reveal>
+            <div className={styles.bottomCtaContent}>
+              <span className="badge badge-gradient" style={{ marginBottom: 18 }}>Get Started in Seconds</span>
+              <h2 className={styles.bottomCtaTitle}>
+                Turn your knowledge into an autonomous AI today
+              </h2>
+              <p className={styles.bottomCtaSub}>
+                Join consultants, educators, coaches, and creators delivering instant, citation-backed answers powered by their own content.
+              </p>
+              <div className={styles.bottomCtaButtons}>
+                <Link href="/auth/signup" className="btn btn-primary btn-lg">
+                  Create Free Account (50 Credits)
+                </Link>
+                <a href="#features" className="btn btn-secondary btn-lg">
+                  Explore Features
+                </a>
+              </div>
+              <p style={{ marginTop: 20, fontSize: "0.825rem", color: "var(--text-muted)" }}>
+                ✓ No credit card required · ✓ 50 free credits included · ✓ Ready in 30 seconds
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -563,6 +1012,7 @@ export default function LandingPage() {
                 <a href="#features" className={styles.footerLink}>Features</a>
                 <a href="#how-it-works" className={styles.footerLink}>How It Works</a>
                 <a href="#pricing" className={styles.footerLink}>Pricing</a>
+                <a href="#faq" className={styles.footerLink}>FAQ</a>
               </div>
               <div className={styles.footerCol}>
                 <div className={styles.footerColTitle}>Account</div>
@@ -573,6 +1023,12 @@ export default function LandingPage() {
           </div>
           <div className={styles.footerBottom}>
             <span>© 2026 Fikram. All rights reserved.</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span className="status-dot done" />
+              <span style={{ color: "var(--text-secondary)", fontSize: "0.8125rem" }}>
+                All Systems Operational
+              </span>
+            </div>
             <span style={{ color: "var(--text-disabled)", fontSize: "0.8125rem" }}>
               Built for experts, by experts.
             </span>
