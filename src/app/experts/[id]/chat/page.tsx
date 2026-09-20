@@ -556,9 +556,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
     try {
       let data: any;
 
+      let attachmentPayload: { url?: string; data?: string; mimeType: string; filename: string } | undefined;
       if (activeAttachment?.file) {
-        let attachmentPayload: { url?: string; data?: string; mimeType: string; filename: string };
-
         try {
           const { downloadUrl } = await uploadFileToStorage(activeAttachment.file);
           attachmentPayload = {
@@ -575,30 +574,94 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
             filename: activeAttachment.file.name,
           };
         }
-
-        // Send chat request with R2 URL or data URL
-        data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
-          message: userMsg,
-          conversationId: activeConvId,
-          history: messages
-            .filter((m) => m.role === "user" || m.role === "model")
-            .slice(-10)
-            .map((m) => ({ role: m.role, content: m.content })),
-          attachment: attachmentPayload,
-          systemPrompt: effectivePrompt || undefined,
-        });
         if (!isRetry) setPendingAttachment(null);
+      }
+
+      const chatPayload = {
+        message: userMsg,
+        conversationId: activeConvId,
+        history: messages
+          .filter((m) => m.role === "user" || m.role === "model")
+          .slice(-10)
+          .map((m) => ({ role: m.role, content: m.content })),
+        attachment: attachmentPayload,
+        systemPrompt: effectivePrompt || undefined,
+        stream: true,
+      };
+
+      // Add temporary model placeholder message for streaming tokens
+      setMessages((prev) => [...prev, { role: "model", content: "" }]);
+
+      const res = await fetch(`/api/experts/${expertId}/chat`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream, application/json",
+        },
+        body: JSON.stringify(chatPayload),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        setMessages((prev) => prev.slice(0, -1));
+        const { ApiError } = await import("@/lib/apiClient");
+        throw new ApiError(errorData?.error || errorData?.message || "Failed to generate response", res.status, errorData);
+      }
+
+      const contentType = res.headers.get("Content-Type") || "";
+      if (contentType.includes("text/event-stream") && res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let streamBuffer = "";
+        let finalEventData: any = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          streamBuffer += decoder.decode(value, { stream: true });
+          const lines = streamBuffer.split("\n\n");
+          streamBuffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const jsonText = trimmed.slice(5).trim();
+            if (!jsonText) continue;
+
+            try {
+              const event = JSON.parse(jsonText);
+              if (event.type === "chunk") {
+                const displayContent = event.partial || event.text || "";
+                setMessages((prev) => {
+                  if (prev.length === 0) return prev;
+                  const lastIdx = prev.length - 1;
+                  if (prev[lastIdx].role !== "model") return prev;
+                  const updated = [...prev];
+                  updated[lastIdx] = {
+                    ...updated[lastIdx],
+                    content: displayContent,
+                  };
+                  return updated;
+                });
+              } else if (event.type === "done") {
+                finalEventData = event;
+              } else if (event.type === "error") {
+                setMessages((prev) => prev.slice(0, -1));
+                const errObj = new Error(event.error || "Generation error");
+                (errObj as any).code = event.code;
+                (errObj as any).language = event.language;
+                throw errObj;
+              }
+            } catch (pErr: any) {
+              if (pErr?.code === "RESPONSE_TOO_LONG" || pErr instanceof Error) throw pErr;
+            }
+          }
+        }
+
+        data = finalEventData || { ok: true, reply: "" };
       } else {
-        // JSON path — standard text-only chat
-        data = await apiClient.post<any>(`/api/experts/${expertId}/chat`, {
-          message: userMsg,
-          conversationId: activeConvId,
-          history: messages
-            .filter((m) => m.role === "user" || m.role === "model")
-            .slice(-10)
-            .map((m) => ({ role: m.role, content: m.content })),
-          systemPrompt: effectivePrompt || undefined,
-        });
+        data = await res.json();
       }
 
       if (data.ok) {
@@ -610,9 +673,15 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           webSources: data.webSources,
         };
 
-        const newModelIndex = messages.length + 1;
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const lastIdx = prev.length - 1;
+          const updated = [...prev];
+          updated[lastIdx] = newModelMsg;
+          return updated;
+        });
 
-        setMessages((prev) => [...prev, newModelMsg]);
+        const newModelIndex = messages.length + 1;
 
         // Option A: Auto-play voice on the very first assistant response in this conversation
         if (isFirstUserMessage && autoVoiceEnabled && safeReply) {

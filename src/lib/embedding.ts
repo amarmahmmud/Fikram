@@ -21,7 +21,7 @@ import { GoogleGenAI } from "@google/genai";
 import Groq from "groq-sdk";
 import { createClient } from "@/lib/supabase/server";
 import { searchWeb, WebSearchResult } from "@/lib/web-search";
-import { generateWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
+import { generateWithModelFallback, generateStreamWithModelFallback, RESILIENT_GEMINI_MODELS, uploadFileFromUrl, deleteGeminiFile, getGeminiApiKeys, getEnterpriseClient } from "@/lib/gemini";
 import { trackVertexSpend } from "@/lib/vertex-budget";
 import { cleanRepetitionLoop } from "@/lib/text-cleaner";
 import {
@@ -915,6 +915,8 @@ export interface GenerateRAGOptions {
   mediaAttachments?: MediaAttachment[];
   /** Route Gemini calls through Vertex AI (paid) or free API keys. */
   useEnterprise?: boolean;
+  /** Optional callback invoked for each streaming text chunk as it arrives from the model. */
+  onChunk?: (chunkText: string) => void;
 }
 
 export interface RAGResponse {
@@ -1266,7 +1268,7 @@ ${finalGroundingBlock}`;
         );
 
         try {
-          const geminiResult = await generateWithModelFallback(geminiContents, {
+          const geminiResult = await generateStreamWithModelFallback(geminiContents, {
             systemInstruction: groundedSystemPrompt,
             generationConfig: {
               maxOutputTokens: tokenBudget,
@@ -1277,7 +1279,7 @@ ${finalGroundingBlock}`;
               responseSchema: scorecardResponseSchema,
             },
             useEnterprise: options?.useEnterprise,
-          });
+          }, options?.onChunk);
 
           rawResultText = geminiResult.text()?.trim() ?? "";
           const validation = validateScorecardJson(rawResultText, isFollowUp);
@@ -1373,7 +1375,7 @@ ${finalGroundingBlock}`;
     geminiContents.push({ role: "user", parts: userParts });
 
     try {
-      const geminiResult = await generateWithModelFallback(geminiContents, {
+      const geminiResult = await generateStreamWithModelFallback(geminiContents, {
         systemInstruction: groundedSystemPrompt,
         generationConfig: {
           maxOutputTokens: 4096,
@@ -1382,7 +1384,7 @@ ${finalGroundingBlock}`;
           topK: 40,
         },
         useEnterprise: options?.useEnterprise,
-      });
+      }, options?.onChunk);
 
       draft = geminiResult.text()?.trim() ?? "I couldn't generate a response.";
     } finally {

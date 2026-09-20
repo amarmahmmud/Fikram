@@ -5,6 +5,7 @@ import { checkRateLimit, getClientIP, ANON_CHAT_LIMIT, AUTH_CHAT_LIMIT } from "@
 import { parseExpertMetadata } from "@/lib/expert-metadata";
 import { getChatCreditCost, checkCreditBalance, deductCredits, getUserTier } from "@/lib/credits";
 import { routeRequest, classifyChatTask } from "@/lib/ai-gateway";
+import { parsePartialScorecardToMarkdown } from "@/lib/scorecard-config";
 
 // Allow up to 60s for RAG generation (Vercel Hobby max)
 export const maxDuration = 60;
@@ -47,6 +48,7 @@ export async function POST(
       systemPrompt,
       reasoningMode,
       webSearchEnabled,
+      stream,
     } = body;
 
     // Process file attachment(s)
@@ -226,7 +228,97 @@ export async function POST(
         ? webSearchEnabled
         : metadata.webSearchEnabled;
 
-    // Run RAG pipeline — automatically routes to Gemini if media attachments present
+    // Handle streaming requests
+    if (stream || req.headers.get("accept")?.includes("text/event-stream")) {
+      const encoder = new TextEncoder();
+      const readable = new ReadableStream({
+        async start(controller) {
+          const sendEvent = (eventData: any) => {
+            try {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify(eventData)}\n\n`));
+            } catch {}
+          };
+
+          let rawAccumulated = "";
+
+          try {
+            const result = await generateRAGResponse(
+              message.trim(),
+              expertId,
+              effectiveSystemPrompt,
+              history || [],
+              {
+                reasoningMode: effectiveReasoningMode,
+                webSearchEnabled: effectiveWebSearch,
+                mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
+                useEnterprise: decision.useEnterprise,
+                onChunk: (chunkText: string) => {
+                  rawAccumulated += chunkText;
+                  const partialMarkdown = isEvaluative
+                    ? parsePartialScorecardToMarkdown(rawAccumulated)
+                    : rawAccumulated;
+                  sendEvent({
+                    type: "chunk",
+                    text: chunkText,
+                    partial: partialMarkdown,
+                  });
+                },
+              }
+            );
+
+            // Save model response to database if conversation exists
+            if (user && activeConvId) {
+              await supabase.from("expert_messages").insert({
+                conversation_id: activeConvId,
+                role: "model",
+                content: result.reply,
+                sources: (result.sources || []) as any,
+                web_sources: (result.webSources || []) as any,
+              });
+
+              await supabase
+                .from("expert_conversations")
+                .update({ updated_at: new Date().toISOString() })
+                .eq("id", activeConvId);
+            }
+
+            sendEvent({
+              type: "done",
+              ok: true,
+              reply: result.reply,
+              scorecard: result.scorecardData,
+              rawScorecardJson: result.rawJson,
+              sources: result.sources,
+              webSources: result.webSources,
+              conversationId: activeConvId || null,
+            });
+          } catch (err: any) {
+            console.error("[Expert Chat Stream] Error:", err);
+            sendEvent({
+              type: "error",
+              error: err.message || "Failed to generate response",
+              code: err?.code,
+              language: err?.language,
+              isRetryable: err?.code === "RESPONSE_TOO_LONG",
+            });
+          } finally {
+            try {
+              controller.close();
+            } catch {}
+          }
+        },
+      });
+
+      return new Response(readable, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
+    // Run RAG pipeline (non-streaming fallback)
     const result = await generateRAGResponse(
       message.trim(),
       expertId,

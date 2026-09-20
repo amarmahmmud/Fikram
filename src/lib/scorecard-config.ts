@@ -597,3 +597,98 @@ export function formatScorecardToMarkdown(parsed: ScorecardPayload): string {
   draft = draft.replace(/(?:\n\s*---\s*){2,}/g, "\n\n---");
   return draft;
 }
+
+/**
+ * Progressively parses partial streaming JSON from Gemini into clean Markdown.
+ * Enables real-time rendering of scorecard table rows and text sections as tokens arrive.
+ */
+export function parsePartialScorecardToMarkdown(rawJson: string): string {
+  if (!rawJson || !rawJson.trim()) return "";
+
+  // 1. Follow-up response stream
+  const followUpIdx = rawJson.indexOf('"follow_up_response"');
+  if (followUpIdx !== -1) {
+    const afterKey = rawJson.slice(followUpIdx + 21);
+    const firstQuote = afterKey.indexOf('"');
+    if (firstQuote !== -1) {
+      const contentStr = afterKey.slice(firstQuote + 1);
+      const lastQuote = contentStr.lastIndexOf('"');
+      const textToDecode = lastQuote !== -1 ? contentStr.slice(0, lastQuote) : contentStr;
+
+      const unescaped = textToDecode
+        .replace(/\\n/g, "\n")
+        .replace(/\\"/g, '"')
+        .replace(/\\\\/g, "\\");
+      if (unescaped.trim().length > 0) {
+        return unescaped;
+      }
+    }
+  }
+
+  // 2. Scorecard items
+  const scorecardItems: { dimension: string; score: number; reasoning: string }[] = [];
+  const scorecardBlockMatch = rawJson.match(/"scorecard"\s*:\s*\[([\s\S]*?)(?:\]|$)/);
+  if (scorecardBlockMatch) {
+    const block = scorecardBlockMatch[1];
+    const itemRegex = /\{\s*"dimension"\s*:\s*"([^"]+)"\s*,\s*"score"\s*:\s*(\d+)\s*,\s*"reasoning"\s*:\s*"([^"]*)"/g;
+    let match: RegExpExecArray | null;
+    while ((match = itemRegex.exec(block)) !== null) {
+      scorecardItems.push({
+        dimension: match[1],
+        score: parseInt(match[2], 10),
+        reasoning: match[3].replace(/\\n/g, " ").replace(/\\"/g, '"'),
+      });
+    }
+  }
+
+  // 3. Verdict
+  const verdictMatch = rawJson.match(/"total_verdict"\s*:\s*"([^"]*)/);
+  const totalVerdict = verdictMatch ? verdictMatch[1].replace(/"$/, "") : "";
+
+  // 4. Roast
+  const roastMatch = rawJson.match(/"roast"\s*:\s*"([\s\S]*?)(?:"(?:\s*,\s*"graveyard")|$)/);
+  const roast = roastMatch
+    ? roastMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
+    : "";
+
+  // 5. Graveyard
+  const graveyardMatch = rawJson.match(/"graveyard"\s*:\s*"([\s\S]*?)(?:"(?:\s*,\s*"pivot")|$)/);
+  const graveyard = graveyardMatch
+    ? graveyardMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
+    : "";
+
+  // 6. Pivot
+  const pivotMatch = rawJson.match(/"pivot"\s*:\s*"([\s\S]*?)(?:"(?:\s*,\s*"follow_up_response")|$)/);
+  const pivot = pivotMatch
+    ? pivotMatch[1].replace(/\\n/g, "\n").replace(/\\"/g, '"')
+    : "";
+
+  // If only in analysis scratchpad, show friendly status
+  if (scorecardItems.length === 0 && !roast && !graveyard && !pivot) {
+    return "*Evaluating unit economics, CAC/LTV & business model...*";
+  }
+
+  let md = "## 🚀 QUICK‑LOOK SCORECARD\n| Dimension | Score (0‑10) | Why you’re getting that number |\n|---|---|---|\n";
+  let totalScore = 0;
+  for (const item of scorecardItems) {
+    totalScore += item.score;
+    md += `| ${item.dimension} | ${item.score} | ${item.reasoning} |\n`;
+  }
+
+  if (totalVerdict || scorecardItems.length === 10) {
+    md += `| **Total** | **${totalScore} / 100** | **${totalVerdict || "Calculating..."}** |\n---\n`;
+  }
+
+  if (roast) {
+    md += `\n## 🔥 ROAST\n${roast}\n`;
+  }
+  if (graveyard) {
+    md += `\n---\n\n## 📉 WHY SIMILAR STARTUPS HAVE DIED\n${graveyard}\n`;
+  }
+  if (pivot) {
+    md += `\n---\n\n## 🛠️ CONSTRUCTIVE PIVOT\n${pivot}\n`;
+  }
+
+  return md.trim();
+}
+

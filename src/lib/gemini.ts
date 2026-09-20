@@ -32,8 +32,8 @@ export function isTransientError(err: any): boolean {
 }
 
 export const RESILIENT_GEMINI_MODELS = [
-  "gemini-3.5-flash",
   "gemini-3.6-flash",
+  "gemini-3.5-flash",
 ];
 
 export interface ResilientGenerateOptions {
@@ -286,6 +286,118 @@ export async function generateWithModelFallback(
           } else {
             console.warn(`[Gemini Fallback] Model ${modelName} failed with non-transient error: ${msg}. Trying next candidate model...`);
             break; // Don't retry same model if it's not transient, try next model
+          }
+        }
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/**
+ * Execute a generateContentStream call against Gemini with automatic
+ * key rotation and model fallback, invoking an onChunk callback
+ * for each received text token/chunk.
+ */
+export async function generateStreamWithModelFallback(
+  contentsOrRequest: any,
+  options: ResilientGenerateOptions = {},
+  onChunk?: (chunkText: string) => void
+) {
+  if (!onChunk) {
+    return generateWithModelFallback(contentsOrRequest, options);
+  }
+
+  const useEnterprise = options.useEnterprise ?? (process.env.GOOGLE_GENAI_USE_ENTERPRISE === "true");
+  const keys = useEnterprise ? [] : getGeminiApiKeys();
+
+  if (!useEnterprise && keys.length === 0) {
+    throw new Error("Neither Google Service Account key nor Gemini API key is configured in environment.");
+  }
+
+  const models = options.preferredModels && options.preferredModels.length > 0
+    ? options.preferredModels
+    : RESILIENT_GEMINI_MODELS;
+
+  const maxRetries = options.maxRetriesPerModel ?? 2;
+  let lastError: any = null;
+  const contents = normalizeContents(contentsOrRequest);
+
+  const config: any = {
+    ...(options.generationConfig || {}),
+  };
+  if (options.systemInstruction) {
+    config.systemInstruction = options.systemInstruction;
+  }
+
+  for (const modelName of models) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const keysToTryCount = (useEnterprise || options.pinnedApiKey) ? 1 : Math.max(1, keys.length);
+
+      for (let keyAttempt = 0; keyAttempt < keysToTryCount; keyAttempt++) {
+        const activeKey = useEnterprise ? "" : (options.pinnedApiKey || keys[currentKeyIndex % keys.length]);
+        const client = useEnterprise ? getEnterpriseClient() : getGenAIClientForKey(activeKey);
+
+        try {
+          const responseStream = await client.models.generateContentStream({
+            model: modelName,
+            contents: contents,
+            config: Object.keys(config).length > 0 ? config : undefined,
+          });
+
+          let fullAccumulatedText = "";
+          for await (const chunk of responseStream) {
+            let chunkText = chunk.text;
+            if (chunkText === undefined || chunkText === null) {
+              chunkText = (chunk as any).candidates?.[0]?.content?.parts?.[0]?.text;
+            }
+            const textStr = (typeof chunkText === "function" ? (chunkText as () => string)() : chunkText) || "";
+            if (textStr) {
+              fullAccumulatedText += textStr;
+              onChunk(textStr);
+            }
+          }
+
+          if (!useEnterprise && keys.length > 1) {
+            currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+          }
+
+          return {
+            text: () => fullAccumulatedText,
+            response: {
+              text: () => fullAccumulatedText,
+            },
+            raw: fullAccumulatedText,
+          };
+        } catch (err: any) {
+          lastError = err;
+          const msg = err?.message || "";
+          const status = err?.status;
+          const isTransient = isTransientError(err);
+
+          if (isTransient) {
+            if (!useEnterprise && keys.length > 1) {
+              const prevIdx = currentKeyIndex % keys.length;
+              currentKeyIndex = (currentKeyIndex + 1) % keys.length;
+              console.warn(
+                `[Gemini Rotation] Model ${modelName} hit ${status || "transient"} on key ${prevIdx + 1}/${keys.length}. Switching to key ${currentKeyIndex + 1}/${keys.length}...`
+              );
+              if (keyAttempt < keysToTryCount - 1) {
+                continue;
+              }
+            }
+
+            const delay = (status === 429 || msg.includes("429") || msg.includes("Resource has been exhausted"))
+              ? attempt * 2000
+              : attempt * 1000;
+            console.warn(
+              `[Gemini Stream Fallback] Model ${modelName} hit transient issue (${status}). Retrying in ${delay}ms...`
+            );
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          } else {
+            console.warn(`[Gemini Stream Fallback] Model ${modelName} failed with non-transient error: ${msg}. Trying next candidate model...`);
+            break;
           }
         }
       }
