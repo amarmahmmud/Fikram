@@ -112,6 +112,7 @@ def train_model(
     r2_bucket: str = "",
     supabase_url: str = "",
     supabase_key: str = "",
+    webhook_secret: str = "",
 ):
     import torch
     import numpy as np
@@ -128,11 +129,14 @@ def train_model(
         elapsed = time.time() - job_start_time
         print(f"[Model Factory] Notifying failure to webhook: {error_msg}")
         if webhook_url:
+            headers = {"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"}
+            if webhook_secret:
+                headers["x-webhook-secret"] = webhook_secret
             for attempt in range(1, 4):
                 try:
                     res = requests.post(
                         webhook_url,
-                        headers={"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"},
+                        headers=headers,
                         json={
                             "job_id": job_id,
                             "status": "failed",
@@ -532,11 +536,14 @@ def train_model(
 
         print(f"[Model Factory] Notifying completion webhook: {webhook_url}")
         if webhook_url:
+            headers = {"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"}
+            if webhook_secret:
+                headers["x-webhook-secret"] = webhook_secret
             for attempt in range(1, 4):
                 try:
                     res = requests.post(
                         webhook_url,
-                        headers={"Bypass-Tunnel-Reminder": "true", "User-Agent": "Modal-Trainer/1.0"},
+                        headers=headers,
                         json={
                             "job_id": job_id,
                             "status": "completed",
@@ -675,6 +682,7 @@ def start_training(item: dict):
     r2_bucket = item.get("r2_bucket", "")
     supabase_url = item.get("supabase_url", "")
     supabase_key = item.get("supabase_key", "")
+    webhook_secret = item.get("webhook_secret") or os.environ.get("MODAL_WEBHOOK_SECRET", "")
 
     if not job_id or not dataset_url:
         return {"status": "failed", "error": "Missing job_id or dataset_url"}
@@ -700,6 +708,7 @@ def start_training(item: dict):
         r2_bucket=r2_bucket,
         supabase_url=supabase_url,
         supabase_key=supabase_key,
+        webhook_secret=webhook_secret,
     )
 
     return {

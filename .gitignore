@@ -25,6 +25,7 @@ gcp-key.json
 # misc
 .DS_Store
 *.pem
+*.exe
 
 # debug
 npm-debug.log*

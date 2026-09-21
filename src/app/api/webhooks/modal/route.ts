@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import crypto from "crypto";
+
+/**
+ * Constant-time comparison using SHA-256 digests to prevent timing attacks.
+ */
+function timingSafeCompare(a: string, b: string): boolean {
+  const hashA = crypto.createHash("sha256").update(a).digest();
+  const hashB = crypto.createHash("sha256").update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
 
 /**
  * Webhook endpoint that Modal calls when training completes or fails.
@@ -17,6 +27,23 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *            credits_to_charge (flat fee) }
  */
 export async function POST(req: Request) {
+  // ── Authentication Check ──
+  // Fail-closed: Reject all requests if MODAL_WEBHOOK_SECRET is not configured in the environment.
+  const expectedSecret = process.env.MODAL_WEBHOOK_SECRET;
+  if (!expectedSecret) {
+    console.error("[Modal Webhook] CRITICAL: MODAL_WEBHOOK_SECRET is not configured in environment. Failing closed.");
+    return NextResponse.json({ error: "Webhook authentication unconfigured" }, { status: 401 });
+  }
+
+  const incomingSecret =
+    req.headers.get("x-webhook-secret") ||
+    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+  if (!incomingSecret || !timingSafeCompare(incomingSecret, expectedSecret)) {
+    console.warn("[Modal Webhook] Unauthorized request: missing or invalid secret");
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const {

@@ -200,6 +200,7 @@ export async function POST(req: Request) {
           r2_bucket: process.env.R2_BUCKET_NAME,
           supabase_url: process.env.NEXT_PUBLIC_SUPABASE_URL,
           supabase_key: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          webhook_secret: process.env.MODAL_WEBHOOK_SECRET,
         }),
       });
 
