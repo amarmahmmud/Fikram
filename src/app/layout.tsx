@@ -9,6 +9,9 @@ export const metadata: Metadata = {
     "The platform where experts create RAG AI Experts powered by their own knowledge. Upload your content, get a grounded RAG AI Expert in seconds — or train a fully custom model.",
   keywords: ["RAG AI Expert", "expert AI", "RAG", "custom training", "knowledge base", "LLM", "content creators"],
   authors: [{ name: "Fikram" }],
+  verification: {
+    google: "TUKKxxwZin4BaShtya74CG8GpoiF0Ush3Ac5zAhKwxE", // ← paste only the content="..." value from Google Search Console
+  },
   openGraph: {
     title: "Fikram — Turn Your Expertise into AI",
     description: "Create RAG AI Experts from your own knowledge. Ready in seconds, no code required.",
