@@ -393,17 +393,36 @@ export default function NewExpertPage() {
     setLoadingQuestions(true);
 
     try {
-      // Send FormData with files so the server can extract domain-specific context from PDFs and docs
-      const formData = new FormData();
-      formData.append("expertName", name.trim());
-      formData.append("description", description.trim());
-      files.forEach((f) => formData.append("filenames", f.file.name));
-      // Append the first 2 files (PDF, document, or text) for server-side snippet extraction
-      files.slice(0, 2).forEach((f) => formData.append("files", f.file));
+      // Build a lightweight JSON body — never send raw file blobs (causes 413 on large PDFs).
+      // For plain-text formats we read the first 4 KB client-side as a snippet.
+      const filenames = files.map((f) => f.file.name);
+      const snippets: string[] = [];
+
+      for (const f of files.slice(0, 2)) {
+        const ext = f.file.name.toLowerCase().split(".").pop() || "";
+        const isReadable =
+          ["txt", "md", "csv", "json"].includes(ext) || f.file.type.startsWith("text/");
+        if (isReadable) {
+          try {
+            const text = await f.file.text();
+            if (text.trim()) snippets.push(text.slice(0, 4000));
+          } catch {
+            // Non-critical — just skip the snippet for this file
+          }
+        }
+        // PDFs and binary media cannot be read client-side without a parser;
+        // the server will rely on expertName + description + filename for context.
+      }
 
       const res = await fetch("/api/experts/alignment-questions", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expertName: name.trim(),
+          description: description.trim(),
+          filenames,
+          snippets,
+        }),
       });
 
       const data = await res.json();

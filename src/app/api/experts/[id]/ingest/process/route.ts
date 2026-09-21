@@ -12,8 +12,8 @@ import {
 } from "@/lib/ai-gateway";
 import { getUserTier } from "@/lib/credits";
 
-// Vercel Hobby hard cap — each invocation MUST complete within this
-export const maxDuration = 15;
+// Vercel Hobby hard cap — 60s gives extraction enough headroom for large PDFs
+export const maxDuration = 60;
 
 // Embedding batch size per invocation — 10 chunks × ~0.5s each ≈ 5-7s
 // Leaves ~6-8s headroom for overhead within the 15s Hobby cap
