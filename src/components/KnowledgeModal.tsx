@@ -434,7 +434,6 @@ export function KnowledgeModal({
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.heic,.mp3,.wav,.m4a,.ogg,.aac,.flac,.mp4,.webm,.mov"
                   multiple
                   hidden
                   onChange={handleFileUpload}

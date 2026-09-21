@@ -302,31 +302,8 @@ export default function NewExpertPage() {
   }
 
   function addFiles(newFiles: File[]) {
-    const validExtensions = new Set([
-      // Documents
-      "pdf", "txt", "md", "csv", "json", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
-      // Images
-      "png", "jpg", "jpeg", "webp", "gif", "heic", "heif",
-      // Audio
-      "mp3", "wav", "m4a", "ogg", "aac", "flac",
-      // Video
-      "mp4", "webm", "mov", "quicktime",
-    ]);
-
     const valid = newFiles.filter((f) => {
       const ext = f.name.toLowerCase().split(".").pop() || "";
-      const isMimeValid =
-        f.type.startsWith("text/") ||
-        f.type.startsWith("image/") ||
-        f.type.startsWith("audio/") ||
-        f.type.startsWith("video/") ||
-        f.type === "application/pdf" ||
-        f.type === "application/json";
-
-      if (!validExtensions.has(ext) && !isMimeValid) {
-        toast.error(`"${f.name}" is not a supported file type.`);
-        return false;
-      }
 
       const isVid = ext === "mp4" || ext === "webm" || ext === "mov" || f.type.startsWith("video/");
       const isAud = ext === "mp3" || ext === "wav" || ext === "m4a" || ext === "ogg" || ext === "flac" || f.type.startsWith("audio/");
@@ -957,7 +934,6 @@ export default function NewExpertPage() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.png,.jpg,.jpeg,.webp,.gif,.heic,.mp3,.wav,.m4a,.ogg,.aac,.flac,.mp4,.webm,.mov,image/*,audio/*,video/*"
                 multiple
                 hidden
                 onChange={handleFileSelect}
