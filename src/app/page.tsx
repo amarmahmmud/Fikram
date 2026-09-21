@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useEffect, useRef, useCallback } from "react";
 import styles from "./landing.module.css";
 import { FikraLogo } from "@/components/FikraLogo";
+import { MessageSquare, FileText, Mic, Video, Zap } from "lucide-react";
 
 const HERO_USE_CASES = [
   "Medical Consultants",
@@ -236,10 +237,10 @@ const CREDIT_PACKS = [
 ];
 
 const CREDIT_BREAKDOWN = [
-  { icon: "💬", amount: "1 Credit", action: "Chat Query", desc: "1 AI response grounded with verified citations" },
-  { icon: "📄", amount: "1 Credit", action: "Document Page", desc: "1 page of PDF, text or course notes indexed" },
-  { icon: "🎙️", amount: "5 Credits", action: "Audio File", desc: "Neural transcription and knowledge embedding" },
-  { icon: "🎬", amount: "10 Credits", action: "Video File", desc: "Audio transcription + visual diagram indexing" },
+  { icon: <MessageSquare size={20} strokeWidth={1.5} />, amount: "1 Credit", action: "Chat Query", desc: "1 AI response grounded with verified citations" },
+  { icon: <FileText size={20} strokeWidth={1.5} />, amount: "1 Credit", action: "Document Page", desc: "1 page of PDF, text or course notes indexed" },
+  { icon: <Mic size={20} strokeWidth={1.5} />, amount: "5 Credits", action: "Audio File", desc: "Neural transcription and knowledge embedding" },
+  { icon: <Video size={20} strokeWidth={1.5} />, amount: "10 Credits", action: "Video File", desc: "Audio transcription + visual diagram indexing" },
 ];
 
 function MarqueeRow({ items, direction = 1 }: { items: typeof FRONTIER_MODELS, direction?: number }) {
@@ -739,7 +740,7 @@ export default function LandingPage() {
                     </div>
 
                     <div className={`${styles.tierAllowancePill} ${plan.popular ? styles.tierAllowancePillPopular : ""}`}>
-                      <span className={styles.tierAllowanceIcon}>⚡</span>
+                      <span className={styles.tierAllowanceIcon}><Zap size={16} strokeWidth={2.5} /></span>
                       <div>
                         <div className={`${styles.tierAllowanceCredits} ${plan.popular ? styles.tierAllowanceCreditsPopular : ""}`}>
                           {plan.credits}

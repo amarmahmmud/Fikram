@@ -23,6 +23,7 @@ import {
   CheckCircle2,
   Image,
   FileAudio,
+  Zap,
   Film,
   Target,
   Sliders,
@@ -838,9 +839,9 @@ export default function NewExpertPage() {
 
               {/* Dynamic context explanation */}
               <div className={styles.modeDynamicHelper}>
-                {reasoningMode === "hybrid" && "⚡ Balanced: Blends verified files with general AI reasoning."}
-                {reasoningMode === "strict" && "🛡️ Strict: Exclusively answers from uploaded files with citations."}
-                {reasoningMode === "evaluative" && "🔥 Critical: Evaluates concepts against your source standards."}
+                {reasoningMode === "hybrid" && <span style={{display: 'flex', alignItems: 'center', gap: 6}}><Zap size={14} /> Balanced: Blends verified files with general AI reasoning.</span>}
+                {reasoningMode === "strict" && <span style={{display: 'flex', alignItems: 'center', gap: 6}}><ShieldCheck size={14} /> Strict: Exclusively answers from uploaded files with citations.</span>}
+                {reasoningMode === "evaluative" && <span style={{display: 'flex', alignItems: 'center', gap: 6}}><Flame size={14} /> Critical: Evaluates concepts against your source standards.</span>}
               </div>
 
               {/* Live Web Search Switch */}
