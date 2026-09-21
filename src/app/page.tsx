@@ -935,6 +935,11 @@ export default function LandingPage() {
                 <Link href="/auth/signup" className={styles.footerLink}>Sign Up</Link>
                 <Link href="/auth/signin" className={styles.footerLink}>Sign In</Link>
               </div>
+              <div className={styles.footerCol}>
+                <div className={styles.footerColTitle}>Legal</div>
+                <Link href="/privacy" className={styles.footerLink}>Privacy Policy</Link>
+                <Link href="/terms" className={styles.footerLink}>Terms of Service</Link>
+              </div>
             </div>
           </div>
           <div className={styles.footerBottom}>
