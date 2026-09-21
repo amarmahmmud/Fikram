@@ -211,8 +211,9 @@ async function handleExtractPhase(
         const arrayBuffer = await res.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
         
-        const { parseOfficeAsync } = require("officeparser");
-        text = await parseOfficeAsync(buffer);
+        const ext = filename.split(".").pop()?.toLowerCase() || "";
+        const { parseOffice } = require("officeparser");
+        text = await parseOffice(buffer, { fileType: ext });
       }
     } else {
       // Plain text, markdown, CSV, etc.
