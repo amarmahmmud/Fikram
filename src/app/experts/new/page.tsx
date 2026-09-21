@@ -308,10 +308,10 @@ export default function NewExpertPage() {
       const isVid = ext === "mp4" || ext === "webm" || ext === "mov" || f.type.startsWith("video/");
       const isAud = ext === "mp3" || ext === "wav" || ext === "m4a" || ext === "ogg" || ext === "flac" || f.type.startsWith("audio/");
       const isImg = ext === "png" || ext === "jpg" || ext === "jpeg" || ext === "webp" || ext === "gif" || ext === "heic" || f.type.startsWith("image/");
-      const maxSize = isVid ? 50 * 1024 * 1024 : isAud ? 25 * 1024 * 1024 : isImg ? 20 * 1024 * 1024 : 25 * 1024 * 1024;
+      const maxSize = 50 * 1024 * 1024; // 50MB flat limit for all types
 
       if (f.size > maxSize) {
-        toast.error(`"${f.name}" exceeds the maximum size of ${Math.round(maxSize / 1024 / 1024)}MB.`);
+        toast.error(`"${f.name}" exceeds the maximum size of 50MB.`);
         return false;
       }
 
