@@ -304,7 +304,7 @@ export default function NewExpertPage() {
   function addFiles(newFiles: File[]) {
     const validExtensions = new Set([
       // Documents
-      "pdf", "txt", "md", "csv", "json",
+      "pdf", "txt", "md", "csv", "json", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
       // Images
       "png", "jpg", "jpeg", "webp", "gif", "heic", "heif",
       // Audio
