@@ -15,6 +15,13 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Password state
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+
   useEffect(() => { document.title = "Settings — Fikram"; }, []);
 
   useEffect(() => {
@@ -63,6 +70,39 @@ export default function SettingsPage() {
       toast.error("Failed to save settings. Please try again.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUpdatePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 8) {
+      setPasswordError("Password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Passwords do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordError(error.message);
+      } else {
+        setPasswordSuccess(true);
+        setNewPassword("");
+        setConfirmPassword("");
+        toast.success("Password updated successfully");
+        setTimeout(() => setPasswordSuccess(false), 4000);
+      }
+    } catch (err: any) {
+      setPasswordError(err?.message || "Failed to update password.");
+    } finally {
+      setPasswordSaving(false);
     }
   }
 
@@ -129,6 +169,77 @@ export default function SettingsPage() {
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <button id="save-profile-btn" type="submit" disabled={saving || loading} className="btn btn-primary btn-sm">
               {saving ? "Saving..." : "Save Profile"}
+            </button>
+          </div>
+        </form>
+
+        <hr className="divider" />
+
+        {/* Security & Password */}
+        <form onSubmit={handleUpdatePassword} className={styles.section}>
+          <div className={styles.sectionHead}>
+            <h3 className={styles.sectionTitle}>Security & Password</h3>
+            <p className={styles.sectionDesc}>Update your account password.</p>
+          </div>
+
+          {passwordSuccess && (
+            <div className={styles.savedBanner} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+              <CheckCircle2 size={16} />
+              <span>Password updated successfully!</span>
+            </div>
+          )}
+
+          {passwordError && (
+            <div style={{
+              background: "rgba(239, 68, 68, 0.1)",
+              border: "1px solid rgba(239, 68, 68, 0.25)",
+              borderRadius: "var(--radius-md)",
+              padding: "10px 14px",
+              color: "#FCA5A5",
+              fontSize: "0.8125rem",
+              marginBottom: 16,
+            }}>
+              {passwordError}
+            </div>
+          )}
+
+          <div className={styles.formGrid}>
+            <div className="input-group">
+              <label htmlFor="settings-new-password" className="input-label">New Password</label>
+              <input
+                id="settings-new-password"
+                type="password"
+                className="input"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 8 characters"
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="input-group">
+              <label htmlFor="settings-confirm-password" className="input-label">Confirm Password</label>
+              <input
+                id="settings-confirm-password"
+                type="password"
+                className="input"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Re-enter new password"
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
+            <button
+              id="update-password-btn"
+              type="submit"
+              disabled={passwordSaving || !newPassword || !confirmPassword}
+              className="btn btn-secondary btn-sm"
+            >
+              {passwordSaving ? "Updating..." : "Update Password"}
             </button>
           </div>
         </form>

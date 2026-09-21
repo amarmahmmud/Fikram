@@ -144,20 +144,6 @@ export default function BrowseModelsPage() {
       }
     });
 
-  if (!loading && models.length === 0) {
-    return (
-      <div className={styles.pageWrapper}>
-        <div className={styles.ambientGlow} />
-        <div className={styles.container}>
-          <div className={styles.emptyState}>
-            <h2 style={{ color: "var(--text-primary)", marginBottom: 8 }}>Marketplace Coming Soon</h2>
-            <p>We are currently curating the best AI models. Check back later!</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.pageWrapper}>
       <div className={styles.ambientGlow} />
@@ -186,57 +172,92 @@ export default function BrowseModelsPage() {
               Discover community RAG AI Experts or create your own in seconds.
             </p>
           </div>
-
         </div>
 
-      <div className={styles.filterBar}>
-        <div className={styles.categoryFilters}>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              className={`${styles.filterBtn} ${activeCategory === cat ? styles.active : ""}`}
-              onClick={() => setActiveCategory(cat)}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        <div className={styles.filterControls}>
-          <div className={styles.searchBar}>
-            <Search size={16} color="var(--text-muted)" />
-            <input 
-              type="text" 
-              placeholder="Search models..." 
-              className={styles.searchInput}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+        <div className={styles.filterBar}>
+          <div className={styles.categoryFilters}>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                className={`${styles.filterBtn} ${activeCategory === cat ? styles.active : ""}`}
+                onClick={() => setActiveCategory(cat)}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
 
-          <select
-            className={styles.sortSelect}
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            aria-label="Sort models"
-          >
-            <option value="popular">Most Used</option>
-            <option value="newest">Newest First</option>
-          </select>
-        </div>
-      </div>
+          <div className={styles.filterControls}>
+            <div className={styles.searchBar}>
+              <Search size={16} color="var(--text-muted)" />
+              <input 
+                type="text" 
+                placeholder="Search models..." 
+                className={styles.searchInput}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
 
-      {loading ? (
-        <div className={styles.loadingState}>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className={styles.skeletonCard} />
-          ))}
+            <select
+              className={styles.sortSelect}
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              aria-label="Sort models"
+            >
+              <option value="popular">Most Used</option>
+              <option value="newest">Newest First</option>
+            </select>
+          </div>
         </div>
-      ) : filteredModels.length === 0 ? (
-        <div className={styles.emptyState}>
-          <p>No models found for the &quot;{activeCategory}&quot; category.</p>
-        </div>
-      ) : (
+
+        {loading ? (
+          <div className={styles.loadingState}>
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className={styles.skeletonCard} />
+            ))}
+          </div>
+        ) : models.length === 0 ? (
+          <div className={styles.emptyState}>
+            <Sparkles size={36} style={{ color: "var(--accent-primary)", marginBottom: 16 }} />
+            <h3 className={styles.emptyStateTitle}>Marketplace Coming Soon</h3>
+            <p className={styles.emptyStateText}>
+              Be the first to publish an AI expert or model to the community showcase.
+            </p>
+            <Link href="/experts/new" className="btn btn-primary btn-sm">
+              <Sparkles size={14} />
+              <span>Create RAG AI Expert</span>
+            </Link>
+          </div>
+        ) : filteredModels.length === 0 ? (
+          <div className={styles.emptyState}>
+            <Search size={32} style={{ color: "var(--text-muted)", marginBottom: 12 }} />
+            <h3 className={styles.emptyStateTitle}>No models found</h3>
+            <p className={styles.emptyStateText}>
+              {searchQuery
+                ? `No models matching "${searchQuery}" in ${activeCategory === "All" ? "all categories" : activeCategory}.`
+                : `No models currently listed in ${activeCategory}.`}
+            </p>
+            <div className={styles.emptyStateActions}>
+              {(searchQuery || activeCategory !== "All") && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setActiveCategory("All");
+                  }}
+                >
+                  Reset Filters
+                </button>
+              )}
+              <Link href="/experts/new" className="btn btn-primary btn-sm">
+                <Sparkles size={14} />
+                <span>Create RAG AI Expert</span>
+              </Link>
+            </div>
+          </div>
+        ) : (
         <div className={styles.grid}>
           {filteredModels.map((item) => (
             <div key={item.id} className={styles.card}>

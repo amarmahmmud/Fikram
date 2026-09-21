@@ -131,7 +131,7 @@ export default function SignUpPage() {
         </form>
 
         <p className={styles.authTerms}>
-          By signing up you agree to our <Link href="/#terms" className={styles.authSwitchLink}>Terms</Link> and <Link href="/#privacy" className={styles.authSwitchLink}>Privacy Policy</Link>.
+          By signing up you agree to our <Link href="/terms" className={styles.authSwitchLink}>Terms</Link> and <Link href="/privacy" className={styles.authSwitchLink}>Privacy Policy</Link>.
         </p>
         <p className={styles.authSwitch}>
           Already have an account?{" "}

@@ -7,32 +7,9 @@ import styles from "./page.module.css";
 import type { Database } from "@/lib/supabase/types";
 import { CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 
 type Transaction = Database["public"]["Tables"]["credit_transactions"]["Row"];
-
-// ── Product catalog (displayed in the Buy Credits modal) ──
-// Each subscription plan has separate monthly and annual Polar product IDs.
-// Annual products are created in Polar with a yearly billing interval.
-const PRODUCTS = {
-  subscriptions: [
-    {
-      name: "Pro Expert",
-      desc: "2,000 credits/month",
-      monthly: { priceLabel: "$19/mo",  productId: "fd898064-a43d-48de-a996-bdf220b62fc7" },
-      annual:  { priceLabel: "$180/yr", productId: "9c8d10da-c3f1-49bb-9481-f40f50bc9454" }, // $15/mo × 12 — save 20%
-    },
-    {
-      name: "Business & Teams",
-      desc: "10,000 credits/month",
-      monthly: { priceLabel: "$79/mo",  productId: "a02142a9-f54a-4637-817e-cb32fb46c67c" },
-      annual:  { priceLabel: "$756/yr", productId: "c47ac54f-4f41-4074-897b-18db41cc5422" }, // $63/mo × 12 — save 20%
-    },
-  ],
-  topups: [
-    { name: "Starter Pack", desc: "500 credits",   priceLabel: "$10", productId: "00fff612-c08e-4bdd-b312-91617773e40b" },
-    { name: "Power Pack",   desc: "2,500 credits", priceLabel: "$40", productId: "3b97ad74-1645-4d8e-9c3e-c39e401b5eb1" },
-  ],
-};
 
 // ── Wrapper with Suspense boundary for useSearchParams ──
 export default function CreditsPageWrapper() {
@@ -56,9 +33,7 @@ function CreditsPageContent() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [showBuyModal, setShowBuyModal] = useState(false);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [modalBillingCycle, setModalBillingCycle] = useState<"monthly" | "annual">("monthly");
 
   useEffect(() => { document.title = "Credits & Billing — Fikram"; }, []);
 
@@ -126,31 +101,6 @@ function CreditsPageContent() {
       case "job_refund": return { label: "REFUND", cls: "badge-success" };
       case "refund": return { label: "REFUND", cls: "badge-success" };
       default: return { label: type.replace("_", " ").toUpperCase(), cls: "badge-default" };
-    }
-  }
-
-  async function handleCheckout(productId: string) {
-    if (!productId) {
-      toast.info("This product is not yet configured. Please check back soon.");
-      return;
-    }
-    setCheckoutLoading(productId);
-    try {
-      const res = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId }),
-      });
-      const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error(data.error || "Failed to create checkout session");
-      }
-    } catch {
-      toast.error("Something went wrong. Please try again.");
-    } finally {
-      setCheckoutLoading(null);
     }
   }
 
@@ -359,123 +309,16 @@ function CreditsPageContent() {
         </div>
       </div>
 
-      {/* ── Buy Credits Modal ── */}
-      {showBuyModal && (
-        <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 1000,
-            background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-          onClick={() => setShowBuyModal(false)}
-        >
-          <div
-            className="card"
-            style={{ maxWidth: 480, width: "90%", padding: 24 }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 style={{ fontSize: "1.125rem", fontWeight: 700, marginBottom: 4, color: "var(--text-primary)" }}>
-              Buy Credits
-            </h3>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: 16 }}>
-              Choose a subscription plan or a one-time top-up pack.
-            </p>
-
-            {/* Billing cycle toggle */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 0,
-              background: "rgba(255,255,255,0.04)", borderRadius: 8,
-              border: "1px solid rgba(255,255,255,0.08)",
-              padding: 3, marginBottom: 16,
-            }}>
-              {(["monthly", "annual"] as const).map((cycle) => (
-                <button
-                  key={cycle}
-                  type="button"
-                  onClick={() => setModalBillingCycle(cycle)}
-                  style={{
-                    flex: 1, padding: "6px 0", border: "none", borderRadius: 6,
-                    fontSize: "0.8125rem", fontWeight: 600, cursor: "pointer",
-                    transition: "all 0.15s",
-                    background: modalBillingCycle === cycle ? "rgba(0, 229, 200, 0.12)" : "transparent",
-                    color: modalBillingCycle === cycle ? "var(--accent-primary, #00e5c8)" : "var(--text-muted)",
-                  }}
-                >
-                  {cycle === "monthly" ? "Monthly" : "Annual"}
-                  {cycle === "annual" && (
-                    <span style={{
-                      marginLeft: 6, fontSize: "0.6875rem", fontWeight: 700,
-                      background: "rgba(0, 229, 200, 0.18)", color: "var(--accent-primary, #00e5c8)",
-                      padding: "1px 5px", borderRadius: 4,
-                    }}>
-                      Save 20%
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            {/* Subscriptions */}
-            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              {modalBillingCycle === "annual" ? "Annual Plans" : "Monthly Plans"}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-              {PRODUCTS.subscriptions.map((p) => {
-                const selected = p[modalBillingCycle];
-                return (
-                  <button
-                    key={p.name}
-                    className="btn btn-secondary"
-                    style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}
-                    disabled={!selected.productId || checkoutLoading === selected.productId}
-                    onClick={() => handleCheckout(selected.productId)}
-                  >
-                    <span>
-                      <strong>{p.name}</strong>
-                      <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.8125rem" }}>{p.desc}</span>
-                    </span>
-                    <span style={{ fontWeight: 700, color: "var(--success)" }}>
-                      {checkoutLoading === selected.productId ? "..." : selected.priceLabel}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Top-ups */}
-            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-              One-Time Top-Ups
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
-              {PRODUCTS.topups.map((p) => (
-                <button
-                  key={p.name}
-                  className="btn btn-secondary"
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px" }}
-                  disabled={!p.productId || checkoutLoading === p.productId}
-                  onClick={() => handleCheckout(p.productId)}
-                >
-                  <span>
-                    <strong>{p.name}</strong>
-                    <span style={{ color: "var(--text-muted)", marginLeft: 8, fontSize: "0.8125rem" }}>{p.desc}</span>
-                  </span>
-                  <span style={{ fontWeight: 700, color: "var(--success)" }}>
-                    {checkoutLoading === p.productId ? "..." : p.priceLabel}
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <button
-              className="btn btn-secondary btn-sm"
-              style={{ width: "100%" }}
-              onClick={() => setShowBuyModal(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <BuyCreditsModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        currentBalance={balance}
+        actionName="power your models and knowledge base"
+        returnUrl="/credits"
+        onSuccess={(newBal) => {
+          setBalance(newBal);
+        }}
+      />
     </>
   );
 }

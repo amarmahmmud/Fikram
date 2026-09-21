@@ -91,3 +91,13 @@
   .balanceContent { flex-direction: column; text-align: center; gap: 20px; }
   .estimatorRow { grid-template-columns: 1fr 1fr; }
 }
+
+@media (max-width: 480px) {
+  .balanceCard { padding: 20px 16px; border-radius: 16px; }
+  .balanceValue { font-size: 2.75rem; }
+  .creditStats { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .estimatorCard { padding: 16px; }
+  .estimatorRow { grid-template-columns: 1fr; gap: 4px; padding: 10px 0; }
+  .estimatorTime { text-align: left; }
+}
+

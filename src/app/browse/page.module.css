@@ -617,3 +617,42 @@
     padding: 18px 16px;
   }
 }
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  margin: 32px 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.emptyStateTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.emptyStateText {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  max-width: 440px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.emptyStateActions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
