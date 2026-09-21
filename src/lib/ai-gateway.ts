@@ -29,6 +29,7 @@ import { isVertexBudgetExceeded, trackVertexSpend, type VertexOperation } from "
 
 export type TaskType =
   | "ingest_text"
+  | "ingest_office"
   | "ingest_pdf"
   | "ingest_image"
   | "ingest_audio"
@@ -152,7 +153,7 @@ export async function routeRequest(
   }
 
   // Plain text ingestion: just embed (Gemini free → Vertex AI)
-  if (task === "ingest_text") {
+  if (task === "ingest_text" || task === "ingest_office") {
     return {
       provider: "gemini-free",
       reason: "Text embed → Gemini free (embedding only)",
@@ -355,6 +356,7 @@ export async function executeWithFallback<T>({
 export function classifyIngestTask(mimeType: string, filename: string): TaskType {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".pdf") || mimeType === "application/pdf") return "ingest_pdf";
+  if (/\.(doc|docx|ppt|pptx|xls|xlsx)$/i.test(lower)) return "ingest_office";
   if (mimeType.startsWith("image/") || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(lower)) return "ingest_image";
   if (mimeType.startsWith("audio/") || /\.(mp3|wav|ogg|webm|m4a|aac|flac)$/i.test(lower)) return "ingest_audio";
   if (mimeType.startsWith("video/") || /\.(mp4|webm|ogg|mov|quicktime)$/i.test(lower)) return "ingest_video";
@@ -395,6 +397,7 @@ export function taskToVertexOp(task: TaskType): VertexOperation | undefined {
       return "document_ocr_per_page";
     case "embed_text":
     case "ingest_text":
+    case "ingest_office":
       return "embed_text";
     case "chat_text":
       return undefined; // Groq, no Vertex cost

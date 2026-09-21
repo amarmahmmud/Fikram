@@ -126,6 +126,7 @@ async function handleExtractPhase(
     // AI Gateway routing
     const { tier } = await getUserTier(userId);
     const task = classifyIngestTask(effectiveMime, filename);
+    const isOffice = task === "ingest_office";
     const decision = await routeRequest(task, tier);
     const vertexOp = taskToVertexOp(task);
 
@@ -203,6 +204,16 @@ async function handleExtractPhase(
       }
 
       text = `[Source: ${mediaCategory} file "${filename}"]\n\n${text}`;
+    } else if (isOffice) {
+      if (url) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to fetch office document from storage");
+        const arrayBuffer = await res.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        
+        const { parseOfficeAsync } = require("officeparser");
+        text = await parseOfficeAsync(buffer);
+      }
     } else {
       // Plain text, markdown, CSV, etc.
       if (url) {
