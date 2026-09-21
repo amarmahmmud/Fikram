@@ -27,7 +27,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
 
   const [userName, setUserName] = useState<string>("Loading...");
   const [userEmail, setUserEmail] = useState<string>("");
-  const [credits, setCredits] = useState<number>(initialCredits ?? 50);
+  const [credits, setCredits] = useState<number | null>(initialCredits ?? null);
   const [plan, setPlan] = useState<string>("free");
   const [initials, setInitials] = useState<string>("--");
   const [isOpen, setIsOpen] = useState(false);
@@ -178,16 +178,22 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
 
         {/* Credit bar */}
         {(() => {
-          const maxCredits =
-            plan === "enterprise" || plan === "business"
-              ? 10000
-              : plan === "pro"
-              ? 2000
-              : Math.max(50, credits);
-          const pct = Math.min(100, Math.max(0, Math.round((credits / maxCredits) * 100)));
+          const displayCredits = credits === null ? 0 : credits;
+          
+          let maxCredits = 50;
+          if (plan === "enterprise" || plan === "business") {
+            maxCredits = 10000;
+          } else if (plan === "pro") {
+            maxCredits = 2000;
+          } else {
+            const tiers = [50, 500, 1000, 2500, 5000, 10000];
+            maxCredits = tiers.find(t => displayCredits <= t) || Math.ceil(displayCredits / 5000) * 5000;
+          }
+
+          const pct = Math.min(100, Math.max(0, Math.round((displayCredits / maxCredits) * 100)));
 
           const isZero = credits === 0;
-          const isLow = credits < 10;
+          const isLow = credits !== null && credits < 10;
 
           return (
             <div style={{ padding: "0 12px 12px" }}>
@@ -241,7 +247,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
                     gap: 3,
                   }}
                 >
-                  {isZero ? "0 • Refill" : credits.toLocaleString()}
+                  {credits === null ? "..." : isZero ? "0 • Refill" : credits.toLocaleString()}
                 </span>
               </div>
             </div>
@@ -266,7 +272,7 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
       <BuyCreditsModal
         isOpen={showBuyModal}
         onClose={() => setShowBuyModal(false)}
-        currentBalance={credits}
+        currentBalance={credits ?? undefined}
         onSuccess={(newBal) => {
           setCredits(newBal);
         }}

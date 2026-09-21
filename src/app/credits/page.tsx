@@ -86,9 +86,19 @@ function CreditsPageContent() {
     loadData();
   }, [supabase, isCheckoutSuccess]);
 
-  const total = Math.max(100, balance + held); // Dynamic total based on actual balance
+  let maxCredits = 50;
+  if (plan === "enterprise" || plan === "business") {
+    maxCredits = 10000;
+  } else if (plan === "pro") {
+    maxCredits = 2000;
+  } else {
+    const tiers = [50, 500, 1000, 2500, 5000, 10000];
+    const gross = balance + held;
+    maxCredits = tiers.find(t => gross <= t) || Math.ceil(gross / 5000) * 5000;
+  }
+
   const available = Math.max(0, balance - held);
-  const pct = Math.min(100, Math.max(0, Math.round((available / total) * 100)));
+  const pct = Math.min(100, Math.max(0, Math.round((available / maxCredits) * 100)));
 
   /** Map transaction type to a human-readable badge */
   function txBadge(type: string) {
