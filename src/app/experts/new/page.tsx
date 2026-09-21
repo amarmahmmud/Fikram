@@ -944,7 +944,7 @@ export default function NewExpertPage() {
               <p className={styles.dropzoneText}>
                 Drop files here or <span className={styles.dropzoneLink}>browse</span>
               </p>
-              <p className={styles.dropzoneHint}>PDF, TXT, MD, CSV, Audio, Video supported (up to 50MB)</p>
+              <p className={styles.dropzoneHint}>Any readable file (Text, Code, Office, PDF), Image, Audio &amp; Video (up to 50MB)</p>
             </div>
 
             {/* URL Ingestion Section */}

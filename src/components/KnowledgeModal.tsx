@@ -443,7 +443,7 @@ export function KnowledgeModal({
                 <div className={styles.dropzoneText}>
                   {uploading
                     ? "Processing & embedding content..."
-                    : "Click to upload documents, images, audio, or video"}
+                    : "Click to upload files, code, documents, images, audio, or video"}
                 </div>
               </div>
 
