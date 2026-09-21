@@ -8,7 +8,7 @@
 
 import { Webhooks } from "@polar-sh/nextjs";
 import { redis } from "@/lib/redis";
-import { PLAN_CREDITS, PRODUCT_PLAN_MAP, TOPUP_CREDITS } from "@/lib/polar";
+import { PLAN_CREDITS, PRODUCT_PLAN_MAP, TOPUP_CREDITS, ANNUAL_PRODUCT_IDS } from "@/lib/polar";
 import { createClient } from "@supabase/supabase-js";
 
 // Use service role for webhook — no user session available
@@ -160,13 +160,15 @@ const polarWebhookHandler = Webhooks({
     if (planName) {
       // Subscription payment — grant monthly credit allowance
       const credits = PLAN_CREDITS[planName] ?? 0;
+      const isAnnual = ANNUAL_PRODUCT_IDS.has(productId);
 
       if (credits > 0) {
+        const billingTag = isAnnual ? " (annual)" : "";
         const label = billingReason === "subscription_create"
-          ? `${planName.toUpperCase()} plan activated`
+          ? `${planName.toUpperCase()} plan activated${billingTag}`
           : billingReason === "subscription_update"
-          ? `${planName.toUpperCase()} plan upgraded`
-          : `${planName.toUpperCase()} monthly renewal`;
+          ? `${planName.toUpperCase()} plan upgraded${billingTag}`
+          : `${planName.toUpperCase()} renewal${billingTag}`;
 
         await grantCredits(userId, credits, "purchase", label, order.id);
         await updateUserPlan(userId, planName);

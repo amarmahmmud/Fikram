@@ -32,13 +32,22 @@ export const PLAN_CREDITS: Record<string, number> = {
 // The webhook handler & reconciliation sync use this to determine which plan a subscription maps to.
 export const PRODUCT_PLAN_MAP: Record<string, string> = {
   // ── Production (Live Polar) ──
-  "fd898064-a43d-48de-a996-bdf220b62fc7": "pro",        // Pro Plan ($19/mo)
-  "a02142a9-f54a-4637-817e-cb32fb46c67c": "enterprise", // Business Plan ($79/mo)
+  "fd898064-a43d-48de-a996-bdf220b62fc7": "pro",        // Pro Plan ($19/mo — monthly)
+  "a02142a9-f54a-4637-817e-cb32fb46c67c": "enterprise", // Business Plan ($79/mo — monthly)
+  "9c8d10da-c3f1-49bb-9481-f40f50bc9454": "pro",        // Pro Expert — Annual ($180/yr)
+  "c47ac54f-4f41-4074-897b-18db41cc5422": "enterprise", // Business & Teams — Annual ($756/yr)
 
   // ── Sandbox (Test Environment) ──
   "8f72db21-1114-4a9f-8157-47cb9b2e5000": "pro",
   "bc6d568a-1f56-42ca-85b6-336b74d5fdae": "enterprise",
 };
+
+// ── Identify annual product IDs for label differentiation in webhook ──
+// Used to generate accurate transaction labels (e.g. "billed annually" vs monthly).
+export const ANNUAL_PRODUCT_IDS = new Set<string>([
+  "9c8d10da-c3f1-49bb-9481-f40f50bc9454", // Pro Expert — Annual (production)
+  "c47ac54f-4f41-4074-897b-18db41cc5422", // Business & Teams — Annual (production)
+]);
 
 // ── Map Polar product IDs → one-off credit amounts ──
 // For top-up packs (non-subscription, one-time purchases).
