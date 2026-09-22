@@ -42,6 +42,12 @@ export default function DashboardClient({ profile, jobs: initialJobs }: { profil
     setPage(1);
   }, [initialJobs]);
 
+  useEffect(() => {
+    if (profile?.credits_balance !== undefined) {
+      setUserCredits(profile.credits_balance);
+    }
+  }, [profile?.credits_balance]);
+
   // Auto-sync jobs on load to ensure honest status
   useEffect(() => {
     const hasActive = initialJobs.some((j: Job) => j.status === "running" || j.status === "pending");

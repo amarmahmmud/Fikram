@@ -34,8 +34,7 @@ function SignInForm() {
       setError(err.message);
       setLoading(false);
     } else {
-      router.push(redirectTo);
-      router.refresh();
+      window.location.href = redirectTo;
     }
   }
 

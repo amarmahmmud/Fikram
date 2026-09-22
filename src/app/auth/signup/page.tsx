@@ -33,7 +33,7 @@ export default function SignUpPage() {
       setLoading(false);
     } else {
       setSuccess(true);
-      setTimeout(() => router.push("/dashboard"), 2000);
+      setTimeout(() => window.location.href = "/dashboard", 2000);
     }
   }
 
