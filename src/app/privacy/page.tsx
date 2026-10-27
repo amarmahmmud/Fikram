@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { FikraLogo } from "@/components/FikraLogo";
 
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
             Privacy Policy
           </h1>
           <p style={{ color: "var(--text-secondary, #8b8b9e)", fontSize: "0.9375rem" }}>
-            Last updated: September 21, 2026
+            Last updated: October 2026
           </p>
         </div>
 
@@ -126,7 +126,7 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="8. Your Rights">
-            <p>You may have the right to access, correct, or delete your personal data. Contact us at <a href="mailto:amarsuadbusiness@gmail.com" style={{ color: "#a78bfa" }}>amarsuadbusiness@gmail.com</a> to exercise these rights.</p>
+            <p>You may have the right to access, correct, or delete your personal data. Contact us at <a href="mailto:support@fikram.live" style={{ color: "#a78bfa" }}>support@fikram.live</a> to exercise these rights.</p>
           </Section>
 
           <Section title="9. Security">
@@ -138,9 +138,11 @@ export default function PrivacyPage() {
           </Section>
 
           <Section title="11. Contact Us">
+            <p>If you have any questions or data requests regarding this Privacy Policy, please contact our team:</p>
             <ul>
-              <li><strong>Email:</strong> <a href="mailto:amarsuadbusiness@gmail.com" style={{ color: "#a78bfa" }}>amarsuadbusiness@gmail.com</a></li>
-              <li><strong>Website:</strong> <a href="https://fikram.live" style={{ color: "#a78bfa" }}>fikram.live</a></li>
+              <li><strong>Support & Data Requests:</strong> <a href="mailto:support@fikram.live" style={{ color: "#a78bfa" }}>support@fikram.live</a></li>
+              <li><strong>Founder & Executive Office:</strong> <a href="mailto:founder@fikram.live" style={{ color: "#a78bfa" }}>founder@fikram.live</a></li>
+              <li><strong>Official Website:</strong> <a href="https://fikram.live" style={{ color: "#a78bfa" }}>fikram.live</a></li>
             </ul>
           </Section>
         </div>
@@ -153,7 +155,9 @@ export default function PrivacyPage() {
         color: "var(--text-muted, #555568)",
         fontSize: "0.8125rem",
       }}>
-        <span>© 2026 Fikram. All rights reserved. · </span>
+        <span>© 2026 Fikram. All rights reserved. · Contact: </span>
+        <a href="mailto:support@fikram.live" style={{ color: "#a78bfa", textDecoration: "none" }}>support@fikram.live</a>
+        <span> · </span>
         <Link href="/privacy" style={{ color: "#a78bfa", textDecoration: "none" }}>Privacy Policy</Link>
         <span> · </span>
         <Link href="/terms" style={{ color: "#a78bfa", textDecoration: "none" }}>Terms of Service</Link>

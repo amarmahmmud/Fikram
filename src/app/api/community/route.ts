@@ -94,7 +94,8 @@ export async function GET() {
     const isVerifiedAdmin = (profile?: { role?: string | null; email?: string | null }) => {
       if (!profile) return false;
       if (profile.role === "admin") return true;
-      if (profile.email && profile.email.toLowerCase().trim() === "amarmahmmud10@gmail.com") return true;
+      const normalizedEmail = profile.email?.toLowerCase().trim();
+      if (normalizedEmail === "amarmahmmud10@gmail.com" || normalizedEmail === "founder@fikram.live") return true;
       return false;
     };
 

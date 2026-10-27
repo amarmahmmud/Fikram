@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { FikraLogo } from "@/components/FikraLogo";
-import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings, Menu, X, Zap } from "lucide-react";
+import { LayoutDashboard, Globe, Sparkles, Wrench, List, Layers, Coins, Settings, Menu, X, Zap, Headphones } from "lucide-react";
 import { BuyCreditsModal } from "@/components/BuyCreditsModal";
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
 const NAV_BOTTOM = [
   { href: "/credits",  label: "Credits", icon: <Coins size={18} /> },
   { href: "/settings", label: "Settings", icon: <Settings size={18} /> },
+  { href: "mailto:support@fikram.live", label: "Support", icon: <Headphones size={18} />, external: true },
 ];
 
 export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
@@ -164,15 +165,28 @@ export function AppSidebar({ credits: initialCredits }: { credits?: number }) {
           <span className="sidebar-section-label" style={{ marginTop: 8 }}>Account</span>
 
           {NAV_BOTTOM.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setIsOpen(false)}
-              className={`nav-item ${pathname === item.href ? "active" : ""}`}
-            >
-              <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
-              <span>{item.label}</span>
-            </Link>
+            (item as any).external ? (
+              <a
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className="nav-item"
+                title="Customer Support (support@fikram.live)"
+              >
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </a>
+            ) : (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsOpen(false)}
+                className={`nav-item ${pathname === item.href ? "active" : ""}`}
+              >
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>{item.icon}</span>
+                <span>{item.label}</span>
+              </Link>
+            )
           ))}
         </nav>
 

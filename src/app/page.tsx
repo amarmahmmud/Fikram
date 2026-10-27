@@ -857,9 +857,13 @@ export default function LandingPage() {
                 Need dedicated LoRA fine-tuning on proprietary corpora, private VPC hosting, or HIPAA-compliant data segregation? Our engineering team works directly with enterprise clients.
               </p>
             </div>
-            <Link href="/auth/signup?intent=enterprise" className="btn btn-secondary btn-lg" style={{ flexShrink: 0 }}>
+            <a
+              href="mailto:founder@fikram.live?subject=Fikram%20Enterprise%20Fine-Tuning%20%26%20Partnership%20Inquiry"
+              className="btn btn-secondary btn-lg"
+              style={{ flexShrink: 0 }}
+            >
               Talk with Founders
-            </Link>
+            </a>
           </div>
 
           {/* Trust Guarantees */}
@@ -941,6 +945,14 @@ export default function LandingPage() {
                 <Link href="/privacy" className={styles.footerLink}>Privacy Policy</Link>
                 <Link href="/terms" className={styles.footerLink}>Terms of Service</Link>
               </div>
+              <div className={styles.footerCol}>
+                <div className={styles.footerColTitle}>Contact & Support</div>
+                <a href="mailto:support@fikram.live" className={styles.footerLink}>support@fikram.live</a>
+                <a href="mailto:founder@fikram.live" className={styles.footerLink}>founder@fikram.live</a>
+                <span style={{ fontSize: "0.8125rem", color: "var(--text-disabled)", marginTop: 2 }}>
+                  Response &lt; 24h
+                </span>
+              </div>
             </div>
           </div>
           <div className={styles.footerBottom}>
@@ -948,7 +960,7 @@ export default function LandingPage() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span className="status-dot done" />
               <span style={{ color: "var(--text-secondary)", fontSize: "0.8125rem" }}>
-                All Systems Operational
+                All Systems Operational · support@fikram.live
               </span>
             </div>
             <span style={{ color: "var(--text-disabled)", fontSize: "0.8125rem" }}>

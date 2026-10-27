@@ -80,7 +80,7 @@ export async function GET(
 
       if (profileData) {
         const creatorEmail = profileData.email?.toLowerCase().trim();
-        if (profileData.role === "admin" || creatorEmail === "amarmahmmud10@gmail.com") {
+        if (profileData.role === "admin" || creatorEmail === "amarmahmmud10@gmail.com" || creatorEmail === "founder@fikram.live") {
           isVerifiedCreator = true;
         }
         creatorProfile = {

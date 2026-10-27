@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Mail, Headphones, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export default function SettingsPage() {
@@ -278,6 +278,60 @@ export default function SettingsPage() {
               </button>
             </div>
           ))}
+        </div>
+
+        <hr className="divider" />
+
+        {/* Support & Direct Help Desk */}
+        <div className={styles.section}>
+          <div className={styles.sectionHead}>
+            <h3 className={styles.sectionTitle}>Help & Direct Support Desk</h3>
+            <p className={styles.sectionDesc}>Need assistance with your models, API limits, or enterprise questions? Contact us directly.</p>
+          </div>
+
+          <div className={styles.supportGrid}>
+            <div className={styles.supportCard}>
+              <div className={styles.supportCardHead}>
+                <span className={styles.supportCardTitle}>
+                  <Headphones size={16} color="var(--accent-primary)" />
+                  Customer & Technical Support
+                </span>
+                <span className="badge badge-indigo" style={{ fontSize: "0.625rem" }}>24/7 Desk</span>
+              </div>
+              <p className={styles.supportCardDesc}>
+                Get assistance with account access, indexing documents, or billing questions.
+              </p>
+              <a
+                href="mailto:support@fikram.live"
+                className="btn btn-secondary btn-sm"
+                style={{ width: "fit-content", textDecoration: "none", marginTop: 4 }}
+              >
+                <Mail size={14} style={{ marginRight: 6 }} />
+                support@fikram.live
+              </a>
+            </div>
+
+            <div className={`${styles.supportCard} ${styles.supportCardFounder}`}>
+              <div className={styles.supportCardHead}>
+                <span className={styles.supportCardTitle}>
+                  <Sparkles size={16} color="#00E5C8" />
+                  Founders & Executive Desk
+                </span>
+                <span className="badge badge-success" style={{ fontSize: "0.625rem" }}>Direct Line</span>
+              </div>
+              <p className={styles.supportCardDesc}>
+                Connect directly with the founding team for partnerships, startup programs, and custom VPC deployments.
+              </p>
+              <a
+                href="mailto:founder@fikram.live"
+                className="btn btn-primary btn-sm"
+                style={{ width: "fit-content", textDecoration: "none", marginTop: 4 }}
+              >
+                <Mail size={14} style={{ marginRight: 6 }} />
+                founder@fikram.live
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </>

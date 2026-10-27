@@ -140,4 +140,61 @@
 
 @media (max-width: 640px) {
   .formGrid { grid-template-columns: 1fr; }
+  .supportGrid { grid-template-columns: 1fr; }
+}
+
+/* Support & Inquiries */
+.supportGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.supportCard {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.supportCard:hover {
+  border-color: rgba(0, 229, 200, 0.3);
+  transform: translateY(-2px);
+}
+
+.supportCardFounder {
+  background: linear-gradient(135deg, rgba(0, 229, 200, 0.04) 0%, rgba(199, 125, 255, 0.03) 100%);
+  border-color: rgba(0, 229, 200, 0.2);
+}
+
+.supportCardFounder:hover {
+  border-color: rgba(0, 229, 200, 0.45);
+}
+
+.supportCardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.supportCardTitle {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.supportCardDesc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
 }

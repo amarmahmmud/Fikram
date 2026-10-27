@@ -4,6 +4,7 @@ import NetworkStatusListener from "@/components/NetworkStatusListener";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://fikram.live"),
   title: "Fikram — Turn Your Expertise into AI",
   description:
     "The platform where experts create RAG AI Experts powered by their own knowledge. Upload your content, get a grounded RAG AI Expert in seconds — or train a fully custom model.",

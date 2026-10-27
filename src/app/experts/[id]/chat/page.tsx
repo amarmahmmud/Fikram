@@ -364,7 +364,8 @@ export default function ExpertChatPage({ params }: { params: Promise<{ id: strin
           .select("email, role")
           .eq("id", data.user_id)
           .maybeSingle();
-        if ((prof as any)?.role === "admin" || (prof as any)?.email?.toLowerCase().trim() === "amarmahmmud10@gmail.com") {
+        const profEmail = (prof as any)?.email?.toLowerCase().trim();
+        if ((prof as any)?.role === "admin" || profEmail === "amarmahmmud10@gmail.com" || profEmail === "founder@fikram.live") {
           setIsVerifiedCreator(true);
         }
       }
